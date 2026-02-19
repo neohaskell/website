@@ -1,0 +1,39 @@
+name: Translate Documentation
+
+on:
+  push:
+    branches: [main]
+    paths: ['src/content/docs/en/**']
+
+permissions:
+  contents: write
+  models: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  translate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/cache@v4
+        with:
+          path: .genaiscript/cache/**
+          key: continuous-translation-${{ github.run_id }}
+          restore-keys: |
+            continuous-translation-
+
+      - uses: pelikhan/action-continuous-translation@v1
+        with:
+          starlight_dir: src/content/docs
+          lang: es,ru,hy,fr,ja
+          source: en
+
+      - uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          file_pattern: 'src/content/docs/**'
+          commit_message: '[translation] auto-translate docs'
+          commit_user_name: genaiscript
