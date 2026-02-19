@@ -7,13 +7,13 @@ on:
       - 'src/content/docs/**'
       - '!src/content/docs/es/**'
       - '!src/content/docs/ru/**'
+      - '!src/content/docs/hy/**'
       - '!src/content/docs/fr/**'
       - '!src/content/docs/ja/**'
   workflow_dispatch:
 
 permissions:
   contents: write
-  models: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -37,15 +37,17 @@ jobs:
       - uses: pelikhan/action-continuous-translation@v0
         continue-on-error: true
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          lang: es,ru,fr,ja
+          openai_api_key: ${{ secrets.GROQ_API_KEY }}
+          openai_api_base: https://api.groq.com/openai/v1
+          model_alias: "translation: openai:llama-3.3-70b-versatile"
+          lang: es,ru,hy,fr,ja
           source: en
           files: |
             src/content/docs/**/*
 
       - name: Reorganize translations to Starlight locale directories
         run: |
-          for lang in es ru fr ja; do
+          for lang in es ru hy fr ja; do
             find src/content/docs -maxdepth 3 -name "*.${lang}.mdx" -o -name "*.${lang}.md" | while read file; do
               ext="${file##*.}"
               # Strip the .lang.ext suffix to get the base name
