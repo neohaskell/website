@@ -29,7 +29,7 @@ jobs:
       - uses: pelikhan/action-continuous-translation@v0
         with:
           starlight_dir: src/content/docs
-          lang: es,ru,hy,fr,ja
+          lang: es,ru,fr,ja
           source: en
 
       - uses: stefanzweifel/git-auto-commit-action@v5
