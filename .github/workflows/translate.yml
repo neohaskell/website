@@ -4,12 +4,12 @@ on:
   push:
     branches: [main]
     paths:
-      - 'src/content/docs/index.mdx'
-      - 'src/content/docs/getting-started/**'
-      - 'src/content/docs/concepts/**'
-      - 'src/content/docs/guides/**'
-      - 'src/content/docs/reference/**'
-      - 'src/content/docs/adrs/**'
+      - 'src/content/docs/**'
+      - '!src/content/docs/es/**'
+      - '!src/content/docs/ru/**'
+      - '!src/content/docs/fr/**'
+      - '!src/content/docs/ja/**'
+  workflow_dispatch:
 
 permissions:
   contents: write
