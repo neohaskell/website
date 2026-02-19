@@ -42,10 +42,10 @@ jobs:
           lang: es,ru,fr,ja
           source: en
           files: |
-            src/content/docs/**/*
+            ./src/content/docs/**/*
 
       - uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          file_pattern: 'src/content/docs/**'
+          file_pattern: 'src/content/docs/** translations/**'
           commit_message: '[translation] auto-translate docs'
           commit_user_name: genaiscript
