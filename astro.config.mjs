@@ -6,19 +6,37 @@ import starlight from '@astrojs/starlight';
 export default defineConfig({
 	integrations: [
 		starlight({
-			title: 'My Docs',
-			social: [{ icon: 'github', label: 'GitHub', href: 'https://github.com/withastro/starlight' }],
+			title: 'NeoHaskell',
+			defaultLocale: 'en',
+			locales: {
+				en: { label: 'English' },
+				es: { label: 'Español' },
+				ru: { label: 'Русский' },
+				hy: { label: 'Հայերեն' },
+				fr: { label: 'Français' },
+				ja: { label: '日本語' },
+			},
+			social: [{ icon: 'github', label: 'GitHub', href: 'https://github.com/neohaskell/neohaskell' }],
 			sidebar: [
 				{
-					label: 'Guides',
-					items: [
-						// Each item here is one entry in the navigation menu.
-						{ label: 'Example Guide', slug: 'guides/example' },
-					],
+					label: 'Getting Started',
+					autogenerate: { directory: 'getting-started' },
 				},
 				{
-					label: 'Reference',
+					label: 'Core Concepts',
+					autogenerate: { directory: 'concepts' },
+				},
+				{
+					label: 'Guides',
+					autogenerate: { directory: 'guides' },
+				},
+				{
+					label: 'API Reference',
 					autogenerate: { directory: 'reference' },
+				},
+				{
+					label: 'ADRs',
+					autogenerate: { directory: 'adrs' },
 				},
 			],
 		}),
