@@ -35,13 +35,14 @@ jobs:
             continuous-translation-
 
       - uses: pelikhan/action-continuous-translation@v0
+        continue-on-error: true
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           starlight_dir: .
           lang: es,ru,fr,ja
           source: en
-          files: "src/content/docs/**/*.mdx;src/content/docs/**/*.md"
-          debug: true
+          files: |
+            src/content/docs/**/*
 
       - uses: stefanzweifel/git-auto-commit-action@v5
         with:
