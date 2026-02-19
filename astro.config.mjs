@@ -12,7 +12,7 @@ export default defineConfig({
 				root: { label: 'English', lang: 'en' },
 				es: { label: 'Español' },
 				ru: { label: 'Русский' },
-				hy: { label: 'Հայերեն' },
+
 				fr: { label: 'Français' },
 				ja: { label: '日本語' },
 			},
