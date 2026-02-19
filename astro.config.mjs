@@ -7,9 +7,9 @@ export default defineConfig({
 	integrations: [
 		starlight({
 			title: 'NeoHaskell',
-			defaultLocale: 'en',
+			defaultLocale: 'root',
 			locales: {
-				en: { label: 'English' },
+				root: { label: 'English', lang: 'en' },
 				es: { label: 'Español' },
 				ru: { label: 'Русский' },
 				hy: { label: 'Հայերեն' },

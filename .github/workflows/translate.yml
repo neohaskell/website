@@ -3,7 +3,13 @@ name: Translate Documentation
 on:
   push:
     branches: [main]
-    paths: ['src/content/docs/en/**']
+    paths:
+      - 'src/content/docs/index.mdx'
+      - 'src/content/docs/getting-started/**'
+      - 'src/content/docs/concepts/**'
+      - 'src/content/docs/guides/**'
+      - 'src/content/docs/reference/**'
+      - 'src/content/docs/adrs/**'
 
 permissions:
   contents: write
@@ -31,10 +37,9 @@ jobs:
       - uses: pelikhan/action-continuous-translation@v0
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          starlight_dir: src/content/docs
+          starlight_dir: .
           lang: es,ru,fr,ja
           source: en
-          debug: true
 
       - uses: stefanzweifel/git-auto-commit-action@v5
         with:

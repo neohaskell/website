@@ -20,7 +20,7 @@ pnpm run preview
 
 ## Content
 
-Documentation source files live in `src/content/docs/en/`. Only edit the English source files — translations are auto-generated.
+Documentation source files live in `src/content/docs/`. Only edit the English source files — translations are auto-generated into locale subdirectories (e.g., `es/`, `ru/`).
 
 ### Sections
 
