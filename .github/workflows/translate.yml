@@ -38,11 +38,31 @@ jobs:
         continue-on-error: true
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          starlight_dir: .
           lang: es,ru,fr,ja
           source: en
           files: |
-            ./src/content/docs/**/*
+            src/content/docs/**/*
+
+      - name: Reorganize translations to Starlight locale directories
+        run: |
+          for lang in es ru fr ja; do
+            find src/content/docs -maxdepth 3 -name "*.${lang}.mdx" -o -name "*.${lang}.md" | while read file; do
+              ext="${file##*.}"
+              # Strip the .lang.ext suffix to get the base name
+              base=$(basename "$file" ".${lang}.${ext}")
+              dir=$(dirname "$file")
+              docs_root="src/content/docs"
+              rel_dir="${dir#${docs_root}}"
+              if [ -z "$rel_dir" ]; then
+                target_dir="${docs_root}/${lang}"
+              else
+                target_dir="${docs_root}/${lang}${rel_dir}"
+              fi
+              mkdir -p "$target_dir"
+              mv "$file" "${target_dir}/${base}.${ext}"
+              echo "Moved: $file -> ${target_dir}/${base}.${ext}"
+            done
+          done
 
       - uses: stefanzweifel/git-auto-commit-action@v5
         with:
