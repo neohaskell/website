@@ -26,7 +26,7 @@ jobs:
           restore-keys: |
             continuous-translation-
 
-      - uses: pelikhan/action-continuous-translation@v1
+      - uses: pelikhan/action-continuous-translation@v0
         with:
           starlight_dir: src/content/docs
           lang: es,ru,hy,fr,ja
