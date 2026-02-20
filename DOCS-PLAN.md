@@ -1,6 +1,7 @@
 # NeoHaskell Documentation Work Plan
 
-> Revised after full review synthesis from Steve Klabnik, Julia Evans, Dan Abramov, Martin Fowler, Sarah Drasner, Tania Rascia, and Kent C. Dodds. All 33 consensus changes incorporated.
+> **Revision 1**: Full review synthesis from Steve Klabnik, Julia Evans, Dan Abramov, Martin Fowler, Sarah Drasner, Tania Rascia, and Kent C. Dodds. All 33 consensus changes incorporated.
+> **Revision 2**: Second-pass deep review — 29 additional improvements from individual reviewer insights (landing page experience, design challenges, debugging scenarios, audience-specific content, mobile experience, lesson granularity, event design teaching, i18n quality, visual design system, and more). All three priority tiers applied.
 > Domain: **NeoBank** (banking/fintech) — consensus from expert panel.
 > Language teaching strategy: **Implicit-first** — NeoHaskell syntax taught through the tutorial, not before it.
 
@@ -44,6 +45,32 @@ Three distinct entry points. Each reader arrives with different goals, different
 - Wants: the "why" without the "how", proof points, risk assessment
 - Needs to learn: why event sourcing reduces long-term cost
 - Success state: understands the value proposition well enough to greenlight a pilot
+
+---
+
+## Landing Page Experience Design
+
+The landing page (`index.mdx`) is the highest-traffic, highest-stakes page in the entire site. It must serve all three audience types within 10 seconds of arrival — not with a wall of text, but with clear visual paths.
+
+### Three-Path Entry (CardGrid)
+
+Use Starlight's `<CardGrid>` component to present three distinct entry points, each speaking directly to one audience:
+
+| Card | Audience | Headline | Subtext | Destination |
+|------|----------|----------|---------|-------------|
+| **Try It** | Developer | "Build something in 10 minutes" | "Go from zero to a working event-sourced app" | Quick Start → Tutorial |
+| **Evaluate It** | Architect | "How it compares to what you know" | "Event sourcing with compiler guarantees — tradeoffs, performance, adoption path" | Why NeoHaskell? → Architecture Evaluation |
+| **Understand It** | Decision-Maker | "Why this matters for your team" | "Event sourcing reduces long-term cost. Here's the proof." | Why NeoHaskell? (business framing) |
+
+### Design Requirements
+
+- **Above the fold**: The three cards must be visible without scrolling on a standard laptop (1440×900)
+- **No paragraph-of-text intro**: The opening line + CardGrid IS the introduction. Save the philosophy for deeper pages.
+- **One sentence of NeoHaskell identity** above the cards: *"NeoHaskell makes event sourcing the default — the compiler enforces what other languages leave to discipline."*
+- **Social proof below the fold** (when available): GitHub stars, Discord member count, notable adopters
+- **Mobile**: Cards stack vertically, each with a clear tap target (see Mobile Experience section)
+
+> **Source**: Sarah Drasner review — "The landing page should route people, not lecture them. Three clear paths with zero ambiguity."
 
 ---
 
@@ -135,6 +162,23 @@ The tutorial uses second person ("you") from Part 1 onward. Alex appears only on
 | 5 | **Transfers** | "Move money between accounts" | Cross-aggregate commands, saga/process manager with full state machine: happy path → failure → compensation. Cross-aggregate test. | `TransferRequested`, `TransferCompleted`, `TransferFailed` | "It handles the failure case too?" |
 | 6 | **Audit Everything** | "Show me everything that ever happened" | Event replay, time-travel queries, full audit trail. Property-based test. | (replaying all events) | "I accidentally built an audit trail" |
 
+### Event Design Teaching
+
+The tutorial must explicitly teach *how to design good events*, not just how to use them. This is the single most transferable skill — a reader who can design events for banking can design events for any domain.
+
+**Core principle to teach**: "Good events describe what happened in the world, not what the system did."
+
+| Good event name | Bad event name | Why |
+|----------------|---------------|-----|
+| `MoneyDeposited` | `BalanceUpdated` | The good name describes a real-world fact; the bad name describes a system operation |
+| `AccountOpened` | `AccountCreated` | "Opened" is the domain language (you open a bank account); "Created" is system language |
+| `WithdrawalDeclined` | `ValidationFailed` | The good name tells you what happened to the customer; the bad name is an implementation detail |
+| `TransferCompleted` | `TransferProcessed` | "Completed" has domain meaning; "Processed" is vague system-speak |
+
+**Where to teach this**: Tutorial Part 2 (Account Rules) is the natural place — the reader is defining their first business events beyond the initial deposit. Include a callout box: "Naming rule: if your event name would make sense in a conversation between bankers, it's a good name. If it only makes sense to programmers, rename it."
+
+> **Source**: Dan Abramov review — "The most important thing a tutorial can teach about event sourcing isn't the mechanics — it's how to think about what constitutes a good event."
+
 ### The Rosetta Stone (appears in Concepts, referenced from Tutorial Part 1)
 
 | What you'd say | Banking term | NeoHaskell term | What it actually is |
@@ -146,6 +190,25 @@ The tutorial uses second person ("you") from Part 1 onward. Alex appears only on
 | "Show me everything" | Audit log | Event Store | The append-only source of truth |
 | "Retail vs. Lending" | Business division | Bounded Context | An independent model with its own events |
 
+### Disambiguation Exercise (Part 1)
+
+Part 1 includes a multiple-choice "check your understanding" moment after the first event is stored. This catches the most dangerous early misconception — that events are just logging.
+
+> **The question**: "Which of these best describes what an event is?"
+> - (a) A log message for debugging
+> - (b) An immutable fact about something that happened in the domain
+> - (c) A notification sent to another service
+> - (d) A database row that gets updated
+>
+> **Correct answer**: (b). The tutorial explains why each wrong answer is wrong:
+> - (a) "Events aren't log messages — you can't delete them, and your entire system state derives from them"
+> - (c) "Events might trigger notifications later, but the event itself is a recorded fact, not a message"
+> - (d) "Events are append-only — they're never updated, which is the whole point"
+
+This appears as an interactive `<details>` toggle ("Test your understanding") after the reader stores their first event and before moving on to commands. It's the earliest possible intervention against wrong mental models.
+
+> **Source**: Dan Abramov review — "Catch the 'events are just logging' misconception in Part 1, or it calcifies and the reader builds on a broken foundation."
+
 ### Design Constraints
 
 - Each part builds ONE concept on top of the previous
@@ -153,10 +216,29 @@ The tutorial uses second person ("you") from Part 1 onward. Alex appears only on
 - Each part starts with a product requirement ("The requirement: ..."), not "Alex wants to..."
 - Part 1 must produce visible output within 10 minutes of starting
 - Part 6 deliberately echoes NeoHaskell.org's pitch: "Banks don't UPDATE your balance"
+- **Version-locked**: The tutorial targets a specific NeoHaskell version (pinned in the companion repo's `flake.nix`). The installation page states "This tutorial uses NeoHaskell vX.Y.Z." When NeoHaskell releases a breaking change, the tutorial is updated as part of the release process — not left to drift. (Source: Tania Rascia — "A tutorial that doesn't specify its version is a tutorial with an expiration date stamped 'unknown.'")
 - Each tutorial page includes estimated reading/coding time (e.g., "~20 minutes")
 - Each tutorial page opens with "What you'll learn" (3-5 bullet points) and closes with a "Recap" section
 - Progress indicator shows "Part N of 6" on every tutorial page — completion visibility is motivation
 - Tests are introduced from Part 2 onward; by Part 6 the reader has written 10-15 tests
+- **Lesson granularity**: Each "Part" may be split into 2-4 focused lessons if the content exceeds ~25 minutes of reading/coding time. Example: Part 1 might become "1a: Your First Event" (10 min) and "1b: Your First Command" (15 min). The key constraint: each lesson must end with a working, runnable state. Progress indicator updates to "Part 1, Lesson 2 of 3" if split. Target: ~15-20 minutes per lesson, ~20 lessons total across 6 parts. (Source: Julia Evans — "Shorter, more frequent completion moments keep motivation high.")
+
+### Debugging Scenario (Part 3 or 4)
+
+The tutorial must include at least one moment where the code compiles successfully but produces wrong behavior — and the reader has to debug it using events. This teaches a critical real-world skill that "it compiles" doesn't cover.
+
+**Recommended placement**: Part 3 (Transaction History) or Part 4 (Multiple Accounts).
+
+**Example scenario**: The reader's monthly summary projection shows the wrong total. The code compiles. The types are correct. But the projection logic has a subtle error (e.g., counting transfers as both withdrawals AND deposits, double-counting). The reader must:
+
+1. Replay the event stream manually (or with a helper function)
+2. Identify which event is being miscounted
+3. Fix the projection logic
+4. Verify with a test
+
+**Why this matters**: Real event-sourced systems fail at the projection level, not the event level. A tutorial that only shows the happy path leaves readers unprepared for the most common class of bugs they'll encounter.
+
+> **Source**: Kent C. Dodds review — "If everything always works on the first try, the reader hasn't actually learned debugging. Give them a real bug to solve."
 
 ### Production Scope Note (appears in Part 6 conclusion, NOT Part 1)
 
@@ -173,9 +255,47 @@ The tutorial uses second person ("you") from Part 1 onward. Alex appears only on
 > *By the end of this tutorial, your NeoBank will handle accounts, transactions, transfers,
 > and a complete audit trail. It'll feel like enterprise software. It was 200 lines of code."*
 
+### "What You Built" Reveal (Part 6 Conclusion)
+
+The end of Part 6 includes a scope table reveal — showing the reader the full breadth of what they've built, mapping their "simple" code to the enterprise-sounding features from the Scope table at the top of this section.
+
+```markdown
+## What You Built
+
+| What it sounds like | What you actually wrote | Lines of code |
+|--------------------|-----------------------|---------------|
+| Multi-account management | A map of account IDs to event streams | ~15 |
+| Real-time transaction ledger | A list of events, rendered chronologically | ~20 |
+| Instant balance reconciliation | A fold over deposit/withdrawal events | ~8 |
+| Overdraft protection | A type-level constraint the compiler enforces | ~5 |
+| Inter-account transfers | Two commands across two aggregates | ~30 |
+| Complete audit trail | The event store, which you already had | 0 (free) |
+| Historical replay | Replaying events to a point in time | ~10 |
+| **Total** | | **~88 lines** |
+```
+
+This is the emotional climax of the tutorial — the moment the reader realizes the left column (which sounds like it requires a team of 20) maps to the right column (which they wrote in an afternoon).
+
+### "What's Next" Transition Page
+
+After Part 6, a dedicated transition page (`tutorial/whats-next.mdx`) bridges the gap between "I finished the tutorial" and "I'm building my own thing." Without this, tutorial completers churn.
+
+**Structure**:
+1. **Celebrate**: "You just built an event-sourced banking service. Seriously."
+2. **Branch**: Three paths forward, matching the audience model:
+   - *"I want to build something else"* → Second example domain (logistics), then Guides
+   - *"I want to understand the theory deeper"* → Core Concepts reading order
+   - *"I want to use this at work"* → Adopting NeoHaskell at Work guide, Coming From pages
+3. **Community**: Discord link, contributor guide, "show us what you built"
+4. **Reference bookmark**: "Now that you've used these patterns, the Reference section will make sense. Bookmark it."
+
+> **Source**: Julia Evans review — "The moment after a tutorial ends is the highest-churn moment. Give them a clear next step or they leave." Sarah Drasner review — "The post-tutorial transition page is where documentation sites lose half their audience."
+
 ### Second Example Domain (for advanced guides)
 
 **Logistics / shipment tracking.** A package moves through locations, status changes are events, delivery is a projection. Different enough from banking to prove the pattern generalizes. Universal enough that everyone understands it.
+
+**TDD Challenge Format**: The second domain should be presented as a test-driven challenge — the reader is given a complete test suite (Given-When-Then tests for the logistics domain) and must implement the event types, command handlers, and projections to make the tests pass. This inverts the tutorial's teach→test flow into a test→implement flow, proving the reader has internalized the pattern. The test suite serves as both specification and verification. (Source: Kent C. Dodds — "Providing tests and asking the reader to make them pass is the strongest possible assessment of whether they've actually learned the material.")
 
 ### Installation Friction Mitigation
 
@@ -476,7 +596,7 @@ Translation layers for specific backgrounds. These become the highest-traffic pa
 | Coming from Go | Structs, interfaces, goroutines | Type classes, algebraic types, channels |
 | Coming from Haskell | Monads, IO, cabal/stack | **Full Rosetta Stone page** — see expanded spec below |
 | Coming from CRUD | REST endpoints, SQL updates | `UPDATE balance` → record `MoneyDeposited`; `SELECT balance` → fold over transactions; REST endpoint → command handler. **NOTE: This is elevated to a standalone Core Concepts page (`from-crud-to-events.mdx`), not just a Coming From subpage.** This is the core teaching document for the primary audience. Structure: What You Might Expect → Why That Breaks → The Mental Model Shift → Side-by-Side Code → When CRUD Is Fine. The Coming From section retains a short version that links to the full concept page. |
-| Coming from Event Sourcing | Kafka, EventStoreDB, Axon | No schema registry needed (types ARE the schema), no consumer groups (projections are functions), event versioning via algebraic data types |
+| Coming from Event Sourcing | Kafka, EventStoreDB, Axon | No schema registry needed (types ARE the schema), no consumer groups (projections are functions), event versioning via algebraic data types. **Honesty requirement**: This page must acknowledge what NeoHaskell DOESN'T yet have that mature ES platforms do — distributed event stores, consumer group equivalents, production battle-testing. Tone: "Here's what's genuinely better, here's what's different, and here's what's not ready yet." Experienced ES developers will spot overselling instantly and leave. (Source: Martin Fowler — "The Coming from Event Sourcing page is the most dangerous page to get wrong. Oversell and you lose the most valuable audience.") |
 
 ### Pattern for Each Page
 
@@ -518,9 +638,42 @@ This page is the most important "Coming From..." entry. Haskell developers will 
 
 3. **"Why would you do this?"** — For each row, a one-paragraph rationale. Not defensive — explanatory. The tone is: "We know you know Haskell. Here's why we made a different choice."
 
-4. **Common AI mistakes for Haskell developers** — When a Haskell dev uses AI (Copilot, ChatGPT, Claude), the AI will generate standard Haskell. This section lists the top 5 patterns the AI will get wrong and how to spot/fix them. Cross-references the "Using AI" guide.
+4. **Common AI mistakes for Haskell developers** — When a Haskell dev uses AI (Copilot, ChatGPT, Claude), the AI will generate standard Haskell. This section lists the top 5 patterns the AI will get wrong and how to spot/fix them. Cross-references the "Using AI" guide (`getting-started/using-ai.mdx`).
 
 5. **"What stayed the same"** — ADTs, type classes (called Traits), `deriving`, records, modules, GHC under the hood. Reassure the reader that their Haskell knowledge isn't wasted — it's redirected.
+
+---
+
+## Architect & Decision-Maker Content
+
+The Audience Model defines three personas, but the plan's content is heavily developer-focused. Architects and Decision-Makers need dedicated pages that speak to their concerns — not repurposed developer content.
+
+### "Why NeoHaskell?" Page (`concepts/why-neohaskell.mdx`)
+
+**Audience**: Architect, Decision-Maker
+**Purpose**: The page someone sends to their CTO or tech lead. Answers "why should we bet on this?"
+
+**Structure**:
+1. **The problem**: Why event sourcing is hard with current tools (discipline-dependent, schema drift, testing friction)
+2. **NeoHaskell's answer**: Compiler-enforced event sourcing — what other tools leave to discipline, NeoHaskell makes mandatory
+3. **Comparison table**: NeoHaskell vs. EventStoreDB vs. Kafka + manual ES vs. Axon (honest — include weaknesses)
+4. **Ecosystem maturity**: Current state, roadmap, community size — no overselling
+5. **When NeoHaskell is NOT the right choice**: Explicit anti-recommendations (strengthens credibility)
+
+### Architecture Evaluation Page (`concepts/architecture-evaluation.mdx`)
+
+**Audience**: Architect
+**Purpose**: Technical deep-dive for someone evaluating NeoHaskell for a real system
+
+**Structure**:
+1. **Transaction guarantees**: What consistency model does NeoHaskell's event store provide?
+2. **Performance characteristics**: Event store throughput, projection rebuild times, memory profile
+3. **Scaling patterns**: Single-node vs. distributed, sharding strategies
+4. **Integration story**: How NeoHaskell services talk to non-NeoHaskell services
+5. **Migration path**: How to introduce NeoHaskell into an existing system (one bounded context at a time)
+6. **Operational concerns**: Monitoring, alerting, backup/restore for event stores
+
+> **Source**: Sarah Drasner review — "The Audience Model promises content for Architects and Decision-Makers, but the plan delivers almost exclusively developer content. These audiences need their own pages, not 'also read the tutorial.'"
 
 ---
 
@@ -537,11 +690,35 @@ Every tutorial page and most concept pages include exercises. Passive reading do
 5. **Compare**: "Write this same feature in [language you know]. Which version is clearer?"
 6. **Audit**: "Replay all events from scratch. Does the derived balance match the current balance? What would happen if an event was missing?"
 7. **Verify**: "Write a test that proves this feature works." Creates a natural build→verify feedback loop. Event sourcing's Given-When-Then pattern IS the testing grammar — use it.
+8. **What If**: "What if the event store lost the last 3 events? What would happen to the balance?" Thought experiments that build intuition about event sourcing properties (immutability, replay, ordering) without requiring code. Best used in concept pages and as tutorial "pause and think" moments. (Source: Julia Evans — "What-if questions build the deepest understanding because they force the reader to simulate the system in their head.")
+
+### "Think First" Design Challenges
+
+Before each tutorial part reveals its solution, the reader faces a design challenge that asks them to think through the problem themselves. This activates retrieval practice and forces the reader to engage their mental model before seeing the "right" answer.
+
+| Tutorial Part | Design Challenge | What the reader designs before seeing the answer |
+|--------------|-----------------|------------------------------------------------|
+| 1. First Transaction | "What events would a deposit produce?" | List the events before seeing `AccountOpened`, `MoneyDeposited` |
+| 2. Account Rules | "How would you prevent overdrafts with events?" | Sketch the validation logic before seeing the `Result.err` pattern |
+| 3. Transaction History | "If you have deposit and withdrawal events, how would you build a bank statement?" | Describe the projection before seeing the implementation |
+| 4. Multiple Accounts | "How would you add a savings account without changing existing events?" | Propose the aggregate separation before seeing the solution |
+| 5. Transfers | "What could go wrong in a transfer between accounts?" | List failure modes before seeing the saga/compensation pattern |
+| 6. Audit Everything | "How would you answer 'what was the balance on March 15th?'" | Propose the replay strategy before seeing the time-travel query |
+
+#### Placement
+
+- Each "Think First" challenge appears at the **start** of the tutorial part, immediately after "The Requirement"
+- The challenge is a callout box (`<Aside type="tip">`) with the prompt
+- Reader is encouraged to write pseudocode or bullet points before scrolling down
+- The tutorial then reveals the NeoHaskell solution, allowing the reader to compare their design
+
+> **Source**: Dan Abramov review — "The reader who designs the event schema before seeing it will understand it 10x better than the reader who just reads it."
 
 ### Exercise Placement
 
-- **Tutorial pages**: 1 Modify + 1 Extend per page (mandatory), plus 1 Verify from Part 2 onward
+- **Tutorial pages**: 1 Modify + 1 Extend per page (mandatory), plus 1 Verify from Part 2 onward, plus 1 "Think First" design challenge per part
 - **Concept pages**: 1 Predict or 1 Break per page (optional but encouraged)
+- **Tutorial Parts 3-6**: Include at least 1 Predict exercise per part (in addition to Modify/Extend/Verify). Predict exercises are especially valuable from Part 3 onward because the reader has enough context to form expectations. Example (Part 3): "Before running this code, predict: what will the monthly summary show if there were 2 deposits and 1 withdrawal?" The reader writes their prediction, runs the code, and compares. Mismatch = learning moment. (Source: Julia Evans — "Predict exercises work best when the reader knows enough to have an expectation but not enough to be certain. Part 3 is that sweet spot.")
 - **Guides**: 0 exercises (guides are task-oriented, not learning-oriented)
 
 ### Exercise Solutions (non-negotiable)
@@ -591,6 +768,26 @@ Every tutorial page must design for failure, not just success. The #1 reason peo
 
 ---
 
+## "Adopting NeoHaskell at Work" Guide
+
+A dedicated guide (`guides/adopting-at-work.mdx`) addresses the pragmatic concerns of developers who want to use NeoHaskell at their company. This is NOT a marketing page — it's an honest, practical guide for navigating organizational adoption.
+
+### Structure
+
+1. **"Start with one bounded context"** — Don't pitch a rewrite. Pick the smallest, most event-natural domain in your system (audit logging, transaction history, notification events). Build it in NeoHaskell. Show results.
+2. **"The Pilot Proposal" template** — A fill-in-the-blanks document the reader can adapt for their team lead: problem statement, proposed scope, success criteria, rollback plan, timeline.
+3. **"Answering the hard questions"** — Pre-written responses to common objections:
+   - "What if the developer leaves?" (NeoHaskell compiles to GHC Haskell — any Haskell dev can maintain it)
+   - "What about hiring?" (The Haskell talent pool, training time, pair programming strategy)
+   - "What about the ecosystem maturity?" (Honest assessment: what's stable, what's in-progress, what's missing)
+   - "What if we need to migrate away?" (Event stores are portable; projections can be rewritten in any language)
+4. **"Running NeoHaskell alongside existing services"** — Technical integration patterns (HTTP APIs, message queues, shared databases)
+5. **"Measuring success"** — What metrics to track during the pilot (bug rate, development velocity, onboarding time for new team members)
+
+> **Source**: Dan Abramov review — "Every developer who finishes the tutorial and wants to use NeoHaskell at work will face organizational resistance. Give them the playbook, or they'll fail at adoption and blame the tool."
+
+---
+
 ## Visual Design Requirements
 
 Diagrams are not optional. They're a core teaching mechanism, designed FIRST with prose written to support them.
@@ -605,12 +802,94 @@ Diagrams are not optional. They're a core teaching mechanism, designed FIRST wit
 
 Each concept page should include a "Visual Design" consideration: what would a diagram of this concept look like? Not every concept needs a diagram, but the decision should be explicit.
 
-### Style
+### Visual Design System
 
-- Clean SVG (not hand-drawn)
-- Consistent color language: commands = blue, events = green, projections = orange
-- Accessible: must work in both light and dark mode
-- Every diagram has alt text
+The visual language must be consistent, documented, and reusable — not invented per-diagram.
+
+**Color Language** (across all diagrams, code highlights, and section accents):
+- Commands = blue (`#3B82F6` / `--color-command`)
+- Events = green (`#22C55E` / `--color-event`)
+- Projections = orange (`#F97316` / `--color-projection`)
+- Aggregates = purple (`#A855F7` / `--color-aggregate`)
+- Errors/failures = red (`#EF4444` / `--color-error`)
+
+**Section Visual Identity**: Each top-level section has a subtle visual differentiator (accent color or icon) so the reader always knows where they are:
+- Getting Started = blue accent
+- Tutorial = green accent
+- Core Concepts = purple accent
+- Guides = orange accent
+- Reference = gray accent
+
+**Diagram Style Guide**:
+- Clean SVG, no hand-drawn aesthetic
+- Consistent arrow styles (solid for data flow, dashed for optional/async)
+- Font: system font stack matching the site
+- Maximum 7 elements per diagram (Miller's law) — split complex diagrams
+- Every diagram has descriptive alt text (not just "diagram")
+- Diagrams are created in a tool that exports clean SVG (Figma, Excalidraw → SVG export, or hand-coded)
+- Source files for diagrams stored in `src/assets/diagrams/` alongside SVG exports
+
+**Accessible**: Must work in both light and dark mode — use CSS custom properties for colors, not hardcoded hex values.
+
+> **Source**: Sarah Drasner review — "A consistent visual design system isn't polish — it's wayfinding. The reader should know they're in the Tutorial section before reading a single word."
+
+---
+
+## Mobile Experience Requirements
+
+Documentation is read on phones — on the bus, during lunch, in bed. Mobile isn't an afterthought; it's a first-class concern.
+
+### Code Block Constraints
+
+- **Maximum line length**: 72 characters for ALL code examples. Longer lines cause horizontal scrolling on mobile, which breaks reading flow.
+- **Code block testing**: CI should validate that no code block exceeds 72 characters per line
+- **If a line must be longer**: Use a line continuation comment (`-- continued`) and break it logically
+
+### Responsive Design
+
+- **Tables**: Use responsive table patterns — on mobile, wide tables should either scroll horizontally with a visual indicator (shadow/fade) or collapse to a stacked layout
+- **Diagrams**: All SVGs must be legible at 375px width (iPhone SE). If a diagram can't be read at that size, provide a simplified mobile version or a "tap to enlarge" pattern
+- **CardGrid**: Cards stack vertically on mobile with full-width tap targets (minimum 48px height)
+- **Code blocks**: Horizontal scroll with visible scroll indicator (not hidden overflow)
+
+### Testing
+
+- **Manual test on a real phone** before shipping any tutorial part — not just browser DevTools responsive mode
+- **Target devices**: iPhone SE (375px), standard Android (360px), iPad Mini (768px)
+- **Test checklist per page**: Can the reader complete the tutorial on a phone? Can they copy code blocks? Can they read diagrams? Can they navigate between parts?
+
+> **Source**: Sarah Drasner review — "If your code examples cause horizontal scrolling on a phone, 30% of your readers just had a degraded experience. Set a max line length and enforce it."
+
+---
+
+## Search Experience Design
+
+Starlight provides built-in search, but good search requires deliberate content design — not just enabling the feature.
+
+### Searchable Headings
+
+- Every heading should contain the words a reader would search for. "Projections" is better than "Deriving Your Views." "Error Handling" is better than "When Things Go Wrong."
+- Concept pages should use the concept name in the H1: "Projections" not "Building Read Models"
+- Error messages should appear as exact searchable text in Common Errors headings
+
+### Synonym Awareness
+
+Readers from different backgrounds search for different terms. Each concept page's frontmatter should include `keywords` (used by Starlight's search index):
+
+```yaml
+---
+title: Projections
+description: Deriving state from events
+keywords: [projection, read model, view, query, CQRS, derived state, materialized view]
+---
+```
+
+### Search Quality Testing
+
+- After each phase, test 10 common search queries manually: "how to test," "error handling," "deployment," "what is an event," "CRUD to events," "transfer between accounts," etc.
+- If a search returns no results or irrelevant results, fix the content (add headings, keywords, or redirects)
+
+> **Source**: Sarah Drasner review — "Good search is 80% content structure and 20% search engine. If your headings use clever names instead of searchable names, no search engine will save you."
 
 ---
 
@@ -623,9 +902,10 @@ Starlight provides components that are not decorations — they're the differenc
 | **Tabs** | Platform-specific instructions, "Your Language → NeoHaskell" comparisons | Installation page (OS tabs), Coming From pages |
 | **Asides** (note, tip, caution, danger) | Contextual callouts without breaking narrative flow | Tutorial: `tip` for shortcuts, `caution` for common mistakes, `note` for "you'll learn more about this in Part N" |
 | **CardGrid** | Visual navigation for section index pages | Core Concepts index, Guides index |
-| **Code block labels** | Name what the code IS, not just its language | Every code block: `title="src/Bank/Account.hs"` |
+| **Code block labels** | Name what the code IS, not just its language | **Every** code block in the tutorial MUST have a file path label: `title="src/Bank/Account.hs"`. No unlabeled code blocks — the reader must always know which file they're editing. Concept pages use descriptive labels ("Example: processing a deposit"). CI should warn on unlabeled code blocks in tutorial pages. (Source: Tania Rascia — "An unlabeled code block forces the reader to guess which file it belongs to. That's a guaranteed support question.") |
 | **Steps** | Numbered sequential instructions | Installation, Getting Started |
 | **Badges** | Status indicators | "New in Part 3", difficulty level on guides |
+| **`<Term>`** (custom) | Tooltip for domain vocabulary | First use of any term from the Rosetta Stone table. Hover/tap shows a one-line definition without leaving the page. Implementation: custom Astro component wrapping a `<abbr>` with CSS tooltip. Example: `<Term def="An immutable record of a fact that happened">event</Term>`. Build in Phase 0 — it's used from the first tutorial page onward. (Source: Steve Klabnik — "A glossary page nobody visits is less useful than a tooltip that appears exactly when the reader is confused.") |
 
 > Adopt these from the first page written. Retrofitting component usage is harder than starting with it.
 
@@ -663,16 +943,18 @@ time_estimate: "~20 minutes"
 
 ---
 
-## Missing Patterns (to be scheduled)
+## Missing Patterns (Scheduled)
 
-Patterns flagged by Martin Fowler as critical but not yet placed in the plan:
+Patterns flagged by Martin Fowler as critical — now placed in specific phases with concrete anchors.
 
-- **Idempotency**: Handling duplicate commands/events. Schedule as concept page or guide.
-- **Snapshotting**: Performance optimization for long event streams. Schedule as guide.
-- **GDPR / Tombstones**: Right to erasure in an append-only store. Schedule as guide.
-- **Event ordering / Causality**: Ensuring events are processed in the correct order. Schedule as concept page with Part 5.
+| Pattern | Type | Schedule | Anchor / Trigger |
+|---------|------|----------|-----------------|
+| **Idempotency** | Concept page | Phase 2 (with Part 5: Transfers) | Reader encounters duplicate transfer commands — idempotency becomes concrete |
+| **Snapshotting** | Guide | Phase 3 (after Part 6: Audit Everything) | Reader has replayed full event history — snapshotting is the obvious optimization |
+| **GDPR / Tombstones** | Guide | Phase 3 (standalone guide) | Addressed alongside `trade-offs.mdx` — "what happens when you need to forget?" |
+| **Event ordering / Causality** | Concept page | Phase 2 (with Part 5: Transfers) | Cross-aggregate transfers raise ordering questions naturally |
 
-> These should be placed during Phase 2-3 as the tutorial content makes them concrete. Don't write them in the abstract.
+> **Source**: Martin Fowler review — "These patterns are too important to leave unscheduled. Each has a natural tutorial anchor point — schedule them there, not in the abstract."
 
 ---
 
@@ -687,6 +969,20 @@ Documentation sections are not silos. Every page should connect the reader to re
 - Every "Coming From..." page links to the relevant concept pages for deeper understanding
 - Every guide links to prerequisite concept pages
 - The `from-crud-to-events.mdx` concept page is linked from: Tutorial Part 1, Getting Started, and the Coming From CRUD page
+
+### Cross-Reference Matrix
+
+A formal matrix tracking links between all Diataxis modes. Maintained as an internal document (not reader-facing) to ensure no section is isolated.
+
+| From \ To | Tutorial | Concepts | Guides | Reference | Coming From |
+|-----------|----------|----------|--------|-----------|-------------|
+| **Tutorial** | Next/prev part | Layer 3 concept links | "For more on testing: Testing Guide" | Rare (link to API when introducing a function) | — |
+| **Concepts** | "See this in action: Part N" | Related concepts | "How to apply this: [Guide]" | "API details: [Reference]" | — |
+| **Guides** | "New to this? Start with Part N" | Prerequisite concept links | Related guides | API reference for functions used | — |
+| **Reference** | — | "Understand this: [Concept]" | "Use this: [Guide]" | — | — |
+| **Coming From** | "Try the tutorial" | Relevant concept pages | Relevant guides | — | — |
+
+> **Audit rule**: After each phase, verify that no page in the matrix has zero outbound links to other sections. Isolated pages are a navigation dead-end.
 
 ### Implementation
 
@@ -713,14 +1009,16 @@ For each enforced NeoHaskell convention, the tutorial includes a **"Break It"** 
 
 ### Break-It Exercises by Convention
 
-| Convention | What to break | Expected error (paraphrased) | What the reader learns |
-|-----------|--------------|-----------------------------|-----------------------|
-| `do` blocks only (no `let..in`, no `where`) | Replace a `do` block with `let..in` | "NeoHaskell uses do blocks for all bindings" | Why uniform binding syntax reduces cognitive load |
-| Qualified imports (`Array.map`, not `map`) | Use an unqualified function name | "Ambiguous occurrence — did you mean Array.map or Map.map?" | Why qualification prevents name collisions |
-| `Result Ok/Err` (not `Either Left/Right`) | Write `Left "error"` | "Not in scope: Left. Did you mean Result.err?" | NeoHaskell's vocabulary is intentional, not arbitrary |
-| `\|>` pipe (not `$` or nested parens) | Use `$` for function application | "NeoHaskell uses \|> for function piping" | Data flows left-to-right, like reading English |
-| No point-free style | Write `Array.map show` instead of `Array.map (\x -> show x)` | "Eta-reduce — NeoHaskell requires explicit lambdas" | Readability over cleverness |
-| `Module.yield` (not `pure`/`return`) | Write `pure value` | "Not in scope: pure. Did you mean Task.yield?" | NeoHaskell names things for what they do, not what they are |
+| Convention | What to break | Expected error (paraphrased) | What the reader learns | Enforced by |
+|-----------|--------------|-----------------------------|-----------------------|-------------|
+| `do` blocks only (no `let..in`, no `where`) | Replace a `do` block with `let..in` | "NeoHaskell uses do blocks for all bindings" | Why uniform binding syntax reduces cognitive load | Linter |
+| Qualified imports (`Array.map`, not `map`) | Use an unqualified function name | "Ambiguous occurrence — did you mean Array.map or Map.map?" | Why qualification prevents name collisions | Linter |
+| `Result Ok/Err` (not `Either Left/Right`) | Write `Left "error"` | "Not in scope: Left. Did you mean Result.err?" | NeoHaskell's vocabulary is intentional, not arbitrary | Compiler |
+| `\|>` pipe (not `$` or nested parens) | Use `$` for function application | "NeoHaskell uses \|> for function piping" | Data flows left-to-right, like reading English | Linter |
+| No point-free style | Write `Array.map show` instead of `Array.map (\x -> show x)` | "Eta-reduce — NeoHaskell requires explicit lambdas" | Readability over cleverness | Linter |
+| `Module.yield` (not `pure`/`return`) | Write `pure value` | "Not in scope: pure. Did you mean Task.yield?" | NeoHaskell names things for what they do, not what they are | Compiler |
+
+> **Enforcement level matters**: The "Enforced by" column tells the reader whether they'll get a hard compiler error or a linter warning. Compiler-enforced conventions are non-negotiable; linter-enforced conventions can theoretically be disabled (but shouldn't be). This distinction helps the reader calibrate their mental model of NeoHaskell's strictness. (Source: Steve Klabnik — "If you don't tell them whether the guardrail is a wall or a suggestion, they'll test it at the worst possible time.")
 
 ### Placement Rules
 
@@ -768,6 +1066,7 @@ Tasks:
 - [ ] Finalize NeoBank domain model (account types, events, commands)
 - [ ] Update `astro.config.mjs` sidebar to match the new section plan
 - [ ] Design core visuals: event flow diagram (command → event → store → projection → read model), CRUD vs. Events comparison visual
+- [ ] Design annotated code block component — Julia Evans-style arrows/callouts pointing to unfamiliar syntax within code. This is Phase 0 infrastructure because Tutorial Parts 1-3 depend on it. Options: custom Starlight component, SVG overlays, or CSS-based annotations. Decide and build before writing Part 1. (Source: Julia Evans — "The annotated code block is the single most important teaching tool for compound unfamiliarity.")
 - [ ] Set up tutorial companion repo with `part-1-start` branch
 - [ ] Write `getting-started/installation.mdx` — Nix setup with installation friction mitigations (see below), first `neo` command, "Hello Transactions"
 - [ ] Write Tutorial Part 1 (`01-first-transaction.mdx`) — this IS the priority deliverable
@@ -784,8 +1083,9 @@ Tasks:
 
 Tasks:
 - [ ] Write `getting-started/reading-neohaskell.mdx` — 5-minute annotated code walkthrough ("Reading NeoHaskell"). Julia Evans style — visual, friendly, zero prerequisites.
+- [ ] Write `getting-started/syntax-warmup.mdx` — 5-minute hands-on warm-up where the reader types 3-5 small NeoHaskell expressions and sees output. NOT a language tutorial — just enough muscle memory that the tutorial's syntax doesn't feel alien. Covers: `do` blocks, `|>` pipe, type annotations, `case..of`. Each example is 1-3 lines with immediate REPL output. (Source: Tania Rascia — "Let the reader's fingers learn the syntax before their brain has to learn the concepts.")
 - [ ] Write `getting-started/first-events.mdx` — Define an event type, deposit money, see balance derived from events
-- [ ] Write `guides/using-ai.mdx` — Copy-paste NeoHaskell prompt for AI tools, the 5 most common AI mistakes, how to spot wrong patterns
+- [ ] Write `getting-started/using-ai.mdx` (moved from guides/) — Copy-paste NeoHaskell prompt for AI tools, the 5 most common AI mistakes, how to spot wrong patterns. Placed in Getting Started because readers using AI copilots need this BEFORE writing their first line of code, not after finishing the tutorial. (Source: Sarah Drasner — "If 70% of developers use AI while coding, the AI guide belongs in Getting Started, not buried in Guides.")
 - [ ] Write first JIT concept pages: `events-not-state.mdx`, `commands-and-handlers.mdx`, `from-crud-to-events.mdx`
 - [ ] Validate the 20 misconceptions list with 5+ real developers (moved from Phase 0)
 - [ ] Create `ARCHITECTURE.md` documenting the Diataxis-based structure decision (moved from Phase 0)
@@ -820,7 +1120,8 @@ Tasks:
 - [ ] Write "Coming From..." pages (JS/TS and Haskell first, others based on traffic)
 - [ ] Write 3-5 standalone guides (testing, deployment, PostgreSQL event store, error handling, integrating with existing systems)
 - [ ] Generate reference docs from source code
-- [ ] Write "Common Errors" page (error message as heading, fix as content)
+- [ ] Write "Common Errors" page — **decision tree format** (not just error→fix pairs). Structure: "What were you trying to do?" → "What error did you see?" → Fix. This matches how readers actually search for help — they know their intent, then see an error, then need a fix. Group by intent (e.g., "I was trying to handle a command," "I was trying to build a projection") rather than alphabetically by error message. Include the exact error text as searchable headings. (Source: Julia Evans — "Error pages organized by error message assume the reader understands the error. They don't. Organize by what they were trying to do.")
+- [ ] Write `guides/reading-error-messages.mdx` — A micro-guide (2-3 pages) showing how to read NeoHaskell compiler errors. Takes 3-5 real error messages, annotates each part (what went wrong, where to look, how to fix), and teaches the general skill of parsing compiler output. Julia Evans annotated-diagram style. This is a standalone guide, not part of the tutorial — but the tutorial links to it from the first Break-It exercise. (Source: Julia Evans — "Reading error messages is a teachable skill that most tutorials assume readers already have. They don't.")
 - [ ] Write "FAQ" addressing remaining misconceptions not covered elsewhere
 
 **Output**: A documentation site that serves all three audience entry paths.
@@ -866,6 +1167,36 @@ Documentation is never done. Build these feedback loops in from day one.
 
 ---
 
+## i18n Quality Plan
+
+Translations are auto-generated by GitHub Action, but auto-generated doesn't mean quality-assured. Bad translations actively harm credibility in non-English markets.
+
+### Quality Tiers
+
+| Language | Tier | Quality Standard | Review Process |
+|----------|------|-----------------|----------------|
+| Spanish (es) | 1 — High priority | Native speaker review of tutorial + getting started | Community reviewer assigned; review before merge |
+| Japanese (ja) | 1 — High priority | Native speaker review of tutorial + getting started | Community reviewer assigned; review before merge |
+| Russian (ru) | 2 — Medium priority | Spot-check key pages | Community volunteer; review when available |
+| French (fr) | 2 — Medium priority | Spot-check key pages | Community volunteer; review when available |
+| Armenian (hy) | 3 — Best effort | Auto-generated only | No review process (too small a contributor base) |
+
+### Code Example Handling
+
+- Code examples are NOT translated (code is universal)
+- Comments within code blocks ARE translated
+- Error messages shown in the tutorial stay in English (they're what the reader will actually see)
+- Surrounding prose explaining the error IS translated
+
+### Translation Staleness Detection
+
+- When English source changes, the GitHub Action should mark the corresponding translation as "needs update" (via a frontmatter field or a tracking file)
+- Stale translations display a banner: "This page may be outdated. [View the English version](/en/...)"
+
+> **Source**: Sarah Drasner review — "Auto-generated translations with no quality process are worse than no translations — they signal that you don't care about non-English speakers."
+
+---
+
 ## File Structure
 
 ```
@@ -876,8 +1207,10 @@ src/content/docs/
     index.mdx                        # Section overview
     installation.mdx                 # Nix, tooling, "hello world"
     reading-neohaskell.mdx           # 5-min annotated code walkthrough ("Reading NeoHaskell")
+    syntax-warmup.mdx                # 5-min hands-on syntax warm-up: type the code, see the output (before tutorial)
     cheat-sheet.mdx                  # "I want to... / Write this..." quick reference (printable)
     first-events.mdx                 # Define event, store it, read it
+    using-ai.mdx                     # MOVED from guides/ — AI prompt, common AI mistakes, how to spot wrong patterns (readers need this before the tutorial, not after)
 
   tutorial/
     index.mdx                        # "Meet Alex — a developer like you." (Alex only here, "you" from Part 1)
@@ -887,15 +1220,18 @@ src/content/docs/
     04-multiple-accounts.mdx         # Multiple aggregates (NOT bounded contexts)
     05-transfers.mdx                 # Cross-aggregate transfers, saga with failure/compensation
     06-audit-everything.mdx          # Event replay, time-travel, audit trail, production scope note
+    whats-next.mdx                   # Post-tutorial transition: celebrate, branch (3 paths), community, reference bookmark
 
   concepts/
     index.mdx                        # "How to read this section"
+    why-neohaskell.mdx               # For Architects/Decision-Makers: comparison, tradeoffs, when NOT to use
+    architecture-evaluation.mdx      # For Architects: performance, scaling, integration, migration, operations
     events-not-state.mdx             # Core mental model shift
     commands-and-handlers.mdx        # Input processing
     from-crud-to-events.mdx          # ELEVATED: standalone page (was Coming From subpage) — the core teaching doc
     projections.mdx                  # Deriving state from events
     type-safety.mdx                  # Why the compiler is your friend
-    testing-event-sourced-systems.mdx # Given-When-Then, the testing trophy for ES
+    testing-event-sourced-systems.mdx # Given-When-Then, the testing trophy for ES. Includes a "Testing Trophy" diagram adapted for event sourcing: base = type safety (free from compiler), middle = unit tests (Given-When-Then for aggregates), upper = integration tests (projection verification), top = E2E (full event replay). The diagram makes the testing strategy visual and shows WHY event-sourced systems are easier to test than CRUD. (Source: Kent C. Dodds — "The Testing Trophy gives readers a mental model for which tests to write and why, preventing the common mistake of testing everything at the E2E level.")
     schema-evolution.mdx             # MOVED from Advanced to Core — too important to defer
     bounded-contexts.mdx             # System decomposition (linked from Part 5, not Part 4)
     effects.mdx                      # How NeoHaskell handles side effects
@@ -905,13 +1241,15 @@ src/content/docs/
 
   guides/
     index.mdx                        # "Pick what you need"
-    using-ai.mdx                     # AI prompt for NeoHaskell, common AI mistakes, how to spot wrong patterns
+    # using-ai.mdx moved to getting-started/ — readers need AI guidance before the tutorial, not after
     testing.mdx                      # Testing event-sourced systems
     deployment.mdx                   # From code to running service
     postgresql-event-store.mdx       # Production event storage
     error-handling.mdx               # Error patterns in NeoHaskell
     integrating-existing-systems.mdx # Incremental adoption
-    common-errors.mdx                # Error message -> fix lookup table
+    adopting-at-work.mdx             # Pragmatic guide for introducing NeoHaskell at your company
+    reading-error-messages.mdx       # Micro-guide: how to read NeoHaskell compiler errors (annotated real examples)
+    common-errors.mdx                # Error message -> fix lookup table (decision tree format)
 
   coming-from/
     index.mdx                        # "Find your background"

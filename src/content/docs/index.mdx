@@ -1,12 +1,12 @@
 ---
 title: NeoHaskell
-description: A modern approach to Haskell for building reliable software.
+description: Event sourcing as a language. The compiler enforces what other tools leave to discipline.
 template: splash
 hero:
-  tagline: A modern approach to Haskell for building reliable software.
+  tagline: Event sourcing as a language — the compiler enforces what other tools leave to discipline.
   actions:
     - text: Get Started
-      link: /getting-started/
+      link: /getting-started/installation/
       icon: right-arrow
     - text: GitHub
       link: https://github.com/neohaskell/neohaskell
@@ -16,19 +16,41 @@ hero:
 
 import { Card, CardGrid } from '@astrojs/starlight/components';
 
-## Explore NeoHaskell
+<CardGrid>
+  <Card title="Build something in 10 minutes" icon="rocket">
+    Go from zero to a working event-sourced app. Install NeoHaskell, deposit some money, and see your balance derived from events — not stored, derived.
 
-<CardGrid stagger>
-  <Card title="Getting Started" icon="rocket">
-    Set up your environment and write your first NeoHaskell program.
+    [Get started →](/getting-started/installation/)
   </Card>
-  <Card title="Core Concepts" icon="open-book">
-    Learn the fundamental ideas behind NeoHaskell.
+  <Card title="How it compares to what you know" icon="setting">
+    Event sourcing with compiler guarantees. See how NeoHaskell compares to EventStoreDB, Kafka, and Axon — tradeoffs, performance, and adoption path.
+
+    [Evaluate NeoHaskell →](/concepts/why-neohaskell/)
   </Card>
-  <Card title="Guides" icon="pencil">
-    Step-by-step tutorials for common tasks.
+  <Card title="Why this matters for your team" icon="open-book">
+    Event sourcing reduces long-term cost. Understand the value proposition, risk assessment, and proof points — without the implementation details.
+
+    [Learn why →](/concepts/why-neohaskell/)
   </Card>
-  <Card title="API Reference" icon="setting">
-    Detailed reference documentation for the NeoHaskell API.
+</CardGrid>
+
+## Learn by building
+
+The [NeoBank tutorial](/tutorial/) takes you from zero to a working banking service with accounts, transactions, transfers, and a complete audit trail. Each part builds one concept. It'll feel like enterprise software — it's about 200 lines of code.
+
+## Already know a language?
+
+<CardGrid>
+  <Card title="JavaScript / TypeScript" icon="seti:javascript">
+    [How your JS/TS maps to NeoHaskell →](/coming-from/javascript/)
+  </Card>
+  <Card title="Python" icon="seti:python">
+    [How your Python maps to NeoHaskell →](/coming-from/python/)
+  </Card>
+  <Card title="Go" icon="seti:go">
+    [How your Go maps to NeoHaskell →](/coming-from/go/)
+  </Card>
+  <Card title="Haskell" icon="seti:haskell">
+    [How NeoHaskell differs from GHC Haskell →](/coming-from/haskell/)
   </Card>
 </CardGrid>
