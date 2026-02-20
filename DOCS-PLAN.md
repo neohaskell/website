@@ -1,6 +1,6 @@
 # NeoHaskell Documentation Work Plan
 
-> Revised after review by Steve Klabnik, Julia Evans, Dan Abramov, Martin Fowler, Sarah Drasner, Tania Rascia, and Kent C. Dodds.
+> Revised after full review synthesis from Steve Klabnik, Julia Evans, Dan Abramov, Martin Fowler, Sarah Drasner, Tania Rascia, and Kent C. Dodds. All 33 consensus changes incorporated.
 > Domain: **NeoBank** (banking/fintech) — consensus from expert panel.
 > Language teaching strategy: **Implicit-first** — NeoHaskell syntax taught through the tutorial, not before it.
 
@@ -14,7 +14,8 @@
 4. **If it doesn't compile, it doesn't ship.** Code verification infrastructure comes before content, not after.
 5. **The example IS the argument.** NeoBank isn't a decoration — it's the lived proof that event sourcing is how the world already works.
 6. **Multiple doors, one house.** Different audiences enter differently, but they all arrive at understanding.
-7. **The tutorial teaches the language implicitly. Concept pages teach it explicitly.** NeoHaskell syntax is introduced through what the reader is building, never in isolation. Each tutorial page lists new syntax in a sidebar aside; concept pages provide the full explanation. No one reads a grammar chapter before cooking dinner.
+7. **The tutorial teaches the language implicitly. Concept pages teach it explicitly.** NeoHaskell syntax is introduced through what the reader is building, never in isolation. New syntax is bolded on first use with a brief inline explanation; concept pages provide the full treatment. No one reads a grammar chapter before cooking dinner.
+8. **Delight is a teaching strategy.** Surprise and "wait, really?!" moments aren't decoration — they're how insights stick. The emotional arc of the tutorial (curiosity → confidence → pride) is designed, not accidental.
 
 ---
 
@@ -80,7 +81,7 @@ Before writing a single page, enumerate and validate these. They drive content d
 | 6 | "Event sourcing means eventual consistency everywhere" | Depends on the bounded context; NeoHaskell gives you choices | Architecture guide |
 | 7 | "My events are my API" | Commands (deposit slips) are the API; events (transactions) are internal facts | Tutorial part 2 — Account Rules |
 | 8 | "I'll need a message broker (Kafka, RabbitMQ)" | Built-in event store handles this at language level | Getting Started |
-| 9 | "Schema evolution will be a nightmare" | Type system + versioning strategy (address honestly) | Advanced guide |
+| 9 | "Schema evolution will be a nightmare" | Type system + versioning strategy (address honestly) | Core Concepts page (not Advanced — this is too important to defer) |
 | 10 | "Functional programming means no state" | There is state — it's just derived from events, not mutated | Concepts |
 | 11 | "Haskell is slow" | NeoHaskell compiles to native code; concurrency is built-in | FAQ or Concepts |
 | 12 | "I need to understand monads first" | NeoHaskell's stdlib is designed so you don't need to | Getting Started |
@@ -103,11 +104,11 @@ Design this FIRST. The tutorial structure emerges from the example's progression
 
 ### The Domain
 
-Alex is a developer building NeoBank — a simple banking service. The domain is universally understood (everyone has a bank account), maps perfectly to event sourcing (ledgers are the original event store), and produces output that feels like real fintech with minimal complexity.
+You're building NeoBank — a simple banking service. The domain is universally understood (everyone has a bank account), maps perfectly to event sourcing (ledgers are the original event store), and produces output that feels like real fintech with minimal complexity.
 
 ### The Character
 
-Alex is the reader. Not a banker — a developer. Every part starts with what Alex (the developer) wants to build, framed as a product requirement that sounds impressively professional.
+The tutorial uses second person ("you") from Part 1 onward. Alex appears only on the tutorial index page as brief framing ("Meet Alex — a developer like you who wants to build a bank"). Inside the tutorial itself, product requirements are framed as "The requirement:" not "Alex wants to..." — this keeps the reader immersed as the builder, not an observer.
 
 ### The Scope
 
@@ -117,7 +118,7 @@ Alex is the reader. Not a banker — a developer. Every part starts with what Al
 | Real-time transaction ledger | Bloomberg terminal | A list of events, rendered chronologically |
 | Instant balance reconciliation | FinTech infrastructure | A fold over deposit/withdrawal events |
 | Overdraft protection | Risk management system | A type-level constraint the compiler enforces |
-| Inter-account transfers | Payment settlement network | Two commands in two bounded contexts |
+| Inter-account transfers | Payment settlement network | Two commands across two aggregates |
 | Complete audit trail | Regulatory compliance engine | The event store, which you already have |
 | Historical replay | Time-travel debugging | Replaying events to a point in time |
 
@@ -125,23 +126,23 @@ Alex is the reader. Not a banker — a developer. Every part starts with what Al
 
 ### The Progression
 
-| Part | Title | Alex's goal | What the reader builds | Events introduced | The "wow" moment |
+| Part | Title | Your goal | What the reader builds | Events introduced | The "wow" moment |
 |------|-------|------------|----------------------|-------------------|-----------------|
-| 1 | **Your First Transaction** | "I want to deposit money" | Event type, command handler, event store, balance as fold | `AccountOpened`, `MoneyDeposited` | "That's 12 lines of code?" |
-| 2 | **Account Rules** | "Don't let me overdraw" | Validation, declined commands, compiler catching illegal states | `MoneyWithdrawn`, `WithdrawalDeclined` | "The compiler just prevented a real bug" |
-| 3 | **Transaction History** | "Show me what happened" | Projections, read models, formatted statement output | (consuming existing events) | "A bank statement IS a projection" |
-| 4 | **Multiple Accounts** | "I need a savings account too" | Multiple aggregates, account-scoped events | `AccountOpened` (savings variant) | "Adding a new account type was trivial?" |
-| 5 | **Transfers** | "Move money between accounts" | Cross-aggregate commands, saga/process manager | `TransferInitiated`, `TransferCompleted` | "Two bounded contexts, and it just works" |
-| 6 | **Audit Everything** | "Show me everything that ever happened" | Event replay, time-travel queries, full audit trail | (replaying all events) | "I accidentally built a compliance engine" |
+| 1 | **Your First Transaction** | "I want to deposit money" | Event type, command handler, event store, balance as fold. Opens with brief CRUD example that fails ("what was the balance before the dispute?") — then introduces events as the solution. | `AccountOpened`, `MoneyDeposited` | "That's 12 lines of code?" |
+| 2 | **Account Rules** | "Don't let me overdraw" | Validation, declined commands (return `Result.err`, not events), compiler catching illegal states. First Given-When-Then test introduced. | `MoneyWithdrawn` | "The compiler just prevented a real bug" |
+| 3 | **Transaction History** | "Show me what happened" | TWO projections from the same event stream: formatted bank statement + monthly summary. This IS the CQRS insight — same events, different views. Projection test introduced. | (consuming existing events) | "Two completely different views from the same events?" |
+| 4 | **Multiple Accounts** | "I need a savings account too" | Multiple aggregates (NOT bounded contexts — checking/savings are different aggregates in the same context), account-scoped events | `AccountOpened` (savings variant, same event with `accountType` field) | "Adding a new account type was trivial?" |
+| 5 | **Transfers** | "Move money between accounts" | Cross-aggregate commands, saga/process manager with full state machine: happy path → failure → compensation. Cross-aggregate test. | `TransferRequested`, `TransferCompleted`, `TransferFailed` | "It handles the failure case too?" |
+| 6 | **Audit Everything** | "Show me everything that ever happened" | Event replay, time-travel queries, full audit trail. Property-based test. | (replaying all events) | "I accidentally built an audit trail" |
 
 ### The Rosetta Stone (appears in Concepts, referenced from Tutorial Part 1)
 
-| What Alex says | Banking term | NeoHaskell term | What it actually is |
+| What you'd say | Banking term | NeoHaskell term | What it actually is |
 |---------------|-------------|-----------------|-------------------|
 | "Something happened" | Transaction | Event | An immutable record of a fact |
 | "Do something" | Deposit slip | Command | A request that may be accepted or rejected |
 | "What's my balance?" | Account statement | Projection | State derived by folding over events |
-| "My account" | Account | Aggregate | A consistency boundary for related events |
+| "My account" | Account | Aggregate | A consistency boundary (not the entity itself — the boundary that protects it) |
 | "Show me everything" | Audit log | Event Store | The append-only source of truth |
 | "Retail vs. Lending" | Business division | Bounded Context | An independent model with its own events |
 
@@ -149,16 +150,19 @@ Alex is the reader. Not a banker — a developer. Every part starts with what Al
 
 - Each part builds ONE concept on top of the previous
 - Each part results in running code the reader wrote themselves
-- Each part starts with a product requirement Alex would write ("I want to...")
+- Each part starts with a product requirement ("The requirement: ..."), not "Alex wants to..."
 - Part 1 must produce visible output within 10 minutes of starting
 - Part 6 deliberately echoes NeoHaskell.org's pitch: "Banks don't UPDATE your balance"
+- Each tutorial page includes estimated reading/coding time (e.g., "~20 minutes")
+- Each tutorial page opens with "What you'll learn" (3-5 bullet points) and closes with a "Recap" section
+- Progress indicator shows "Part N of 6" on every tutorial page — completion visibility is motivation
+- Tests are introduced from Part 2 onward; by Part 6 the reader has written 10-15 tests
 
-### Disclaimer (appears on tutorial page 1)
+### Production Scope Note (appears in Part 6 conclusion, NOT Part 1)
 
-> NeoBank is a teaching example, not a production banking system. It doesn't handle
-> multi-currency, regulatory compliance, concurrent access, or interest calculation.
-> Those are real problems — some are covered in the advanced guides. What NeoBank
-> demonstrates is how event sourcing makes complex-sounding features trivially simple.
+> Leading with "this isn't real" undermines the emotional strategy. Instead, the Part 6 conclusion reframes scope as forward-looking: "You've built accounts, transactions, transfers, and a complete audit trail. For production, you'd add: multi-currency support, regulatory compliance, concurrent access controls, and interest calculation. Those are covered in the advanced guides. What you've proven is that event sourcing makes complex-sounding features genuinely simple."
+>
+> If scope-setting is needed early, do it with confidence ("We'll keep this focused on the core patterns"), not defensiveness.
 
 ### The Opening Line of the Tutorial
 
@@ -173,6 +177,16 @@ Alex is the reader. Not a banker — a developer. Every part starts with what Al
 
 **Logistics / shipment tracking.** A package moves through locations, status changes are events, delivery is a projection. Different enough from banking to prove the pattern generalizes. Universal enough that everyone understands it.
 
+### Installation Friction Mitigation
+
+If Nix is the only installation path, this is the single highest-friction point in the entire documentation. Design the Nix experience as if it's the product.
+
+- **Zero-install path if possible**: Offer a playground or GitHub Codespaces option so readers can start the tutorial without any local setup
+- **If Nix is required**: The installation page must make Nix feel effortless — not "install Nix, then install NeoHaskell" but "run this one command"
+- **Installation time estimates**: Tell the reader how long each step takes ("This downloads ~500MB and takes 2-5 minutes")
+- **Platform-specific instructions**: Use Starlight Tabs for macOS / Linux / Windows (WSL) — no "figure out which one applies to you"
+- **Troubleshooting section**: The 5 most common installation failures and their fixes, based on Discord reports
+
 ---
 
 ## Tutorial Layer System
@@ -181,28 +195,25 @@ Every tutorial page operates on three simultaneous layers. The reader engages wi
 
 ### Layer 1: The NeoBank Narrative (mandatory, always visible)
 
-This is the tutorial. Alex wants to build a feature, writes the code, sees the result. The reader follows along. NeoHaskell syntax is used but never formally introduced — the reader absorbs it by doing.
+This is the tutorial. You want to build a feature, you write the code, you see the result. NeoHaskell syntax is used but never formally introduced — the reader absorbs it by doing.
 
-### Layer 2: "New Syntax on This Page" Aside (expandable sidebar)
+### Layer 2: Inline Syntax Explanation (replaces the dropped sidebar specification)
 
-Each tutorial page includes a collapsible aside listing every new language construct introduced on that page. Format:
+> The original plan specified a collapsible "New NeoHaskell on this page" sidebar. Reviewer consensus (5/7) found this overengineered and fighting the implicit-first philosophy. Julia Evans' annotated code blocks solve compound-unfamiliarity (Martin's concern) without shifting the reader's attention from "I'm building a bank" to "I'm learning a language."
 
-```
-<details>
-<summary>New NeoHaskell on this page</summary>
+The tutorial handles new syntax through three mechanisms:
 
-- **`|>` (pipe operator)** — passes the left side as the last argument to the right side. Like Unix pipes for code.
-- **`do` blocks** — how you sequence steps in NeoHaskell. All variable binding happens here.
-- **`Result.ok` / `Result.err`** — success or failure, enforced by the compiler.
+1. **Bold on first use**: The first time a construct appears, it's **bolded** with a one-clause inline explanation. Example: "We use the **pipe operator (`|>`)** — it passes the left side as input to the right side, like Unix pipes for code."
 
-</details>
-```
+2. **Annotated code blocks**: For the first major code example in Parts 1-3, use Julia Evans-style annotated code blocks where arrows or callouts point to unfamiliar syntax within the code itself. This teaches syntax IN the context of what the reader is building, not separate from it.
+
+3. **Standalone syntax quick reference page**: `getting-started/cheat-sheet.mdx` (already planned) serves as the go-to reference for NeoHaskell syntax. Linked once from Part 1 ("bookmark this — it's your NeoHaskell phrasebook").
 
 Rules:
-- Maximum 3-5 constructs per page (if more, the page is doing too much — split it)
-- Each construct gets a one-sentence explanation, not a full lesson
-- Links to the relevant concept page for deeper understanding
-- First occurrence of a construct is bold in the tutorial text itself
+- Maximum 3-5 new constructs per page (if more, the page is doing too much — split it)
+- No separate syntax sidebar or collapsible aside — syntax lives in the narrative flow
+- First occurrence of each construct is bold in the tutorial text with a brief explanation
+- Subsequent occurrences are not explained — the reader has seen it before
 
 ### Layer 3: Concept Deep-Dive Links (inline, unobtrusive)
 
@@ -220,16 +231,16 @@ Rules:
 
 ### Layer Interaction Map
 
-| Tutorial Part | Layer 2: New Syntax | Layer 3: Concept Links |
+| Tutorial Part | Layer 2: Bold-on-first-use syntax | Layer 3: Concept Links |
 |--------------|--------------------|-----------------------|
-| 1. First Transaction | `do`, `\|>`, type declarations, `Task`, `Module.yield` | Events, Commands, Event Store |
-| 2. Account Rules | `case..of`, `Result`, pattern matching on types | Aggregates, Validation |
-| 3. Transaction History | Record syntax, `Array.map`, `Array.foldl` | Projections, Read Models |
-| 4. Multiple Accounts | Module structure, qualified imports, `Map` | Bounded Contexts |
-| 5. Transfers | `Task.andThen`, error propagation, `[fmt\|...\|]` | Sagas, Process Managers |
+| 1. First Transaction | `do`, `\|>`, type declarations, `Task`, `Module.yield` (annotated code block) | Events, Commands, Event Store |
+| 2. Account Rules | `case..of`, `Result`, pattern matching on types (annotated code block) | Aggregates, Validation, Testing |
+| 3. Transaction History | Record syntax, `Array.map`, `Array.foldl` (annotated code block) | Projections, Read Models |
+| 4. Multiple Accounts | Module structure, qualified imports, `Map` | Multiple Aggregates |
+| 5. Transfers | `Task.andThen`, error propagation, `[fmt\|...\|]` | Sagas, Process Managers, Bounded Contexts |
 | 6. Audit Everything | Event replay functions, time-based queries | Event Store internals |
 
-> **Principle**: If a reader skips every aside and every link, they still complete the tutorial and have working code. The layers add depth, not dependencies.
+> **Principle**: If a reader skips every link, they still complete the tutorial and have working code. The layers add depth, not dependencies.
 
 ---
 
@@ -338,6 +349,15 @@ sidebar:
 | Reference | No | No | Yes | "What are the exact details?" |
 | Coming From... | No | No | Yes | "Map my existing knowledge" |
 
+### Litmus Tests (for deciding where content belongs)
+
+| Section | Litmus Test |
+|---------|-------------|
+| Tutorial | "Does this page require previous pages?" — if yes, it's tutorial. |
+| Concept | "Could the reader understand this without a keyboard?" — if yes, it's explanation. |
+| Guide | "Does this solve a problem the reader already knows they have?" — if yes, it's a guide. |
+| Reference | "Would a reader come here to look up a forgotten detail?" — if yes, it's reference. |
+
 ---
 
 ## Reference Documentation Strategy
@@ -381,20 +401,22 @@ Concept pages are NOT pre-written. They are written **when the tutorial first ne
 
 | Tutorial Part | Concept Pages to Write | Why now (the tutorial needs it) |
 |--------------|----------------------|-------------------------------|
-| 1. First Transaction | `events-not-state.mdx`, `commands-and-handlers.mdx` | Reader just stored their first event and issued their first command |
-| 2. Account Rules | `type-safety.mdx` | Reader saw the compiler reject an invalid withdrawal — explain why types do this |
-| 3. Transaction History | `projections.mdx` | Reader just built a bank statement — the concept is fresh and concrete |
-| 4. Multiple Accounts | `bounded-contexts.mdx` | Reader has two account types — explain why they're separate |
-| 5. Transfers | `effects.mdx` | Cross-aggregate operations need effect explanation |
-| 6. Audit Everything | `concurrency.mdx` | Event replay at scale needs concurrency explanation |
+| 1. First Transaction | `events-not-state.mdx`, `commands-and-handlers.mdx`, `from-crud-to-events.mdx` | Reader just stored their first event, issued their first command, and saw CRUD fail |
+| 2. Account Rules | `type-safety.mdx`, `testing-event-sourced-systems.mdx` | Reader saw the compiler reject an invalid withdrawal and wrote their first test |
+| 3. Transaction History | `projections.mdx` | Reader just built two projections from the same events — the CQRS concept is fresh |
+| 4. Multiple Accounts | `schema-evolution.mdx` | Reader has two account types — schema evolution is concrete now, not theoretical |
+| 5. Transfers | `effects.mdx`, `bounded-contexts.mdx` | Cross-aggregate transfers genuinely need bounded context explanation; effects needed for saga |
+| 6. Audit Everything | `concurrency.mdx`, `thinking-in-events.mdx`, `trade-offs.mdx` | Capstone: replay at scale needs concurrency; wrap-up needs "Thinking in Events" (the react.dev equivalent); honesty about trade-offs |
+
+> **New pages from review consensus**: `from-crud-to-events.mdx` (elevated from Coming From subpage), `testing-event-sourced-systems.mdx`, `thinking-in-events.mdx` (Dan's "Thinking in React" equivalent — 5-step process: Identify events → Define commands → Design aggregates → Build projections → Connect bounded contexts, using non-banking domain), `trade-offs.mdx` (honest about when event sourcing adds unnecessary complexity), `schema-evolution.mdx` (moved from Advanced to Core — too important to defer).
 
 ### Concept Page Template (internal)
 
-Every concept page follows this structure:
+Every concept page follows this structure. **The template is flexible** — some concepts need 2 sections, some need 7. Required sections are marked; all others are optional based on what the concept demands.
 
 ```markdown
 ---
-title: [Concept Name]
+title: [Concept Name] (use concept-name headings for searchability)
 description: [One sentence]
 entry_stage: [Mental model stage required]
 exit_stage: [Mental model stage after reading]
@@ -402,21 +424,35 @@ misconception: [Which misconception from the 20 this addresses]
 tutorial_anchor: [Which tutorial part first links here]
 ---
 
-## The One-Sentence Version
-[If the reader reads nothing else, this sentence should shift their mental model]
+## What You Might Expect
+[Start from the reader's CRUD assumptions. "If you're used to SQL, you'd expect..."]
 
-## In NeoBank Terms
+## Why That Breaks
+[Show the specific failure. Make the reader feel the pain of the old model.]
+
+## [Concept Name]: The Mental Model Shift (REQUIRED)
+[The core explanation — what changes in how you think, not just what you do]
+
+## What Happens When... (trace a concrete scenario)
+[Make invisible runtime behavior visible. "When you deposit $50, here's what happens step by step..."]
+
+## In NeoBank Terms (REQUIRED)
 [Explain using the banking domain they already know from the tutorial]
 
-## The Full Picture
+## The Full Picture (REQUIRED, with code)
 [Complete explanation with code examples]
 
 ## How NeoHaskell Enforces This
 [What the compiler/linter does to keep you on the right path]
 
+## Testing This Concept
+[How to verify your understanding with a test — connects to testing-first philosophy]
+
 ## Going Deeper (optional)
 [Academic references, advanced patterns, links to external resources]
 ```
+
+> Required sections: **Mental Model Shift**, **In NeoBank Terms**, **The Full Picture**. All others are included when they serve the concept — flexibility over rigidity.
 
 ### Why Just-in-Time?
 
@@ -439,7 +475,7 @@ Translation layers for specific backgrounds. These become the highest-traffic pa
 | Coming from Python | Django ORM, Flask routes | Events vs. models, handlers vs. views |
 | Coming from Go | Structs, interfaces, goroutines | Type classes, algebraic types, channels |
 | Coming from Haskell | Monads, IO, cabal/stack | **Full Rosetta Stone page** — see expanded spec below |
-| Coming from CRUD | REST endpoints, SQL updates | `UPDATE balance` → record `MoneyDeposited`; `SELECT balance` → fold over transactions; REST endpoint → command handler |
+| Coming from CRUD | REST endpoints, SQL updates | `UPDATE balance` → record `MoneyDeposited`; `SELECT balance` → fold over transactions; REST endpoint → command handler. **NOTE: This is elevated to a standalone Core Concepts page (`from-crud-to-events.mdx`), not just a Coming From subpage.** This is the core teaching document for the primary audience. Structure: What You Might Expect → Why That Breaks → The Mental Model Shift → Side-by-Side Code → When CRUD Is Fine. The Coming From section retains a short version that links to the full concept page. |
 | Coming from Event Sourcing | Kafka, EventStoreDB, Axon | No schema registry needed (types ARE the schema), no consumer groups (projections are functions), event versioning via algebraic data types |
 
 ### Pattern for Each Page
@@ -500,27 +536,164 @@ Every tutorial page and most concept pages include exercises. Passive reading do
 4. **Break**: "Remove the type annotation. What error do you get? Why?"
 5. **Compare**: "Write this same feature in [language you know]. Which version is clearer?"
 6. **Audit**: "Replay all events from scratch. Does the derived balance match the current balance? What would happen if an event was missing?"
+7. **Verify**: "Write a test that proves this feature works." Creates a natural build→verify feedback loop. Event sourcing's Given-When-Then pattern IS the testing grammar — use it.
 
 ### Exercise Placement
 
-- **Tutorial pages**: 1 Modify + 1 Extend per page (mandatory)
+- **Tutorial pages**: 1 Modify + 1 Extend per page (mandatory), plus 1 Verify from Part 2 onward
 - **Concept pages**: 1 Predict or 1 Break per page (optional but encouraged)
 - **Guides**: 0 exercises (guides are task-oriented, not learning-oriented)
 
-### Bloom's Taxonomy Progression (mapped to tutorial parts)
+### Exercise Solutions (non-negotiable)
 
-Exercises follow a deliberate cognitive progression — readers move from rote execution to creative composition.
+Every exercise must have:
+- 2-3 progressive hints in `<details>` components (graduated difficulty)
+- Full solution behind a "Show solution" toggle
+- Link to the tutorial companion repo branch for that section
 
-| Tutorial Part | Bloom's Level | Exercise Pattern | Example |
-|--------------|--------------|-----------------|---------|
-| 1. First Transaction | **Remember** (Copy) | Copy-paste the code, run it, see the output. Change one value. | "Change the deposit amount to $200. Run it. What's the new balance?" |
-| 2. Account Rules | **Understand** (Modify) | Change behavior within existing structure. | "Add a `MinimumBalance` rule — withdrawals below $10 remaining are declined." |
-| 3. Transaction History | **Apply** (Replicate) | Build a similar feature from scratch using the same pattern. | "Create a `MonthlyStatement` projection that groups transactions by month." |
-| 4. Multiple Accounts | **Analyze** (Decompose) | Identify which pattern to apply and why. | "Should `AccountType` be an event or a field on `AccountOpened`? Argue both sides." |
-| 5. Transfers | **Evaluate** (Critique) | Judge a given solution and find the flaw. | "This transfer handler doesn't check the source balance. What goes wrong? Fix it." |
-| 6. Audit Everything | **Create** (Compose) | Build something new that combines multiple concepts. | "Build a `FraudAlert` projection that flags accounts with 3+ declined withdrawals in 24 hours." |
+> Exercises without solutions are frustrating. "Stuck? Here's the full code" sections dramatically improve tutorial completion rates.
 
-> The progression ensures that by part 6, the reader isn't following instructions — they're making design decisions. This is how we know they've internalized the mental model.
+### Exercise Difficulty Progression
+
+Exercises follow a deliberate progression — the reader moves from copying to creating across the tutorial.
+
+- **Part 1** (Copy & tweak): Copy-paste the code, run it, see the output, change one value. "Change the deposit amount to $200. Run it. What's the new balance?" The reader proves the system works.
+- **Part 2** (Modify within structure): Change behavior within existing patterns. "Add a `MinimumBalance` rule — withdrawals below $10 remaining are declined." First `Verify` exercise: write a test for the rule.
+- **Part 3** (Replicate a pattern): Build a similar feature from scratch. "Create a `MonthlyStatement` projection that groups transactions by month." The reader demonstrates they can apply the projection pattern independently.
+- **Part 4** (Decompose & decide): Identify which pattern to apply and argue why. "Should `AccountType` be an event or a field on `AccountOpened`? Argue both sides." The reader is thinking like a designer, not a copier.
+- **Part 5** (Critique & fix): Judge a given solution and find the flaw. "This transfer handler doesn't check the source balance. What goes wrong? Fix it." Write a cross-aggregate test.
+- **Part 6** (Compose something new): Build something that combines multiple concepts. "Build a `FraudAlert` projection that flags accounts with 3+ declined withdrawals in 24 hours." Write a property-based test.
+
+> By Part 6, the reader isn't following instructions — they're making design decisions. This is how we know they've internalized the mental model.
+
+### Checkpoint Progression
+
+Verification grows with the reader's confidence:
+- **Part 1**: Manual verification — "run it, see the output"
+- **Part 2**: Semi-automated — introduce the test runner, write first Given-When-Then test
+- **Part 4**: Automated tests as primary verification — reader runs test suite
+- **Part 6**: Reader writes their own verification from scratch — property-based testing
+
+---
+
+## Stuck Reader Strategy
+
+Every tutorial page must design for failure, not just success. The #1 reason people don't finish tutorials isn't that the content is bad — they got stuck and had no way forward.
+
+### Per-Tutorial-Page Requirements
+
+1. **"If You're Stuck" section**: Escape hatches at the bottom of every tutorial page with 3-5 "If you see X, check Y" troubleshooting items specific to that page's content
+2. **Complete code for each section**: Collapsible `<details>` with the full working code at each checkpoint — not just the final version
+3. **Tutorial companion repo**: Tagged branches per part (`part-1-start`, `part-1-complete`, `part-2-start`, etc.). Reader can `git checkout part-2-start` to get a clean starting point for any section.
+4. **Progressive hints**: Every exercise has 2-3 hints before the full solution (see Exercise Solutions above)
+
+> The emotional safety net: at no point should a reader feel they have no options. Even "start this section over from the companion repo" is better than "I guess I'll quit."
+
+---
+
+## Visual Design Requirements
+
+Diagrams are not optional. They're a core teaching mechanism, designed FIRST with prose written to support them.
+
+### Required Diagrams (Phase 0)
+
+1. **Event flow diagram**: Command → Event → Store → Projection → Read Model. The single most important diagram — shows how one action flows through the entire system. Clean SVG, not hand-drawn.
+2. **Event timeline visualization**: Static SVG that grows through the tutorial. Part 1 shows 2 events; by Part 6 it shows the full history.
+3. **CRUD vs. Events comparison visual**: Side-by-side showing "UPDATE balance SET 150" vs. "record MoneyDeposited $50." Used in tutorial intro and `from-crud-to-events.mdx`.
+
+### Per-Concept-Page Visuals
+
+Each concept page should include a "Visual Design" consideration: what would a diagram of this concept look like? Not every concept needs a diagram, but the decision should be explicit.
+
+### Style
+
+- Clean SVG (not hand-drawn)
+- Consistent color language: commands = blue, events = green, projections = orange
+- Accessible: must work in both light and dark mode
+- Every diagram has alt text
+
+---
+
+## Starlight Component Strategy
+
+Starlight provides components that are not decorations — they're the difference between documentation that works and documentation that merely exists. Adopt from Phase 0.
+
+| Component | Purpose | Where to use |
+|-----------|---------|-------------|
+| **Tabs** | Platform-specific instructions, "Your Language → NeoHaskell" comparisons | Installation page (OS tabs), Coming From pages |
+| **Asides** (note, tip, caution, danger) | Contextual callouts without breaking narrative flow | Tutorial: `tip` for shortcuts, `caution` for common mistakes, `note` for "you'll learn more about this in Part N" |
+| **CardGrid** | Visual navigation for section index pages | Core Concepts index, Guides index |
+| **Code block labels** | Name what the code IS, not just its language | Every code block: `title="src/Bank/Account.hs"` |
+| **Steps** | Numbered sequential instructions | Installation, Getting Started |
+| **Badges** | Status indicators | "New in Part 3", difficulty level on guides |
+
+> Adopt these from the first page written. Retrofitting component usage is harder than starting with it.
+
+---
+
+## Tutorial Page Template
+
+Every tutorial page follows this structure:
+
+```markdown
+---
+title: "Part N: [Title]"
+description: [One sentence]
+time_estimate: "~20 minutes"
+---
+
+## What You'll Learn
+- [3-5 bullet points — the reader knows what they're signing up for]
+
+## The Requirement
+[Product requirement framing — what you're building this part]
+
+## [Main content sections...]
+
+## If You're Stuck
+- If you see [X], check [Y]
+- If you see [Z], try [W]
+- [Full code for this section in <details> toggle]
+- [Link to companion repo branch]
+
+## Recap
+- [3-5 bullet points — what you just learned]
+- [Link to next part]
+```
+
+---
+
+## Missing Patterns (to be scheduled)
+
+Patterns flagged by Martin Fowler as critical but not yet placed in the plan:
+
+- **Idempotency**: Handling duplicate commands/events. Schedule as concept page or guide.
+- **Snapshotting**: Performance optimization for long event streams. Schedule as guide.
+- **GDPR / Tombstones**: Right to erasure in an append-only store. Schedule as guide.
+- **Event ordering / Causality**: Ensuring events are processed in the correct order. Schedule as concept page with Part 5.
+
+> These should be placed during Phase 2-3 as the tutorial content makes them concrete. Don't write them in the abstract.
+
+---
+
+## Cross-Reference Strategy
+
+Documentation sections are not silos. Every page should connect the reader to related content.
+
+### Cross-Reference Requirements
+
+- Every tutorial page links to the concept pages it introduces (Layer 3)
+- Every concept page links back to the tutorial part where the concept was first encountered
+- Every "Coming From..." page links to the relevant concept pages for deeper understanding
+- Every guide links to prerequisite concept pages
+- The `from-crud-to-events.mdx` concept page is linked from: Tutorial Part 1, Getting Started, and the Coming From CRUD page
+
+### Implementation
+
+Use consistent link patterns:
+- Tutorial → Concept: `[→ Deep dive: What is a projection?](/concepts/projections)`
+- Concept → Tutorial: `[See this in action: Tutorial Part 3](/tutorial/03-transaction-history)`
+- Coming From → Concept: `[Learn more: Events, not state](/concepts/events-not-state)`
 
 ---
 
@@ -588,36 +761,40 @@ Even if not built immediately, structure content so these can be added later.
 
 ### Phase 0 — Foundation (Week 1)
 
-**Goal**: Buildable infrastructure and validated learner assumptions.
+**Goal**: Buildable infrastructure and Tutorial Part 1 shipped. Streamlined per reviewer consensus — ship fast, learn from real readers.
 
 Tasks:
 - [ ] Set up code block extraction + compilation CI
-- [ ] Validate the 20 misconceptions list with 5+ real developers
 - [ ] Finalize NeoBank domain model (account types, events, commands)
-- [ ] Study reference docs: Rust Book (progression), Stripe (reference quality), react.dev (teaching method)
-- [ ] Create `ARCHITECTURE.md` documenting the Diataxis-based structure decision
 - [ ] Update `astro.config.mjs` sidebar to match the new section plan
-- [ ] Write `getting-started/reading-neohaskell.mdx` — 5-minute annotated code walkthrough ("Reading NeoHaskell"). Take a real 20-line NeoHaskell snippet and annotate every line with what it does and why it looks like that. Julia Evans style — visual, friendly, zero prerequisites.
-- [ ] Write `getting-started/cheat-sheet.mdx` — "I want to... / Write this..." quick reference. Two-column format: left column is intent ("bind a variable", "handle an error", "iterate over a list"), right column is NeoHaskell code. Printable. Fits on 2 pages.
+- [ ] Design core visuals: event flow diagram (command → event → store → projection → read model), CRUD vs. Events comparison visual
+- [ ] Set up tutorial companion repo with `part-1-start` branch
+- [ ] Write `getting-started/installation.mdx` — Nix setup with installation friction mitigations (see below), first `neo` command, "Hello Transactions"
+- [ ] Write Tutorial Part 1 (`01-first-transaction.mdx`) — this IS the priority deliverable
+- [ ] Write `getting-started/cheat-sheet.mdx` — "I want to... / Write this..." quick reference. Two-column format. Printable. Linked from Part 1 as "your NeoHaskell phrasebook."
+- [ ] Test Part 1 with someone who's never seen NeoHaskell (observe, don't help). Fix everything.
 
-**Output**: CI pipeline, validated misconceptions, confirmed example domain, updated site config, "Reading NeoHaskell" page, cheat sheet.
+> Moved to Phase 1: "Validate 20 misconceptions" (happens during writing), "Study reference docs" (already done as part of review process), "Create ARCHITECTURE.md" (can happen alongside content). The priority is: **ship Tutorial Part 1, watch someone use it, fix everything.**
 
-### Phase 1 — The First Real Page (Week 2)
+**Output**: CI pipeline, confirmed example domain, updated site config, Installation page, Tutorial Part 1, cheat sheet, core diagrams, companion repo.
 
-**Goal**: One complete, published "Quick Start" page. Not a skeleton. Real content.
+### Phase 1 — Quick Start + First Concept Pages (Week 2)
+
+**Goal**: Complete Quick Start flow and first concept pages driven by Tutorial Part 1.
 
 Tasks:
-- [ ] Write `getting-started/installation.mdx` — Nix setup, first `neo` command, "Hello Transactions"
+- [ ] Write `getting-started/reading-neohaskell.mdx` — 5-minute annotated code walkthrough ("Reading NeoHaskell"). Julia Evans style — visual, friendly, zero prerequisites.
 - [ ] Write `getting-started/first-events.mdx` — Define an event type, deposit money, see balance derived from events
-- [ ] Write `guides/using-ai.mdx` — Copy-paste NeoHaskell prompt for AI tools, the 5 most common AI mistakes (generates `pure` instead of `Task.yield`, uses `where` blocks, writes point-free, uses `Either` instead of `Result`, uses unqualified imports), how to spot wrong patterns, when to trust vs. override AI suggestions
+- [ ] Write `guides/using-ai.mdx` — Copy-paste NeoHaskell prompt for AI tools, the 5 most common AI mistakes, how to spot wrong patterns
+- [ ] Write first JIT concept pages: `events-not-state.mdx`, `commands-and-handlers.mdx`, `from-crud-to-events.mdx`
+- [ ] Validate the 20 misconceptions list with 5+ real developers (moved from Phase 0)
+- [ ] Create `ARCHITECTURE.md` documenting the Diataxis-based structure decision (moved from Phase 0)
 - [ ] Every code block compiles in CI
-- [ ] Test with someone who's never seen NeoHaskell (observe, don't help)
-- [ ] Fix everything the test revealed
-- [ ] Verify the Tutorial Layer System works — first-events.mdx must have all 3 layers (narrative, syntax aside, concept links)
+- [ ] Verify the Layer System works — first-events.mdx must have all 3 layers (narrative, bold-on-first-use syntax, concept links)
 
-**Output**: Two real pages that a developer can follow from zero to "I deposited $100 and saw my balance update from events." Plus an AI usage guide and language orientation pages.
+**Output**: Complete Quick Start path, first concept pages, AI guide, validated misconceptions.
 
-**Why this is Phase 1, not Phase 4**: You discover 80% of structural problems by writing the first 2 pages. Writing early is research.
+**Why this is Phase 1, not Phase 4**: You discover 80% of structural problems by writing the first real pages. Writing early is research.
 
 ### Phase 2 — Tutorial Spine (Weeks 3-5)
 
@@ -703,22 +880,27 @@ src/content/docs/
     first-events.mdx                 # Define event, store it, read it
 
   tutorial/
-    index.mdx                        # "Meet Alex. He's building a bank."
-    01-first-transaction.mdx         # Deposit money, see events, derive balance
-    02-account-rules.mdx             # Overdraft protection, declined commands
-    03-transaction-history.mdx       # Projections, bank statements as read models
-    04-multiple-accounts.mdx         # Savings accounts, multiple aggregates
-    05-transfers.mdx                 # Cross-account transfers, bounded contexts
-    06-audit-everything.mdx          # Event replay, time-travel, audit trail
+    index.mdx                        # "Meet Alex — a developer like you." (Alex only here, "you" from Part 1)
+    01-first-transaction.mdx         # CRUD failure moment, then events. Deposit money, derive balance.
+    02-account-rules.mdx             # Overdraft protection, declined commands (Result.err), first test
+    03-transaction-history.mdx       # TWO projections from same events (statement + monthly summary)
+    04-multiple-accounts.mdx         # Multiple aggregates (NOT bounded contexts)
+    05-transfers.mdx                 # Cross-aggregate transfers, saga with failure/compensation
+    06-audit-everything.mdx          # Event replay, time-travel, audit trail, production scope note
 
   concepts/
     index.mdx                        # "How to read this section"
     events-not-state.mdx             # Core mental model shift
     commands-and-handlers.mdx        # Input processing
+    from-crud-to-events.mdx          # ELEVATED: standalone page (was Coming From subpage) — the core teaching doc
     projections.mdx                  # Deriving state from events
-    bounded-contexts.mdx             # System decomposition
     type-safety.mdx                  # Why the compiler is your friend
+    testing-event-sourced-systems.mdx # Given-When-Then, the testing trophy for ES
+    schema-evolution.mdx             # MOVED from Advanced to Core — too important to defer
+    bounded-contexts.mdx             # System decomposition (linked from Part 5, not Part 4)
     effects.mdx                      # How NeoHaskell handles side effects
+    thinking-in-events.mdx           # The "Thinking in React" equivalent — capstone mental model
+    trade-offs.mdx                   # Honest: when NOT to use event sourcing
     concurrency.mdx                  # Channels, locks, async
 
   guides/
@@ -737,7 +919,7 @@ src/content/docs/
     python.mdx
     go.mdx
     haskell.mdx
-    crud.mdx
+    crud.mdx                         # Short version — links to concepts/from-crud-to-events.mdx for full treatment
     event-sourcing.mdx
 
   reference/
@@ -754,7 +936,7 @@ src/content/docs/
 
 | Rejected approach | Why |
 |-------------------|-----|
-| Analyzing 12 documentation sites | Diminishing returns after 3. Time is better spent on learner research. |
+| Analyzing more documentation sites beyond the 12 already reviewed | We analyzed 12 sites during research. Diminishing returns from further analysis. Time is better spent on learner research and shipping content. |
 | Separate `research/` and `structure/` directories | Intermediate artifacts that rot. Ship real content instead. |
 | Writing all skeletons before any prose | Creates false sense of progress. Write real pages, discover structure. |
 | One linear flow for all audiences | Decision-makers, architects, and developers have different needs. |
@@ -762,7 +944,7 @@ src/content/docs/
 | Phase-gated approach (finish Phase N before starting N+1) | Iterate. Write → test → learn → restructure → write. |
 | Separate "Learn NeoHaskell" section before the tutorial | Forces readers through a grammar chapter before they have context. Language is learned by using it, not by studying it. The tutorial teaches syntax implicitly; concept pages teach it explicitly. |
 | Formal grammar reference page | NeoHaskell is a dialect, not a new language. A grammar spec signals "this is academic" instead of "this is practical." The cheat sheet and concept pages cover everything a developer needs. |
-| Beginner / Intermediate / Advanced language tiers | Artificial divisions that create anxiety ("Am I intermediate yet?"). Instead, the tutorial progression naturally moves from simple to complex syntax. The Bloom's taxonomy progression handles difficulty scaling without labeling readers. |
+| Beginner / Intermediate / Advanced language tiers | Artificial divisions that create anxiety ("Am I intermediate yet?"). Instead, the tutorial progression naturally moves from simple to complex syntax. The exercise difficulty progression handles scaling without labeling readers. |
 
 ---
 
@@ -770,12 +952,18 @@ src/content/docs/
 
 How we know the docs are working:
 
+**Behavioral metrics:**
 1. **Time to first deposit**: A new developer goes from zero to depositing $100 and seeing their balance derived from events — under 10 minutes.
 2. **Tutorial completion rate**: >50% of people who start tutorial part 1 finish part 4. Part 4 is the "bank statement" moment — where projections click. This is the critical retention point.
 3. **Discord question reduction**: Recurring questions decrease month-over-month.
 4. **Contributor PRs**: At least 1 external docs PR per month (evidence that docs are contributor-friendly).
 5. **Search satisfaction**: People who use site search find what they need (low "search → bounce" rate).
 6. **"I built a bank" effect**: Tutorial readers describe NeoBank as "impressive" or "real" in feedback — evidence that the domain creates the right emotional response.
+
+**Understanding metrics** (not just behavior):
+7. **Mental model transfer**: After completing the tutorial, can the reader model a non-banking domain in events without guidance? (Test with 5 users post-tutorial.)
+8. **Explanation ability**: Can the reader explain to someone else why events are stored instead of state? If they can teach it, they understand it.
+9. **Pattern recognition**: When shown a new feature request, does the reader instinctively think "what events does this produce?" rather than "what table do I update?"
 
 ---
 
