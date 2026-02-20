@@ -1,10 +1,178 @@
 ---
 title: "Your First Events"
-description: "Define an event, store it, and see your balance derived from events."
+description: "Define an event, store it, and see your balance derived from events — not stored, calculated."
 ---
 
-The quickest path to seeing NeoHaskell in action. Define a deposit event, store it, and watch your balance get calculated — not stored, calculated. This is event sourcing in 10 lines of code.
+{/* 
+  CONTENT OUTLINE
+  ===============
+  Position: Getting Started step 2 (after Installation, before Tutorial)
+  Time estimate: ~10 minutes
+  Mental model stage: 0 → 1 ("I store data in rows" → "Banks record transactions")
+  Misconceptions addressed: #2 (ES is a library), #3 (just update a field), #10 (FP means no state)
+  Layer system: All 3 layers active (narrative, bold-on-first-use syntax, concept links)
+  
+  Expert reviewer principles applied:
+  - Dan Abramov: Hook with CRUD failure before introducing events; catch "events = logging" misconception
+  - Julia Evans: Annotated code block for the first event type definition
+  - Tania Rascia: File path labels on every code block; version note
+  - Sarah Drasner: Route to next step, don't lecture; keep it under 10 minutes
+  - Steve Klabnik: Define terms at point of use (event, command, projection)
+  - Kent C. Dodds: End with something verifiable — the reader can run it and see output
+  - Martin Fowler: Honest scope — this is a taste, not the full meal
+*/}
+
+## What You'll Learn
+
+- What an **event** is and why NeoHaskell stores events instead of updating state
+- How to define an event type (`AccountOpened`, `MoneyDeposited`)
+- How to store events in NeoHaskell's built-in event store
+- How your balance is **calculated from events** — never stored, never stale
+- Why this matters: the same 10 lines give you an audit trail for free
+
+## The CRUD Instinct (and Why It Breaks)
+
+{/* 
+  Hook: Start from what the reader already knows. Show a familiar CRUD pattern,
+  then reveal the question it can't answer. This is Dan Abramov's "catch the
+  misconception before it calcifies" principle applied to the Quick Start.
+  
+  Bullet points for this section:
+*/}
+
+- Show a familiar mental model: "I have a balance, I update it"
+  - Pseudocode: `UPDATE accounts SET balance = 150 WHERE id = 1`
+  - This feels natural — it's how every CRUD app works
+- Pose the question that breaks it: **"What was the balance before the dispute?"**
+  - The UPDATE destroyed the history — there's no way to know
+  - Banks figured this out centuries ago: they don't update balances, they record transactions
+- One-line reframe: "A deposit isn't 'set balance to $150' — it's 'recorded: $50 deposited.' NeoHaskell is built on this same idea."
+
+{/* → Concept link (Layer 3): [→ Deep dive: From CRUD to Events](/concepts/from-crud-to-events) */}
+
+## Define Your First Event
+
+{/* 
+  This is where the reader writes their first NeoHaskell event type.
+  Julia Evans-style annotated code block — arrows/callouts pointing to unfamiliar syntax.
+  Bold-on-first-use for new syntax constructs (Layer 2).
+  Tania Rascia: Every code block has a file path label.
+
+  Bullet points for this section:
+*/}
+
+- Introduce the concept: an **event** is an immutable fact about something that happened
+  - Use the Rosetta Stone framing: "Something happened" → Banking: "Transaction" → NeoHaskell: "Event"
+  - "Events describe what happened in the world, not what the system did"
+- Define two event types: `AccountOpened` and `MoneyDeposited`
+  - Show the NeoHaskell type definition (annotated code block)
+  - **Bold-on-first-use**: `type` keyword, record syntax, field types
+  - Annotate: point out that each event carries the data it needs (amount, account ID, timestamp)
+- Naming callout: "Good event names make sense to a banker: `MoneyDeposited`, not `BalanceUpdated`"
+- Key insight: "You didn't import an event sourcing library. NeoHaskell events are just types — the language makes event sourcing the default."
+  - This addresses Misconception #2: "Event sourcing is a library I import"
+
+{/* → Concept link (Layer 3): [→ Deep dive: Events, Not State](/concepts/events-not-state) */}
+
+## Store an Event
+
+{/*
+  The reader stores their first event. This should feel effortless.
+  Kent C. Dodds: Must produce verifiable output — the reader runs it and sees something.
+  Steve Klabnik: Define "event store" at point of use.
+
+  Bullet points for this section:
+*/}
+
+- Introduce the **event store**: an append-only log where events are recorded
+  - Rosetta Stone: "Show me everything" → Banking: "Audit log" → NeoHaskell: "Event Store"
+  - "You don't need Kafka or RabbitMQ — NeoHaskell has a built-in event store"
+  - This addresses Misconception #8: "I'll need a message broker"
+- Write the code to store a `MoneyDeposited` event
+  - **Bold-on-first-use**: the **pipe operator (`|>`)** — passes the left side as input to the right side
+  - **Bold-on-first-use**: `do` blocks for binding values
+  - Code block with file path label: `title="src/Bank/Main.hs"`
+- Run it — the reader should see confirmation that the event was stored
+  - Show the terminal command and expected output
+  - "You just recorded a fact. Not a row update — a fact. It can never be changed or deleted."
+
+{/* → Concept link (Layer 3): [→ Deep dive: Commands and Handlers](/concepts/commands-and-handlers) */}
+
+## Derive Your Balance
+
+{/*
+  The "aha" moment. The balance isn't stored — it's calculated by replaying events.
+  This is the core event sourcing insight, delivered in the Quick Start.
+  Martin Fowler: Be precise about what "derived" means.
+  Dan Abramov: This is where the mental model shift happens.
+
+  Bullet points for this section:
+*/}
+
+- Pose the question: "Where's the balance?"
+  - "There's no `balance` column. There's no `balance` variable. So where is it?"
+- Introduce **projection**: state derived by folding over events
+  - Rosetta Stone: "What's my balance?" → Banking: "Account statement" → NeoHaskell: "Projection"
+  - **Bold-on-first-use**: `Array.foldl` — processes a list left-to-right, accumulating a result
+- Write a `getBalance` function that folds over events
+  - Show: `AccountOpened` → starting balance of 0
+  - Show: `MoneyDeposited` → add the deposit amount
+  - The result: the current balance, calculated fresh from the complete history
+  - Code block with file path label: `title="src/Bank/Account.hs"`
+- Run it — the reader sees their balance: `$50.00`
+  - "That balance was never stored. It was calculated from the event history. If you deposit again, it recalculates."
+  - This addresses Misconception #10: "Functional programming means no state" — there IS state, it's just derived
+
+{/* → Concept link (Layer 3): [→ Deep dive: Projections](/concepts/projections) */}
+
+## The Full Picture (10 Lines)
+
+{/*
+  Show the complete code — all the pieces together. This is the payoff.
+  Sarah Drasner: Don't lecture, show the result.
+  Tania Rascia: Full working code, copy-pasteable.
+  
+  Bullet points for this section:
+*/}
+
+- Present the complete working example as one cohesive listing
+  - Event types + store + derive balance = ~10 lines of meaningful code
+  - File path label: `title="src/Bank/Main.hs"` (complete file)
+- Highlight what the reader gets "for free" with these 10 lines:
+  - Complete audit trail (the event store IS the audit trail)
+  - Time-travel debugging (replay events to any point)
+  - No data loss (events are immutable — nothing is ever overwritten)
+- Brief comparison moment: "In a CRUD app, you'd have a `balance` column and an `UPDATE` statement. You'd have no history, no audit trail, and disputes would be impossible to resolve. With events, you get all of that by default."
+
+## What Just Happened
+
+{/*
+  Quick recap — cement the mental model before the reader moves on.
+  Dan Abramov: Name the concepts explicitly so they stick.
+  Steve Klabnik: Connect the terms to the Rosetta Stone.
+
+  Bullet points for this section:
+*/}
+
+- You defined **events** — immutable facts about what happened (deposits, not balance updates)
+- You stored them in an **event store** — an append-only log, not a mutable database
+- You derived your **balance** with a **projection** — state calculated from history, never stored directly
+- You didn't install a framework, configure a message broker, or set up a database. NeoHaskell made event sourcing the default path.
+
+## Next Steps
+
+{/*
+  Sarah Drasner: Route people clearly. Julia Evans: Don't let them drift.
+  Three clear paths matching the audience model.
+
+  Bullet points for this section:
+*/}
+
+- **Ready to build something real?** → [Start the NeoBank Tutorial](/tutorial/) — build a full banking service with accounts, transfers, and an audit trail
+- **Want to understand the theory?** → [Events, Not State](/concepts/events-not-state) — the deep dive into why this approach works
+- **Coming from CRUD?** → [From CRUD to Events](/concepts/from-crud-to-events) — a systematic comparison of what changes and why
+- **Bookmark this** → [Cheat Sheet](/getting-started/cheat-sheet/) — quick reference for NeoHaskell syntax
 
 :::caution[Coming Soon]
-This page is under development. Check back soon!
+The code examples on this page are placeholders. Actual NeoHaskell code will be added once the NeoBank domain model is finalized.
 :::
