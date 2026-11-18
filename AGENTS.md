@@ -57,7 +57,9 @@ A finished page does not wait for owner approval to close its ticket. Record che
 
 # Documentation direction
 
-For documentation authoring, revision, deletion, and conceptual review, load the repository-local [neohaskell-content-review](.agents/skills/neohaskell-content-review/SKILL.md), its authoring reference, and its [documentation voice](.agents/skills/neohaskell-content-review/references/documentation-voice.md). Use the Rust Book's explanatory progression and descriptive headings, not a chain of imperative sections or repeated marketing benefits. This documentation-specific voice overrides generic technical-writing prescriptions for imperative tutorial headings and uniformly clipped sentences.
+For documentation authoring, revision, deletion, and conceptual review, load the repository-local [neohaskell-content-review](.agents/skills/neohaskell-content-review/SKILL.md), its authoring reference, and its [documentation voice](.agents/skills/neohaskell-content-review/references/documentation-voice.md). Use the Rust Book's explanatory progression and descriptive headings, not a chain of imperative sections or repeated marketing benefits. Prefer relevant local documentation links over upstream links for reader navigation, even when the destination is still a page plan. Link upstream sources inline when they support a factual claim. This documentation-specific voice overrides generic technical-writing prescriptions for imperative tutorial headings and uniformly clipped sentences.
+
+Keep supporting tools in proportion to the NeoHaskell lesson. Mentioning that Neo uses Git and makes an initial commit is enough on a creation page; Git inspection commands and similar detours into Nix, build tools, or editors belong only where the reader's task requires them.
 
 The content-review skill owns page purpose, source investigation, direct-entry context, prerequisite progression, and independent pedagogical review. This replaces the unavailable `neohaskell-docs`, `documentation-entry-points`, and `neohaskell-progressive-explanations` skill routes without discarding their accepted teaching direction.
 

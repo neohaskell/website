@@ -14,7 +14,7 @@ Neo is the command-line tool for working with NeoHaskell projects. It creates th
 
 A new project already contains a small application called Counter. It lets you create a named counter, add or subtract an amount, and read its current value. Having an application in place gives us something to run and examine before changing any code.
 
-You'll need Neo, Nix, and Git installed to follow along. The [Neo CLI prerequisites](https://github.com/neohaskell/NeoHaskell/blob/414602b9510a92dfac647bc68d6afadfb594502c/neo/README.md#prerequisites) describe these tools.
+You'll need Neo, Nix, and Git installed to follow along. [Install NeoHaskell](../installation/) covers the required tools.
 
 ## Creating a project with Neo <a id="create-the-application" />
 
@@ -40,9 +40,9 @@ This uses version `0.1.0`, description `A new NeoHaskell project`, author `Anony
 
 For example, you can give your agent this task from the directory where the project belongs:
 
-> Use `neo new my-neo-app --ci` to create a project here. Leave the Counter application unchanged, and don't start it yet. Show me the generated neo.json and the initial Git commit.
+> Use `neo new my-neo-app --ci` to create a project here. Leave the Counter application unchanged, and don't start it yet. Show me the generated neo.json.
 
-After either route finishes, `my-neo-app` contains the generated files and a new Git repository. If a directory with that name already exists, Neo stops rather than overwriting it. A different name creates a separate project.
+After either route finishes, `my-neo-app` contains the generated files. Neo also makes an initial Git commit, recording the project as it was created. If a directory with that name already exists, Neo stops rather than overwriting it. A different name creates a separate project.
 
 ## The project settings <a id="review-the-project-settings" />
 
@@ -65,7 +65,7 @@ We've left out the other fields here so we can look at these two first. `name` i
 
 The file also has a field named `neo-version`. Its value is a long string of letters and numbers identifying an exact revision of the NeoHaskell framework code. This is called a **pin**. New changes to NeoHaskell do not change the code your project uses, because it still points to that revision. We can leave the pin as it is while working with the starter.
 
-You'll also find `flake.nix`, `cabal.project`, and `my-neo-app.cabal`. These files describe the application and its dependencies to the build tools. Neo generates them from the project settings, so changes to those settings belong in `neo.json` rather than in the generated files.
+Neo uses these settings to generate the build configuration. Changes to project settings belong in `neo.json` rather than in the generated files.
 
 ## The Counter application <a id="confirm-the-counter-starter" />
 
@@ -74,21 +74,3 @@ The source code is in `src/`. Open `src/App.hs`, then look for the `src/Starter/
 Counter uses the same parts introduced in [Commands and queries](../../learn/). A command asks to create a counter or change its value. An event records an accepted change, and a query supplies the current counter values. These are the same jobs that placing an order and checking stock perform in the mug-shop example, with less business behavior to work through.
 
 For now, we're keeping that code unchanged. This gives us a starting application whose behavior we can check before asking an agent to add anything.
-
-## The initial Git commit <a id="the-initial-git-commit" />
-
-Neo commits the generated files to the new repository. From inside `my-neo-app`, you can read the commit message with:
-
-```sh
-git log -1 --format=%s
-```
-
-The message is `Initial commit from NeoCLI`. This commit exists only on your machine; creating the project does not publish it to GitHub. Neo uses its own repository-local Git identity for this commit, separate from the author metadata in `neo.json`.
-
-Git can also tell us whether anything has changed since creation:
-
-```sh
-git status --short
-```
-
-For an untouched project, there is no output. If the command lists files, those files have changed or are not yet tracked by Git. That difference is worth examining before we run the application, since the initial commit is the reference we'll use when reviewing later edits.

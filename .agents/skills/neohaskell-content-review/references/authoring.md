@@ -6,7 +6,7 @@ Use the current ticket for scope and `AGENTS.md` for delivery. This reference ow
 
 Read `PRODUCT.md`, `GLOSSARY.md`, the existing page, and the relevant learning path from [reading context](reading-context.md). The four introductory lessons are the teaching and philosophical baseline. Resolve page order from the current navigation and ticket rather than inventing a new curriculum.
 
-Write the reader's immediate goal and the visible result that completes it. Keep the material that serves that result. A creation page ends with a recognizable project and a way to check it; running the application and tracing all its files belong to their own pages. For a conceptual lesson, state the question the reader should be able to reason about afterward.
+Write the reader's immediate goal and the visible result that completes it. Keep the material that serves that result. A creation page ends with a recognizable project; running the application and tracing all its files belong to their own pages. Mention supporting tools only as far as the task needs them. It is useful to say that Neo initializes Git and commits the generated files; a project-creation lesson does not need Git inspection commands, identity configuration, or a version-control tutorial. Apply the same boundary to Nix, build tools, editors, and other supporting tools. Keep detailed verification in internal evidence unless the reader needs it to complete the NeoHaskell task. For a conceptual lesson, state the question the reader should be able to reason about afterward.
 
 When revising, preserve useful explanations and accepted choices outside the correction. When deleting, inspect incoming links, stable anchors, navigation, and the explanation that used to supply a prerequisite. Repair those dependencies within scope or report the concrete gap. Translation remains separately authorized.
 
@@ -20,7 +20,7 @@ Keep revisions, commands, output, review reports, and verification limits under 
 
 ## Teach through meaningful inspection
 
-Use [documentation voice](documentation-voice.md) for article tone and composition. Establish the subject and enough context for a direct landing, rather than beginning every page with an instruction. Use named links when reusing a prior example. Introduce unfamiliar mechanisms through their concrete purpose before using them to explain another mechanism.
+Use [documentation voice](documentation-voice.md) for article tone and composition. Establish the subject and enough context for a direct landing, rather than beginning every page with an instruction. Use named links when reusing a prior example. Prefer a relevant local documentation page over an upstream source link for reader-facing navigation, even when the local page is not yet complete. Link external sources inline when they substantiate a factual claim or the reader needs the upstream artifact itself. Introduce unfamiliar mechanisms through their concrete purpose before using them to explain another mechanism.
 
 AI-assisted building is the normal path. Give the agent a bounded task and the developer something specific to inspect. When manual and agent routes are alternatives, introduce the choice before the first action so sequential readers do not perform both. Trust comes from understanding small changes and checking their behavior, not from telling readers to trust an agent. Counter orients the reader to the real starter. The mug shop remains the continuing application example elsewhere.
 
