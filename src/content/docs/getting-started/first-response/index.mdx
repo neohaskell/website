@@ -1,17 +1,123 @@
 ---
-title: "Check your first response"
-description: "Page plan. Is the application actually processing commands and answering queries?"
-tableOfContents: false
-pagefind: false
+title: Check your first response
+description: Create a counter through the application's browser documentation, change its value, and check both accepted and rejected commands.
+tableOfContents:
+  minHeadingLevel: 2
+  maxHeadingLevel: 2
 prev: true
 next: true
-head:
-  - tag: meta
-    attrs:
-      name: robots
-      content: noindex
 ---
 
-## Page plan <a id="page-plan" />
+Counter's documentation can send commands to your running application and show the answers it returns. That gives us a way to check the starter's behavior before changing its code. We'll create a counter named `Example counter`, add one to it, and read its value. Then we'll try an amount the application should refuse.
 
-This page will verify the running starter by creating a `Counter`, using the returned entity identifier in a change command, and reading the resulting value through its query. It will explain the request payload, response envelope, and possible delay before the projection reflects the change. A rejected input will distinguish a working validation response from a setup failure. The maintained `Counter` scenario will provide a repeatable check before readers begin the shop tutorial.
+This page uses the unchanged project from [Create a project](../create-project/), with the application still running as described in [Run the application](../run/). Open [http://127.0.0.1:8080/docs](http://127.0.0.1:8080/docs) and leave the application's terminal running throughout the example.
+
+## A counter and its identity <a id="a-counter-and-its-identity" />
+
+A counter needs a name before we can change its value. In the documentation's navigation, expand **CounterEntity** and select **create-counter**. On a narrow screen, open the menu first. Click **Test Request** to open a panel where you can edit and send the command.
+
+The **Body** editor contains the data sent with the command, also called its **payload**. Replace its contents with:
+
+```json
+{
+  "label": "Example counter"
+}
+```
+
+`Example counter` is the name we've chosen for this example. You can use another name; it doesn't select a built-in feature or tell the application to perform an action. The field name `label` stays as written, because that is where the command expects the counter's name.
+
+This is JSON, a text format for passing data between programs. The braces enclose an object with named fields. Here, the only field is `label`, and its value is the text `Example counter`. Keep the double quotes around both the field name and its text value.
+
+Click **Send** once. On a narrow screen, this is the triangular button beside the address. The response has status `200 OK` and a body like this:
+
+```json wrap
+{
+  "entityId": "775c035c-847a-49cf-8914-e64cd9b0c2bc",
+  "tag": "Accepted"
+}
+```
+
+`tag` tells us that the command was accepted. `entityId` identifies the counter the application just created. Your identifier will be different from the example. Copy its complete value, without the surrounding quotes, so you can use it in the next command.
+
+The label helps us recognize the counter, but its identifier is what later commands use to select it. Creating another counter with the same label creates a separate counter with a new identifier. Sending this command again would therefore create another counter, rather than read the one we already have.
+
+## A change to that counter <a id="a-change-to-that-counter" />
+
+A new counter starts at zero. To add one, the application needs to know which counter to change and how much to add. Close the request panel, select **increment-counter** under **CounterEntity**, and open **Test Request**.
+
+Replace the body with the following JSON, substituting the identifier you copied for the example's `entityId` value:
+
+```json wrap
+{
+  "entityId": "775c035c-847a-49cf-8914-e64cd9b0c2bc",
+  "amount": 1
+}
+```
+
+Both fields belong to the same object, so a comma separates them. The identifier is text and stays inside double quotes. The amount is a number, so `1` has no quotes. It means "add one," not "set the value to one."
+
+Click **Send** once. The response again has status `200 OK`, `tag` set to `Accepted`, and the same `entityId`. The command has changed that counter, but its response doesn't contain the new value. To see the value, we need a query.
+
+## The query's answer <a id="the-querys-answer" />
+
+Commands and queries have different jobs, as explained in [Commands and queries](../../learn/). The increment command asks for a change. The Counter query supplies the values the application maintains from accepted changes. Reading it doesn't increment the counter again.
+
+### All counters
+
+Close the request panel and expand **Queries**. There are two **CounterView** entries. Select the one whose route is `/queries/counter-view`, without `/{id}` at the end. Open **Test Request**, leave its query parameters empty, and click **Send**. This reads the list of counters without needing a request body.
+
+After creating one counter and incrementing it once, the response looks like this:
+
+```json wrap
+{
+  "effectiveLimit": 100,
+  "hasMore": false,
+  "items": [
+    {
+      "counterId": "775c035c-847a-49cf-8914-e64cd9b0c2bc",
+      "label": "Example counter",
+      "value": 1
+    }
+  ],
+  "total": 1
+}
+```
+
+The counters are inside `items`. The square brackets enclose a list, and each object in that list describes one counter. Find the object whose `counterId` matches the `entityId` you saved. These two field names refer to the same counter. Its `label` is `Example counter`, or the name you chose, and its `value` is `1`.
+
+The outer object is a **response envelope**. It holds the list along with information about how much data the query returned. `effectiveLimit` is the maximum number of items for this page of results, `total` is the number of matching counters, and `hasMore` says whether more results remain. With just our counter, `total` is `1` and `hasMore` is `false`. If you've created other counters during this run, the list and total will reflect them too.
+
+### One counter by identifier
+
+The query also has a route for reading just one counter. Close the panel and select the other **CounterView** entry, whose route is `/queries/counter-view/{id}`. Open **Test Request**. Under **Path Variables**, paste your counter's identifier into the **Value** cell beside `id`, then click **Send**. Use the identifier itself, without quotes or braces. The `{id}` in the route marks the part of the address that the documentation replaces with your value.
+
+This response contains the counter directly:
+
+```json wrap
+{
+  "counterId": "775c035c-847a-49cf-8914-e64cd9b0c2bc",
+  "label": "Example counter",
+  "value": 1
+}
+```
+
+Both routes read the same maintained data. The list route wraps its results in `items` and includes pagination information. The route with an identifier returns one counter, without the list envelope. Its `counterId` and `value` should match the counter you found in the list.
+
+An accepted command and an updated query answer need not arrive at exactly the same moment. The application records the change, then updates the query's maintained data. If your counter is missing from the list, the single-counter route returns `404`, or the value still shows zero immediately after the command, wait briefly and send the **query** again. Don't resend the increment to refresh the answer. Each accepted increment adds another one.
+
+## A rejected change <a id="a-rejected-change" />
+
+A successful change checks only one part of the behavior. Counter also has a decision that refuses an increment when its amount is zero or negative. We can check that condition without changing the code.
+
+Return to **increment-counter** and open **Test Request**. Keep your counter's identifier, but change `amount` from `1` to `0`. Click **Send**. This time the response has status `400 Bad Request`, with `tag` set to `Rejected` and `reason` set to `Amount must be positive`.
+
+<picture>
+  <source media="(max-width: 40rem)" srcSet={`${import.meta.env.BASE_URL}images/docs/counter-rejection-dark-phone.png`} />
+  <img src={`${import.meta.env.BASE_URL}images/docs/counter-rejection-dark-desktop.png`} alt="The application's response to a zero increment: 400 Bad Request, with reason Amount must be positive and tag Rejected" width="1100" height="580" />
+</picture>
+
+The application received the command and refused the proposed change. That is different from a browser connection failure, where no application response arrives. The status alone doesn't explain every failure; here, the response body tells us which condition rejected the command.
+
+Read `/queries/counter-view` and `/queries/counter-view/{id}` again through **Test Request**, using your counter's identifier for the second route. The counter should still have value `1` in both answers, because the rejected command records no increment event. If you sent extra positive increments earlier, its value should remain at that earlier total instead.
+
+If the response says `Counter not found`, check that you used the identifier from your own creation response. Also check whether the application has restarted since you created it. The starter loses its counters when it stops, so after a restart you need to create a new counter and use its new identifier.
