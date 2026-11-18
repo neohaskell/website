@@ -1,17 +1,66 @@
 ---
-title: "Run the application"
-description: "Page plan. How do I start and stop the starter, and which terminal must remain open?"
-tableOfContents: false
-pagefind: false
+title: Running the Counter application
+description: Start the Counter starter, open its built-in documentation, and understand what happens when the application stops.
+sidebar:
+  label: Run the application
+tableOfContents:
+  minHeadingLevel: 2
+  maxHeadingLevel: 2
 prev: true
 next: true
-head:
-  - tag: meta
-    attrs:
-      name: robots
-      content: noindex
 ---
 
-## Page plan <a id="page-plan" />
+The project from [Create a project](../create-project/) contains Counter, a small application for creating named counters and changing their values. Its source files describe that behavior, but the application needs to be running before you can use it.
 
-This page will build and run the generated `Counter` application from its project root, identify the local HTTP address, and explain which process must remain running while requests are sent from another terminal. It will distinguish an initial dependency download from application startup, show how to stop and restart the process, and explain that the default in-memory event history disappears when the process ends. Watch mode will be introduced only after the first successful launch.
+Counter includes a documentation site where you can explore its commands and queries in your browser. We'll start the application and open that site, leaving the Counter code unchanged.
+
+## The first run <a id="the-first-run" />
+
+The commands on this page run from the project root, the `my-neo-app` directory containing `neo.json`. If you've kept the terminal from the creation page open, you're already there. You can start Counter yourself or ask your agent to start it. Choose one route so that only one copy is running.
+
+To start it yourself, run:
+
+```sh
+neo run
+```
+
+Neo builds the application and starts it. On the first run, it uses Nix to prepare the required tools and libraries, also called **dependencies**. Downloads and compilation can produce a lot of output before Counter starts. Those messages show preparation in progress; the application isn't available in your browser yet. Later runs can reuse downloaded dependencies and unchanged build results.
+
+You don't need to run `neo build` first or enter a separate Nix environment. `neo run` builds what it needs before starting the application.
+
+If your agent is starting Counter instead, ask it to use `neo run --ci`. This gives it plain output instead of Neo's interactive display:
+
+> Run the unchanged Counter application from this project's root with `neo run --ci`. Keep it running and check that its built-in documentation opens at `http://127.0.0.1:8080/docs`. Don't change the source or dependency pin to make it start.
+
+The `--ci` option changes Neo's presentation. It doesn't turn the application into a background process or stop it after startup.
+
+## The application's documentation <a id="the-applications-documentation" />
+
+Keep the terminal with `neo run` open and visit [http://127.0.0.1:8080/docs](http://127.0.0.1:8080/docs) in your browser. Here, `127.0.0.1` means your own machine, and `8080` is the port where the application accepts connections. The `/docs` part opens its built-in documentation.
+
+This is the documentation for your own application. You can use it to try Counter's commands and read its query results without leaving the browser. NeoHaskell generates it from the application, so it follows the commands and queries your project defines.
+
+<picture>
+  <source media="(max-width: 40rem)" srcSet={`${import.meta.env.BASE_URL}images/docs/counter-queries-dark-phone.png`} />
+  <img src={`${import.meta.env.BASE_URL}images/docs/counter-queries-dark-desktop.png`} alt="Counter's built-in documentation showing its two query routes" width="1400" height="588" />
+</picture>
+
+If the browser can't connect, look at the terminal. Neo may still be downloading or compiling, or the application may have stopped with an error. Once startup completes, reload the browser page. If the terminal reports that port 8080 is already in use, check whether you already have a copy of Counter running.
+
+Unlike project creation, running Counter doesn't finish by returning you to a prompt. The process stays active to serve the documentation and answer requests. Leave that terminal running while you use the browser. If you need to enter another terminal command, open a second terminal rather than stopping Counter to reuse the first one.
+
+## Stopping and starting again <a id="stopping-and-starting-again" />
+
+To stop Counter, return to its terminal and press Ctrl+C. Once the process ends, the terminal returns to its prompt. The documentation may still be visible in the browser, but the application can no longer answer new requests. Reloading the documentation page now fails to connect.
+
+From the project root, start it again with:
+
+```sh
+neo run
+```
+
+After startup, reload the browser page to open the documentation again. Starting a second copy while the first is still running is different from restarting it: both copies would try to use port 8080. Stop the existing process before running another.
+
+The starter keeps its event history in memory. That means the events live in the running process rather than in durable storage. When the process ends, that history disappears. Counters you create during one run won't be there after a restart, and the query starts with no counters again.
+
+This doesn't change the event-history model explained in [Events and history](../../introduction/history/). An application can rebuild state from retained events, but it can't recover events that were never saved beyond the process. Restarting Counter leaves your source files intact; it's the starter's application data that is lost.
