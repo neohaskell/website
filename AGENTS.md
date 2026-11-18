@@ -43,6 +43,18 @@ Own the design decision and its execution. Read reviewer proposals yourself, sel
 
 For NeoHaskell homepage work, product explanations, metadata, or capability evidence, load `$neohaskell-positioning`. It owns the approved benefits-first pitch for NeoHaskell as an AI-first programming language, including the accepted homepage direction. If discovery has not refreshed, read `${CODEX_HOME:-$HOME/.codex}/skills/neohaskell-positioning/SKILL.md`; use `PRODUCT.md` for repository-specific facts and `GLOSSARY.md` for terminology.
 
+# Page-by-page documentation effort
+
+The active [documentation map](https://plane.p.egregore.io/egregore/projects/5535680e-e3f6-4023-b400-2b27544130e2/issues/997c4e07-bfa9-4543-92bd-2e415f3e4ed1/) owns the page queue and accepted operating agreement. “Wayfinder continue with the next page” means load that map, address any newly supplied feedback, then claim its first open, unblocked, unassigned page ticket. Use the shared Wayfinder skill at `/Users/nick/egregoreOS/.agents/skills/wayfinder/SKILL.md` and Plane helpers; never infer the next page solely from filesystem order.
+
+This map explicitly includes execution. Complete one page per session in the approved sidebar order, starting with Create a project and skipping Install NeoHaskell while the installer is in development. Preserve the four owner-reviewed introductory pages. Resume the map's assigned `docs-page-loop` worktree and branch so each session inherits completed pages and skill improvements; allow only one writing session at a time.
+
+Each page ticket owns source investigation, complete writing, independent technical and pedagogical review, fixes, applicable checks, rendered desktop/mobile verification, and an English local commit. Independent review agents are authorized for this effort. Deliver at `http://127.0.0.1:4323` before owner review. Publication means this local preview only: no push or hosted deployment. Follow README.md to keep exactly one repository server and verify it serves the active worktree.
+
+Improve existing repository skills through real page work and owner feedback, rather than first building a workflow engine. Guidance must support creating, modifying and deleting content, source investigation, editorial voice, and fit within the reader's learning path. Use the four approved pages as the philosophy and teaching baseline. Help readers trust their AI agent by understanding and reviewing bite-sized code; Counter introduces the starter, and the mug shop remains the recurring application example elsewhere. Keep internal verification findings out of public disclaimer copy without inventing successful evidence.
+
+A finished page does not wait for owner approval to close its ticket. Record checks, review outcomes, source revision, local commit and preview URL in its resolution, verify closure, and add a linked gist to the map. Apply later feedback to the page and its owning skills. Continue the next page in a fresh Herdr session using `herdr-continue`, carrying the map, next ticket, worktree and latest progress; stop ownership after verified delivery. Store run receipts and review evidence under ignored `.agents-state/`. Tracker tickets remain the queue, not a duplicated local checklist.
+
 # Documentation direction
 
 For NeoHaskell documentation pages, examples, navigation, or styling, load `$neohaskell-docs`. For a rejected direction, corrected feedback scope, conflicting constraints, or ambiguous design reference, load `$design-feedback`. Both use the existing repository records; later explicit user direction can supersede the baseline within its stated scope. If discovery has not refreshed, read `${CODEX_HOME:-$HOME/.codex}/skills/<skill-name>/SKILL.md`.
