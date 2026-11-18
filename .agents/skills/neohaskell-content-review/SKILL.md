@@ -1,9 +1,13 @@
 ---
 name: neohaskell-content-review
-description: Review NeoHaskell homepage and documentation writing for concepts assumed before they are taught. Use when writing or revising explanations, headings, navigation labels, or example introductions. Follow the reader's journey from the homepage, while preserving direct-entry context and the requested edit scope.
+description: Author and review NeoHaskell documentation within the reader's learning path. Use when creating, revising, or deleting documentation, or reviewing homepage explanations for untaught concepts. Covers source investigation, page purpose, direct-entry context, and pedagogical review while preserving the requested scope.
 ---
 
-# Review the reader's prerequisites
+# Write within the reader's learning path
+
+For documentation creation, revision, or deletion, follow [authoring a page](references/authoring.md) and [documentation voice](references/documentation-voice.md). The voice reference applies the Rust Book's connected explanations and descriptive headings instead of a chain of imperative steps or benefit slogans. For a bounded copy review, use the prerequisite review below without expanding the edit scope.
+
+## Review the reader's prerequisites
 
 Review what the reader must understand to follow the argument, not just which technical words appear. Use the actual page order and preceding explanations as evidence of what has been taught. A glossary entry, later page, heading, source excerpt, or screenshot label does not by itself teach a concept.
 

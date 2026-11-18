@@ -1,0 +1,48 @@
+# Documentation voice
+
+Use the Rust Book's explanatory teaching voice for NeoHaskell documentation. This governs article prose and headings, not the homepage pitch, CLI messages, or this skill's operational instructions. It takes precedence over generic advice to make every tutorial heading an imperative or every paragraph a short action step.
+
+## The reference
+
+Read [Hello, Cargo!](https://doc.rust-lang.org/book/ch01-03-hello-cargo.html) for a project-creation lesson and [Hello, World!](https://doc.rust-lang.org/book/ch01-02-hello-world.html) for the first encounter with code. Follow their teaching moves rather than copying their sentences or product-specific details.
+
+The Cargo chapter begins by saying what Cargo is and what work it does. It connects that tool to a program the reader recognizes. Under "Creating a Project with Cargo", the authors make a project, inspect the files, and explain what those files mean. Later, a change in build output becomes the reason to explain rebuilding. The explanation grows from something the reader has just seen.
+
+That is the model: a knowledgeable person working through an example with the reader. It is neither a checklist supervisor nor a salesperson. Instructions still belong in the prose when there is an action to perform.
+
+## How to write the lesson
+
+- Use descriptive headings that name the subject or learning activity. "The project settings" and "Creating a project with Neo" fit a lesson. A sequence of "Create", "Review", "Confirm", and "Keep" headings turns the article into a task board. Gerunds alone do not fix that structure; each section needs an explanation worth reading.
+- Introduce the thing before directing the reader to use it. Explain what the tool does, then make something with it. After a command or snippet, describe the actual result and what the reader should notice.
+- Let the example carry the progression. Move from the generated file to its setting, from the setting to the reason it exists, or from an observed result to the mechanism behind it. Avoid restarting every section with another generic instruction.
+- Use "we" for reasoning and observations shared with the reader, and "you" for their environment or choices. Contractions and ordinary connective words are welcome. Do not manufacture friendliness with congratulations, exclamation marks, or repeated "Let's" openings.
+- Vary sentence length as the explanation requires. Keep a longer sentence when its clauses make a relationship easier to understand. Split a sentence that carries unrelated ideas, not one that crosses an arbitrary word count. Short fragments are not a substitute for voice.
+- Keep named concepts and file names consistent. Vary the sentence structure, not the technical vocabulary. Introduce a term beside its concrete meaning instead of using synonyms to disguise repetition.
+- Explain the concrete reason for a choice without attaching a benefit slogan to every step. Once a Git commit has been explained as a reference for later edits, the next paragraph can discuss its output without repeating that the reader is in control.
+- Use lists for a real sequence or a set the reader needs to compare. Keep connected explanation in paragraphs. A series of terminal questions often reads more naturally as prose than as a five-item checklist repeating the interface.
+- Preserve meaningful limitations and exact evidence. Confidence comes from showing what happens, not from boosters such as "seamless", "essential", or "powerful". Avoid adding qualifiers merely to sound cautious when the behavior is known.
+- Stop when the subject has been explained. Do not add a generic summary, a reassurance paragraph, or a duplicate of native next-page navigation.
+
+## Editorial warning signs
+
+These are revision prompts, not tests of who wrote a text. [VU Amsterdam's guide](https://vu.nl/en/about-vu/more-about/alp-guide-spotting-ai-writing) explicitly distinguishes AI-writing tendencies from proof of authorship. [Daytona State's checklist](https://library.daytonastate.edu/GenerativeAI/checklist) also warns that no single indicator proves AI use.
+
+Look for these patterns across the whole article:
+
+- Repeated sentence openings, uniform sentence lengths, and the same paragraph shape throughout.
+- Heading followed by a sentence that repeats the heading, then a restatement at the end.
+- Generic openings and conclusions that could describe any programming tool.
+- A list of facts without a developing explanation or connection to the example.
+- Excess headings, bold phrases, lists, or parallel mini-sections that break the reading into isolated instructions.
+- Stock transitions, inflated vocabulary, vague sources, and assertions stronger than their evidence.
+- Repeated contrasts such as "not just X, but Y", forced groups of three, and benefit slogans after ordinary operations.
+- A flat, overcompressed voice with no reasoning, or decorative informality that substitutes for reasoning.
+- Source claims, outputs, and examples that sound plausible but have not been checked against the actual artifact.
+
+Correct the underlying passage. Do not insert mistakes, random synonyms, anecdotes, or artificial sentence-length variation to imitate a human or satisfy a detector. Correct grammar is desirable. Imperatives, headings, repeated technical terms, and plain short sentences are useful when the context calls for them; their mechanical repetition is the problem.
+
+## Voice review
+
+Read the headings together, then the opening and closing sentence of each section. Check whether they form a connected explanation or a chain of commands and promises. Read a complete section beside the Rust reference. Ask whether the text tells the reader what the example means, or merely tells them what to do next.
+
+For owner-rejected prose, use a fresh reviewer and provide the owner's actual objection and the inspected reference. A prior technical or visual pass does not establish that the writing sounds right. Revise the actual page alongside the owning guidance, then review the new rendered reading rhythm.

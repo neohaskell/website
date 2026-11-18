@@ -57,11 +57,11 @@ A finished page does not wait for owner approval to close its ticket. Record che
 
 # Documentation direction
 
-For NeoHaskell documentation pages, examples, navigation, or styling, load `$neohaskell-docs`. For a rejected direction, corrected feedback scope, conflicting constraints, or ambiguous design reference, load `$design-feedback`. Both use the existing repository records; later explicit user direction can supersede the baseline within its stated scope. If discovery has not refreshed, read `${CODEX_HOME:-$HOME/.codex}/skills/<skill-name>/SKILL.md`.
+For documentation authoring, revision, deletion, and conceptual review, load the repository-local [neohaskell-content-review](.agents/skills/neohaskell-content-review/SKILL.md), its authoring reference, and its [documentation voice](.agents/skills/neohaskell-content-review/references/documentation-voice.md). Use the Rust Book's explanatory progression and descriptive headings, not a chain of imperative sections or repeated marketing benefits. This documentation-specific voice overrides generic technical-writing prescriptions for imperative tutorial headings and uniformly clipped sentences.
 
-For documentation page openings and reused examples or concepts, load `$documentation-entry-points`; every page must make sense when reached directly, with named contextual links rather than positional references.
+The content-review skill owns page purpose, source investigation, direct-entry context, prerequisite progression, and independent pedagogical review. This replaces the unavailable `neohaskell-docs`, `documentation-entry-points`, and `neohaskell-progressive-explanations` skill routes without discarding their accepted teaching direction.
 
-For conceptual lessons, load `$neohaskell-progressive-explanations`. It owns page purpose, editorial conviction, connected examples, and the fresh adversarial reader review required for new or substantially rewritten arguments. Review the page's intended effect and rendered reading rhythm as well as technical accuracy. Comparisons with other development approaches are an internal test, not mandatory public concessions. Combine that review with the teaching-example review when both apply.
+For documentation styling or navigation design, use [neohaskell-visual-language](.agents/skills/neohaskell-visual-language/SKILL.md) and the existing documentation surface record. For a rejected direction, corrected feedback scope, conflicting constraints, or ambiguous design reference, load `$design-feedback`. Later explicit user direction supersedes the baseline within its stated scope.
 
 # Translation
 

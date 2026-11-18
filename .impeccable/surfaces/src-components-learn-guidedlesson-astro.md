@@ -79,6 +79,8 @@ related_targets:
 
 Mode: Read. This stable filename targets current MDX documentation, not the retired widget. The [learning experience brief](../questions/learning-experience-brief.md) owns the current sequence, navigation, evidence, translation pause, and local delivery preference.
 
+VOICE: The owner's 18 November correction rejects the imperative heading chain and marketing-like narration in the first project draft. Use the Rust Book's connected teaching voice: introduce the subject, work through a concrete example, and explain what the reader observes. Descriptive headings, ordinary connective prose, and varied sentence lengths replace the task-board rhythm. This changes documentation prose, not the approved homepage pitch or four introductory pages. The durable guidance is [documentation voice](../../.agents/skills/neohaskell-content-review/references/documentation-voice.md).
+
 THESIS: Developer value lies in understanding and judgment. NeoHaskell is a language whose integrated capabilities help one person understand and build the whole application. Each page establishes enough context for direct entry and uses named links for reused examples; examples connect to that argument before mechanisms are introduced.
 
 OWN-WORLD: Native documentation navigation, continuous articles, quiet separators, and readable inline examples. Preserve the original logo, Manrope, violet/cyan identity, and ordinary scrolling.
