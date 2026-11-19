@@ -1,17 +1,109 @@
 ---
 title: "IDE, inspect, and validate"
-description: "Page plan. How do I inspect or validate the model from the command line?"
-tableOfContents: false
-pagefind: false
-prev: false
-next: false
-head:
-  - tag: meta
-    attrs:
-      name: robots
-      content: noindex
+description: "Inspect source declarations, synchronize the saved Event Model, and check its structure with Neo."
 ---
 
-## Page plan <a id="page-plan" />
+Neo provides three views of an application's model: source inspection in the terminal, a saved `event-model.json`, and the browser IDE. They serve different checks. Inspection helps you see what Neo recognizes in the code; validation checks the saved model's structure. Neither runs a command decision or proves that an external service completed its work.
 
-This page will list `neo ide` host and port settings, `inspect` filters, `inspect sync`, and `validate` path and JSON options. A compact table will distinguish read-only inspection from source-to-model synchronization and IDE edits. It will record validation exit codes and show the structure of a future captured result, linking model-authoring tasks elsewhere. `Command` contracts will be tied to the documented revision rather than assumed present in older binaries.
+This reference covers Neo 0.18.0. Run these commands from the application root, beside `neo.json` and `src/`. [Event models and features](../../framework/) explains the source declarations; [Neo commands](../) covers building and running the application.
+
+## Source and saved model <a id="source-and-model" />
+
+When reviewing the mug shop, we might ask whether the shipping integration names the right receiving command. `neo inspect integrations` exposes the integration information discovered in source. The IDE reads a saved model, which can also contain layout and grouping. Synchronization updates that saved representation from recognized source declarations.
+
+<div class="model-tools-flow" role="img" aria-label="Source inspection reads application source. Synchronization writes the saved Event Model. The IDE reads that model, and validation checks its structure and references.">
+  <div class="mt-node">Application source</div>
+  <div class="mt-link">neo inspect</div>
+  <div class="mt-node">Recognized declarations</div>
+  <div class="mt-link">neo inspect sync writes</div>
+  <div class="mt-node"><code>event-model.json</code></div>
+  <div class="mt-branches">
+    <div><span class="mt-link">neo ide reads</span><span class="mt-node">Browser model</span></div>
+    <div><span class="mt-link">neo validate checks</span><span class="mt-node">Structure and references</span></div>
+  </div>
+</div>
+
+A valid saved file can still omit business behavior or differ from source. Compilation, tests and application requests answer those separate questions.
+
+## Inspection output <a id="inspect" />
+
+```sh
+neo inspect
+neo inspect integrations
+neo inspect wiring
+```
+
+Without a subcommand, `inspect` prints a JSON document containing the workspace root, discovered domains and derived wiring. The read-only filters are `domains`, `commands`, `events`, `queries`, `integrations` and `wiring`. They inspect the current directory; Neo does not search parent directories for the application root. An empty result can mean the source layout was not recognized, rather than that the application has no behavior.
+
+Integration entries include `name`, `file`, `kind`, `handlesEvents` and `emitsCommands`. In the mug-shop shipping example, inspection recognizes `BookShipment` and its `RecordShipment` target, but returns an empty `handlesEvents` array for the typed handler. That output does not establish an event-to-integration connection. Read the [Integration contracts](../../framework/integrations/) alongside the handler and registration when checking the actual runtime path.
+
+`wiring` groups recognized relationships by event: `produced_by` lists commands, `feeds_queries` lists queries, and `triggers_integrations` lists integrations with their command targets. These relationships come from [source scanning](https://github.com/neohaskell/NeoHaskell/blob/414602b9510a92dfac647bc68d6afadfb594502c/neo/src/commands/inspect.rs), not execution tracing. In particular, `kind: "reactive"` in the inspection output is not proof that a worker uses the current typed inbound API.
+
+## Synchronization <a id="sync" />
+
+```sh
+neo inspect sync
+```
+
+Unlike the inspection filters, `sync` writes `event-model.json`. It requires an existing parseable model file. Existing recognized record fields can update without moving nodes; adding recognized nodes can invoke structural healing and layout. The IDE's source watcher uses the same synchronization engine.
+
+A second invocation on an unchanged synchronized project reports that the file is already in sync. Review the file diff after a synchronization, especially when new nodes cause layout changes. Synchronization is source-to-model work; it does not generate Haskell implementations from a diagram.
+
+## The browser IDE <a id="ide" />
+
+```sh
+neo ide
+```
+
+Neo serves the bundled IDE at `http://127.0.0.1:2323` and keeps the process running until you stop it with Ctrl+C. The IDE is a separate listener from your application. Starting it does not start the application's HTTP transport.
+
+`--port` changes the listener port. `--host` accepts a literal IPv4 or IPv6 address, with loopback as the default; `localhost` is not accepted as a host argument.
+
+```sh
+neo ide --host 127.0.0.1 --port 2324
+```
+
+Select a feature to inspect its chapters and slices. Saved grouping affects what appears in that feature: nodes can remain under **Ungrouped** even when a feature has no chapters. Check the selected feature and the saved model before interpreting an empty canvas as missing application behavior.
+
+The native model supports inbound and outbound integration nodes and connections for event inputs and receiving commands. At this revision, the typed `BookShipment` example is labeled inbound in the saved model despite being an outbound handler; its receiving-command edge is present but its event-input edge is absent. What appears depends on what the source scanner recognizes and what is saved in the model. An explanatory integration figure in a guide does not guarantee matching native edges. Use the source handler, inspection output and saved node connections together when reviewing a flow. The [Create a reusable integration](../../../guides/integrations/create-reusable/) and [Manage integration resources](../../../guides/integrations/resources/) guides explain the application work behind those representations.
+
+## Validation and exit codes <a id="validate" />
+
+```sh
+neo validate
+neo validate event-model.json --json
+```
+
+Validation is read-only. With no path it reads `event-model.json` in the current directory; an explicit path selects another file. Neo uses the [shared model validator](https://github.com/neohaskell/NeoHaskell/blob/414602b9510a92dfac647bc68d6afadfb594502c/neo/src/commands/validate.rs) to check the embedded JSON Schema and referential rules, such as whether an edge references an existing node. It does not compare every model declaration with compiled application behavior.
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | Valid model |
+| `1` | Read or tool failure, including a directory passed as the file |
+| `2` | Invalid schema or references |
+| `3` | Malformed JSON |
+| `4` | File does not exist |
+
+With `--json`, model outcomes appear as a JSON object on standard output. A valid file produces:
+
+```json
+{"status":"valid"}
+```
+
+Other model statuses are `invalid`, `malformedJson` and `notFound`. Invalid results include error locations and messages; malformed results include the parse error. Read failures still use the tool's error diagnostic and exit `1`, so a script must check the process status rather than assuming every failure has a JSON body.
+
+For an invalid reference, repair the reported node or edge relationship. For malformed JSON, repair the syntax at the reported position before synchronizing. A missing file needs an existing model created or saved through the IDE, or an explicit path to one. Rerun validation after the repair; success establishes the saved model's structural validity.
+
+<style>{`
+.model-tools-flow { max-width: 38rem; margin: 2rem auto; font-size: 16px; line-height: 1.5; text-align: center; }
+.model-tools-flow * { margin: 0; box-sizing: border-box; }
+.mt-node { border: 1px solid var(--sl-color-gray-4); border-radius: 8px; padding: 12px 16px; background: var(--sl-color-gray-6); display: block; }
+.mt-link { position: relative; display: block; padding: 16px 8px; }
+.mt-link::before { content: ''; position: absolute; top: 0; bottom: 0; left: 50%; border-left: 1px solid var(--sl-color-gray-3); z-index: 0; }
+.mt-link { background: var(--sl-color-bg); }
+.mt-link::before { left: 8px; }
+.mt-branches { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; border-top: 1px solid var(--sl-color-gray-3); }
+.mt-branches > div { position: relative; }
+
+@media (max-width: 520px) { .mt-branches .mt-link::before { display: none; } .mt-branches { grid-template-columns: 1fr; gap: 0; border-top: 0; padding-left: 16px; } .mt-branches > div::after { content: ''; position: absolute; left: -16px; top: 0; bottom: 0; border-left: 1px solid var(--sl-color-gray-3); } .mt-branches > div:last-child::after { bottom: 25px; } .mt-branches > div::before { content: ''; position: absolute; top: calc(100% - 25px); left: -16px; width: 16px; border-top: 1px solid var(--sl-color-gray-3); } }
+`}</style>
