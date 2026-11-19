@@ -1,0 +1,10 @@
+<div class="query-projection" aria-label="Entity state selects a query row, then combine replaces its answer">
+  <div class="origin"><strong>MugStock entity</strong><span>stream stock-7</span><span>available = 2</span></div>
+  <div class="link"><code>queryId stock</code><svg width="16" height="24" viewBox="0 0 16 24" aria-hidden="true"><path d="M8 0v21m-6-6 6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" /></svg></div>
+  <div class="row" data-diagram-role="query"><strong>StockAnswer row</strong><span>key stock-7</span><span>existing available = 3</span></div>
+  <div class="link"><code>combine stock (Just row)</code><svg width="16" height="24" viewBox="0 0 16 24" aria-hidden="true"><path d="M8 0v21m-6-6 6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" /></svg></div>
+  <div class="row result" data-diagram-role="query"><strong>Update</strong><span>same row key stock-7</span><span>available = 2</span></div>
+</div>
+<style>
+.query-projection{font-size:1rem;line-height:1.5;max-width:30rem;margin:2rem auto;border-left:2px solid var(--sl-color-gray-4);padding-left:1.5rem}.query-projection *{margin:0}.origin,.row{display:flex;flex-direction:column;padding:1rem;border:1px solid var(--sl-color-gray-4);border-radius:.25rem;background:var(--sl-color-gray-6)}.row{border-color:var(--diagram-line);background:var(--diagram-surface);color:var(--diagram-ink)}.link{display:flex;flex-direction:column;align-items:center;padding:.75rem 0;gap:.25rem}.link code{white-space:normal;overflow-wrap:anywhere;font-size:1rem}.result strong{font-weight:600}
+</style>

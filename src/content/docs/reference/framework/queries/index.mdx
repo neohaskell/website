@@ -1,17 +1,126 @@
 ---
 title: "Queries and projections"
-description: "Page plan. What updates a query row, and what may a caller read?"
-tableOfContents: false
-pagefind: false
-prev: false
-next: false
-head:
-  - tag: meta
-    attrs:
-      name: robots
-      content: noindex
+description: "Query row identity, projection updates, filtering, pagination and access policies."
 ---
 
-## Page plan <a id="page-plan" />
+import QueryProjectionFlow from '@components/learn/QueryProjectionFlow.astro';
 
-This page will define `Query`, `QueryOf`, `EntitiesOf`, `queryId`, `combine`, and the `Update`, `Delete`, and `NoOp` outcomes. A small entity-to-query example will show row identity separately from event stream identity. Anchored sections will cover `NeoQL` filtering, pagination inputs and response fields, result limits, pre-fetch access, and per-row visibility. The `Counter` query will supply the concrete consumer, with links to HTTP requests, storage, and authorization tasks instead of repeating their complete procedures.
+A query stores an answer that callers can read without reconstructing an entity's event history for each request. Its row might contain a counter's label and value, or the available quantity of a mug. The projection builds that answer from entity state. This reference describes the contracts behind [Query available stock](../../../tutorial/stock-query/); [Entities and events](../entities/) explains how events reconstruct the entity state used here.
+
+## Row identity and entity identity <a id="row-identity" />
+
+An event stream identifies one entity's history. A query row has its own UUID key in a separate store. `queryId` chooses that row from the entity state; it does not choose the event stream. A one-row-per-entity query often uses the same UUID for both, as this stock answer does. The figure's `stock-7` is a readable stand-in for that UUID.
+
+When a subscribed event triggers an update, the updater fetches the entity's current full state. It uses `queryId` to select the existing row, then passes both values to `combine`. Here the entity says two mugs remain and the old answer says three. Replacing the answer with two makes it reflect the entity again.
+
+<QueryProjectionFlow />
+
+The event that triggered the update and the state supplied to `combine` are different inputs to the overall process. `combine` receives the current state, which can already include later events. It does not receive a historical snapshot fixed at the triggering event. Adding the entity's full quantity to the existing row on every update would count the same stock repeatedly.
+
+Multiple entities can contribute to one row only when their `queryId` implementations deliberately return the same UUID. `EntitiesOf` alone does not create that relationship or fan an update out across rows. Updating one row is atomic in the query store; it is not a transaction combining command acceptance, event persistence and all query updates. See [Store application data](../../../guides/storage/) for the separate persistence paths.
+
+## The projection contracts <a id="query-contracts" />
+
+`Query` defines access and result-limit policy for a row type. `QueryOf entity query` defines how one entity contributes to that type. `EntitiesOf query` lists the contributing entity types used by query registration and subscription.
+
+```haskell
+queryId :: entity -> Uuid
+combine :: entity -> Maybe query -> QueryAction query
+```
+
+These are methods of `QueryOf entity query`, whose constraints require `Entity entity` and `Query query`. The first argument to `combine` is the entity state. The second is `Nothing` if the selected row does not exist, or `Just row` if it does.
+
+| Outcome | Effect on the selected row |
+| --- | --- |
+| `Update row` | Store the supplied row, creating it or replacing its value. |
+| `Delete` | Remove the row at the selected key. |
+| `NoOp` | Leave storage unchanged, including when no row exists. |
+
+`Delete` removes a derived answer, not the entity's event history. `NoOp` differs from an empty answer: it preserves whatever answer is already there.
+
+For a mug shop's public stock answer, the row can simply copy the current quantity. This excerpt uses the `MugStock` entity from [Entities and events](../entities/), with its `stockId` and `available` fields.
+
+```haskell
+import Core
+import Service.AccessControl
+  (AccessError, UserClaims, publicAccess, publicView)
+
+data StockAnswer = StockAnswer {
+  stockId :: Uuid,
+  available :: Int
+}
+
+canAccess :: Maybe UserClaims -> Maybe AccessError
+canAccess = publicAccess
+
+canView :: Maybe UserClaims -> StockAnswer -> Maybe AccessError
+canView = publicView
+
+deriveQuery ''StockAnswer [''MugStock]
+
+instance QueryOf MugStock StockAnswer where
+  queryId stock = stock.stockId
+  combine stock _existing = Update StockAnswer {
+    stockId = stock.stockId,
+    available = stock.available
+  }
+```
+
+With `stock.available = 2`, `combine` returns `Update` with `available = 2`, whether the old row held three or was absent. The ignored `_existing` argument is intentional: this answer is a replacement derived entirely from one entity. A query combining several entities may need the existing row to preserve the other entities' contributions.
+
+Define `canAccess` and `canView` before `deriveQuery`. The helper wires them to `Query.canAccessImpl` and `Query.canViewImpl`, generates `EntitiesOf StockAnswer = '[MugStock]` and its name, and supplies serialization, schema and supporting instances. It does not write the `QueryOf` business logic. If the module defines `maxResults :: Int` before the helper, that value supplies `maxResultsImpl`; use a positive limit.
+
+## The starter's Counter query <a id="counter-query" />
+
+The starter keeps `CounterView` in `src/<YourApp>/Counter/Queries/CounterView.hs`. It contains `counterId`, `label` and `value`, declares public access and row visibility, and derives a query over `CounterEntity`. Its handwritten `QueryOf CounterEntity CounterView` selects `entity.counterId` and replaces all three fields from the current entity. This is the same replacement pattern as the stock answer.
+
+The Counter feature registers the query slice and its event subscriptions. The declaration supplies the events that trigger projection work; merely defining a row type does not run a subscriber. [Event models and features](../) explains `query`, `readsFrom` and `onEvent`. When reviewing an agent's query change, inspect the row key, whether `combine` replaces or accumulates data, and which events trigger it. Deployed query definitions remain frozen; [Add a feature safely](../../../tutorial/change-safely/) covers new behavior under a new identity.
+
+## NeoQL filtering <a id="neoql" />
+
+The HTTP collection endpoint accepts a NeoQL expression in its `q` parameter. At this revision, the supported forms are bare field access and field equality with a string or number:
+
+```text
+.value
+.value == 2
+.label == "Mug counter"
+```
+
+Equality keeps matching rows. A bare `.value` keeps the complete rows; it does not reduce each answer to its `value` field. Field names are exact JSON keys. An equality on an unknown field matches no rows. Boolean comparisons, compound conditions, ordering and nested paths are outside this grammar. Expressions longer than 500 characters are rejected.
+
+NeoQL filters rows after row visibility checks and before pagination. It does not add an ordering guarantee. Use [Send HTTP requests](../../../tutorial/http-orders/) for request URLs and URL encoding rather than embedding unescaped expressions in a URL.
+
+## Pagination and result limits <a id="pagination" />
+
+`QueryPageRequest` contains `limit` and `offset`. `parsePageRequest` takes their optional text values in that order. Missing or nonnumeric values use the defaults; numeric values are clamped to the supported range.
+
+| Input | Default | Range |
+| --- | --- | --- |
+| `limit` | 100 | 1 to 1000 |
+| `offset` | 0 | 0 to 10,000,000 |
+
+For example, limit `5000` and offset `-5` become limit `1000` and offset `0`. The endpoint then takes the smaller of the request limit and the query's `maxResultsImpl`, whose default is 1000.
+
+`QueryPageResponse row` contains these fields:
+
+| Field | Meaning |
+| --- | --- |
+| `items` | The current page of authorized, matching rows. |
+| `total` | Count after visibility and NeoQL filtering, before pagination. |
+| `hasMore` | Whether `offset + effectiveLimit` is less than `total`. |
+| `effectiveLimit` | Page limit after the query-specific cap. |
+
+The collection handler loads rows before filtering and slicing the result. A smaller page bounds the returned items, not the cost of scanning the store. Neither the query-store interface nor this endpoint promises a stable sort order. A UUID lookup returns one row directly rather than this page envelope.
+
+## Access before fetching and visibility per row <a id="authorization" />
+
+The two query policies return `Nothing` to allow access and `Just error` to deny it:
+
+```haskell
+canAccess :: Maybe UserClaims -> Maybe AccessError
+canView :: Maybe UserClaims -> StockAnswer -> Maybe AccessError
+```
+
+`canAccess` runs before storage access. `canView` runs on each fetched row. The collection endpoint omits denied rows, then applies NeoQL and pagination, so `total` does not reveal the number of hidden rows. A UUID lookup returns the same not-found outcome for a missing row and a row denied by `canView`.
+
+The public policies in the example deliberately expose stock quantities. For private answers, [Control query access](../../../guides/authorization/query-access/) explains authenticated access, permissions and ownership checks. Query authorization still applies when commands use a trusted transport path; that command bypass does not bypass query policies. Protected-value resolution is a separate step after authorization, not a substitute for it.
