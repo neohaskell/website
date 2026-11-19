@@ -1,0 +1,8 @@
+<section class="deployment-flow" aria-label="Retained history rebuilds query state in a replaceable application process">
+  <div class="history" data-diagram-role="event"><strong>Retained events</strong><span>Directory outside the process</span></div>
+  <div class="replay"><span>Replay on restart</span><i aria-hidden="true"></i></div>
+  <div class="process"><strong>Mug-shop executable</strong><span>HTTP on 127.0.0.1:8080</span><div class="query" data-diagram-role="query"><strong>AvailableStock</strong><span>Rebuilt in process memory</span></div></div>
+</section>
+<style>
+.deployment-flow{display:grid;grid-template-columns:1fr 110px 1.4fr;align-items:center;margin:2rem 0;font-size:16px;line-height:1.5}.deployment-flow strong,.deployment-flow span{display:block}.deployment-flow strong{font-weight:600}.history{grid-column:1;color:var(--diagram-event-ink);padding:12px;border:2px solid var(--diagram-event-line)}.process{grid-column:3;border:2px solid var(--sl-color-text-accent);padding:16px}.query{margin-top:20px;border-left:3px solid var(--diagram-query-line);padding-left:12px;color:var(--diagram-query-ink)}.replay{padding:0 10px}.replay i{display:block;height:2px;background:var(--sl-color-gray-3);position:relative;margin-top:8px}.replay i:after{content:'';position:absolute;right:0;top:-4px;border-left:8px solid var(--sl-color-gray-3);border-top:5px solid transparent;border-bottom:5px solid transparent}@media(max-width:600px){.deployment-flow{grid-template-columns:1fr;gap:16px}.history,.process{grid-column:1}.replay{padding-left:20px}.replay i{width:2px;height:28px}.replay i:after{top:auto;bottom:0;right:-4px;border-top:8px solid var(--sl-color-gray-3);border-left:5px solid transparent;border-right:5px solid transparent;border-bottom:0}}
+</style>

@@ -1,17 +1,99 @@
 ---
-title: "Deploy an application"
-description: "Page plan. What must be configured and persisted to run this application elsewhere?"
-tableOfContents: false
-pagefind: false
-prev: false
-next: false
-head:
-  - tag: meta
-    attrs:
-      name: robots
-      content: noindex
+title: Deploy an application
+description: Build a pinned mug-shop executable, retain its history outside the process, and verify its state after a restart.
+tableOfContents:
+  minHeadingLevel: 2
+  maxHeadingLevel: 2
+prev: true
+next: true
 ---
 
-## Page plan <a id="page-plan" />
+import DeploymentBoundary from '../../../../components/learn/DeploymentBoundary.astro';
 
-This page will assemble a reproducible deployment example for a pinned application and framework revision, naming the executable, runtime configuration, database, and file paths. A deployment figure will distinguish persistent services from the application process and show the public HTTP boundary. Verification will cover startup, an accepted command, a query, and a restart, while identifying environment-specific hosting and process supervision that the repository does not supply.
+Deploying the mug shop means starting a particular version of its executable with the configuration and retained state that version expects. Replacing the process must not give the shop a new history. An order accepted before the replacement should still reduce stock afterward.
+
+This guide builds on [Keep events across restarts](../storage/) and [Expose an HTTP API](../transports/). We will reproduce a single-process deployment locally: build the executable, start it, accept an order, then restart and read the same shop. The figure shows the local HTTP listener. A public HTTPS boundary belongs to the hosting environment.
+
+<DeploymentBoundary />
+
+The event directory survives the process. In this configuration, query rows live in memory and are rebuilt from retained events. [Persist and rebuild queries](../storage/query-rebuilds/) explains the separate persistent-row option. Neither a build directory nor the running process should be the only home of the shop's history.
+
+## The version being deployed
+
+The application source and its dependency pins together identify the release. Keep `neo.json`, `cabal.project`, `flake.nix` and `flake.lock` with that source. In the project used here, the framework revision is `414602b9510a92dfac647bc68d6afadfb594502c`: `neo.json` records it, the two source-package tags in `cabal.project` select it, and the Nix input selects the same revision. Preserve the pins in your existing project rather than upgrading dependencies during deployment.
+
+Ask your agent to prepare the existing mug-shop composition for a local deployment check:
+
+```text wrap
+Preserve all deployed commands, events, queries and their tests.
+Keep the Web transport and the existing mug-shop Features.
+Use one persistent SimpleEventStore with an unused directory named
+.neo/deployment-events, and bind HTTP to 127.0.0.1:8080.
+Keep all other configuration and history untouched.
+Show me the focused App.hs changes before building.
+```
+
+The directory name is an example you choose for this new exercise. If it already contains history, choose another unused directory. Moving to a different directory does not migrate an existing shop. For an actual release replacement, retain the existing configured directory and its contents.
+
+Review these settings inside `EventModel.eventModel do`, before the Features. This excerpt replaces the corresponding settings; it is not another application definition:
+
+```haskell wrap
+EventModel.withEventStore
+  (\(_ :: StarterConfig) -> SimpleEventStore {
+    basePath = Path.fromText ".neo/deployment-events" |> Maybe.getOrDie,
+    persistent = True
+  })
+EventModel.withHost "127.0.0.1"
+EventModel.withPort 8080
+EventModel.withTransport WebTransport.server
+```
+
+Keep the storage imports from [Keep events across restarts](../storage/). `withHost` and `withPort` take concrete values. A `PORT` field in `StarterConfig` does not by itself connect that field to the Web listener. Here the listener is explicitly fixed at port 8080, and the loopback host keeps this exercise on your machine. If that port is occupied, stop only your own previous application process or choose another port in the composition and use it throughout the check.
+
+## Building and starting the executable
+
+From the project root, run the existing tests and build gate first:
+
+```sh
+neo --ci test
+neo build
+```
+
+`neo build` also checks locked deployed source at this CLI revision. Keep the lock file and frozen definitions from [Add a feature safely](../../tutorial/change-safely/) with the release. A new behavior needs its own identity, even when it is being prepared for deployment.
+
+The generated project declares an executable named `my-neo-app`. If your project has another name, use its executable name from the `.cabal` file. Build that target and ask Cabal for its location within the pinned Nix environment:
+
+```sh
+nix develop --command cabal build exe:my-neo-app
+nix develop --command cabal list-bin exe:my-neo-app
+```
+
+The second command prints an absolute executable path. Run that path from the same project root, keeping the pinned environment available:
+
+```sh
+nix develop --command bash -c 'exec "$(cabal list-bin exe:my-neo-app)"'
+```
+
+This starts the built application directly, without Neo's development interface. Keep the terminal open. The command demonstrates execution on the build machine; copying this binary to a different operating system or to a machine without its runtime libraries is a separate packaging task. A host must provide a compatible runtime or a release built for its own platform.
+
+Open [the local application documentation](http://127.0.0.1:8080/docs). Its presence confirms that HTTP is answering, but the stock query is the meaningful check that history has been processed. Query maintenance can lag behind startup or a newly accepted command.
+
+## A replacement that remembers the order
+
+In the generated documentation, open a new shop with a valid UUID you have not used in this exercise's history. The shop starts with three mugs. Use **place-online-order** with the same UUID and read `AvailableStock` until it shows two. Keep the separate online Feature from [Add a feature safely](../../tutorial/change-safely/) registered for this check. Record the UUID and the query answer before stopping.
+
+Stop the process with Ctrl+C and wait for it to exit. Start the same executable again from the same project root using the command above. Do not open the shop again. Read `AvailableStock` for the recorded UUID until it shows two mugs. Then place another order: it should be accepted and leave one mug. The next order should be rejected with `Reserved for in-person sales`, leaving stock at one.
+
+That final rejection checks the recovered entity state as well as the query answer. Replaying history did not place another order. If the shop is missing, check the working directory and event-store settings before sending any new commands. An empty or stale query immediately after startup can reflect catch-up; it is not a reason to delete history.
+
+You can inspect the behavior independently of its runtime storage. Run `neo inspect sync`, then open `neo ide` and follow `ShopOpened` and `OrderPlaced` into `AvailableStock`. The source model explains what rebuilds the answer. The restart exercise establishes that the configured history actually survived.
+
+## State and services outside the executable
+
+The local simple store uses `.neo/deployment-events` relative to the process working directory. Keep one application process on this directory. On a host, make the working directory explicit and put retained state on storage that survives release replacement. Do not put the only copy inside a disposable checkout or container layer.
+
+A PostgreSQL deployment instead needs the database service, connection settings and retained database storage described in [Keep events across restarts](../storage/#choosing-postgresql). Choosing a PostgreSQL event store does not choose a persistent query store. Preserve the application scope used for protected values, along with the database and key state needed to interpret existing history.
+
+Other capabilities add their own retained state. [Generate a document](../files/generated-documents/) separates blob bytes from file metadata; both need durable storage. [Connect an external account](../integrations/oauth-connections/) separates provider credentials from temporary connection transactions. The default in-memory secret store loses credentials on restart, and persisting tokens alone does not persist pending connection transactions. An application that uses these capabilities needs their storage choices settled before replacing its process.
+
+The host also supplies process supervision, HTTPS termination, network access rules, secret injection, backups and restore checks. Restrict access to application state and secrets, and keep them out of the release source. Configure caller verification and access policies through [Verify caller identity](../authentication/), [Authorize a command](../authorization/) and [Restrict query results](../authorization/query-access/) before exposing private behavior. Binding a Web listener does not make every command private. The local exercise ends with a running, restartable release; publishing it requires those environment-specific decisions.
