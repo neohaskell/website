@@ -1,17 +1,87 @@
 ---
 title: "Erase a protected value"
-description: "Page plan. How do I make an owned protected value unreadable without deleting history?"
-tableOfContents: false
-pagefind: false
-prev: false
-next: false
-head:
-  - tag: meta
-    attrs:
-      name: robots
-      content: noindex
+description: "Erase one protected value's key, preserve recorded history, and recover an unfinished erasure request."
 ---
 
-## Page plan <a id="page-plan" />
+import ProtectedErasure from '@components/learn/ProtectedErasure.astro';
+import ErasureRetry from '@components/learn/ErasureRetry.astro';
 
-This page will introduce a narrowly scoped erasure task using the PostgreSQL-backed protected-value mechanism. It will follow an authorized owner request, deletion of one protected reference, the resulting command, and an explicit retry. A before-and-after figure will distinguish the retained event record from the unavailable protected content, and explain how queries and external copies must be considered separately when checking the intended outcome.
+An order can remain part of the mug shop's history after the shop no longer needs a customer's delivery note. If that note was recorded as an `Erasable Text`, NeoHaskell can erase its decryption key while retaining the event that carried the encrypted value. Reading that protected value then yields `Erased` instead of the original text.
+
+This is a PostgreSQL-backed event-store operation. It differs from [Generate a document](../../files/generated-documents/), which stores file bytes and file metadata. Erasing a protected reference does not delete a generated receipt or its physical bytes.
+
+<ProtectedErasure />
+
+## A value protected from the start
+
+Protection begins when the value enters the recorded history. An ordinary text field already written into an event cannot be made erasable by wrapping a later copy. For the delivery note, the agent adds an `Erasable Text` field to a new event and creates its value inside the command's decision:
+
+```haskell
+note <- Erasable.new deliveryNote
+```
+
+Here `deliveryNote` is the text supplied to the new command. `Erasable.new` returns a protected value for the event to carry. With the PostgreSQL event store, the event and its encryption key are committed together. The stored event contains an encrypted envelope and reference, rather than the note's plain text. Two independent calls to `new` produce independent protected values, even when their text is equal.
+
+The normal authorized JSON representation has an `Available` case containing the value and an `Erased` case without it. Query clients must handle both JSON cases. In command decisions, `Erasable` is opaque: use its supported operations rather than pattern-matching on those JSON tags. The order's stock calculation should depend on its recorded quantity, not on whether the delivery note is still readable.
+
+Use the PostgreSQL configuration from [Keep events across restarts](../), including a stable, nonempty `erasableApplicationScope`. That scope identifies the application for protected-key ownership. It is configuration, not the signed-in user's identity. Keep it stable across restarts.
+
+## The owner's request
+
+Before exposing erasure, the application needs a verified signed-in identity. [Verify caller identity](../../authentication/) covers that setup. The erasure command must compare the authenticated user with the order's owner and reject a request for another owner's order. A reference supplied by the caller is not proof of ownership.
+
+Ask your agent for this bounded addition:
+
+```text
+Add erasure for one protected delivery note in the mug shop.
+Use new command, event and Feature identities; preserve deployed definitions.
+Check the signed-in owner and the note's exact protected reference.
+Record a pending erasure request before running the outbound action.
+Keep the note out of ordinary text fields, logs and error messages.
+Add an internal result command and an explicit owner-authorized retry.
+Test another owner, completion rejection and retry after restart.
+```
+
+The accepted request records which order and protected reference are pending. The application then runs the outbound action from that recorded event. Keep the owner identifier needed for authorization separate from the erasable note, and decide explicitly whether retaining that identifier fits the shop's data policy.
+
+## One reference, one result
+
+The built-in action is `Integration.Erasable.Erase`. The following excerpt shows its configuration inside an outbound handler. `target`, `recordResult` and `recordFailure` are application values: the target identifies the stored note, and the two functions construct the application's internal result command.
+
+```haskell
+Integration.outbound Erasure.Erase {
+  target = target,
+  onResult = recordResult,
+  onFailure = recordFailure
+}
+```
+
+Import `Integration.Erasable` qualified as `Erasure`. Its `ErasureTarget` contains `reference`, `entityName` and `streamId`. Derive these from the accepted request and its owning entity, rather than accepting arbitrary target coordinates from the caller. The store checks the application scope, entity name and stream against the key's recorded ownership.
+
+The result distinguishes three outcomes:
+
+| Result | Meaning for the request |
+| --- | --- |
+| `ErasedNow` | The matching key was active and has now been erased. |
+| `AlreadyErased` | The matching key was already erased. A retry can complete successfully. |
+| `UnknownReference` | No key record exists for this reference. Do not record successful erasure. |
+
+`onFailure` handles an operation failure, such as an unavailable key store or a mismatch with the recorded ownership scope. It is separate from the three results above. Register the outbound handler and its event subscription in the Feature, and register the receiving result command with `InternalTransport`. The result command must check that the reference matches its pending request before recording completion. An accepted request is not evidence that either the key operation or the result command has succeeded.
+
+## Erasure and completion are separate
+
+The key operation commits before the integration dispatches its result command. If that command is rejected, or the process stops between those steps, the protected note can already read as `Erased` while the application's request still says pending. Keep those two facts distinct in the query.
+
+<ErasureRetry />
+
+The retry command should load the retained request, recheck its owner and submit the same protected reference again. When the earlier attempt erased the key, the repeated action returns `AlreadyErased`. The result command can then record completion without restoring the value or creating a new protected copy. Make repeated completion safe too, so an identical result cannot corrupt the order's state.
+
+A restart does not automatically resubmit every unfinished outbound request. Retain enough state to find pending requests and retry them explicitly. If the first attempt never reached the key operation, the retry can instead return `ErasedNow`; both outcomes can complete the same business request.
+
+## Checking the intended outcome
+
+Use a disposable order and two independently protected notes in your local application. Read the owner's query before erasure, request erasure for the first reference, and read again after completion. The first note should be `Erased`; the second should remain `Available`. Restart with the same PostgreSQL history and confirm that distinction survives, while the order's nonprotected business facts still rebuild.
+
+Then reject the receiving result command in an isolated test. Verify that the key is erased but completion is pending, restore normal result acceptance, and explicitly retry. Expect `AlreadyErased` and recorded completion. A second signed-in owner must be unable to request the operation or read the first owner's protected content. Inspect these command and integration connections in the native IDE, alongside the tests, before accepting the agent's change.
+
+Erasure removes the key from the active protected-value store; it leaves the recorded event and encrypted envelope. It does not retract plaintext already copied into a query row, log, exported file or external service. Previously loaded values can also remain in memory. Review those copies and the retention of database backups separately. [Persist and rebuild queries](../query-rebuilds/) explains why stored query rows have their own lifecycle. A separately protected derivative has its own reference and key, so erasing the original does not erase that derivative.

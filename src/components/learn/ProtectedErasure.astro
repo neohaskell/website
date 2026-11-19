@@ -1,0 +1,26 @@
+<div class="erasure" role="img" aria-label="Before erasure, a retained event and active key reveal an available note. After erasure, the same event remains but the erased key cannot reveal the note.">
+  <section>
+    <h3>Before erasure</h3>
+    <div class="record" data-diagram-role="event">Order event<br /><span>Encrypted note + reference</span></div>
+    <div class="connection">with its active key</div>
+    <div class="answer" data-diagram-role="query">Available<br /><span>Leave at reception</span></div>
+  </section>
+  <section>
+    <h3>After erasure</h3>
+    <div class="record" data-diagram-role="event">Same order event<br /><span>Encrypted note + reference</span></div>
+    <div class="connection broken">Key erased <b aria-hidden="true">×</b></div>
+    <div class="answer" data-diagram-role="query">Erased<br /><span>No note content</span></div>
+  </section>
+</div>
+<style>
+.erasure { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:24px; margin:32px 0; }
+.erasure section { min-width:0; margin:0; }
+.erasure h3 { font-size:18px; margin:0 0 16px; }
+.record,.answer { border:1px solid var(--diagram-line); background:var(--diagram-surface); color:var(--diagram-ink); border-radius:8px; padding:16px; font-size:18px; line-height:1.5; }
+.erasure span { font-size:16px; }
+.connection { box-sizing:border-box; height:80px; line-height:24px; position:relative; padding:20px 12px 20px 24px; margin-left:20px; border-left:2px solid var(--sl-color-gray-3); font-size:16px; }
+.connection::after { content:''; position:absolute; bottom:0; left:-6px; border-top:8px solid var(--sl-color-gray-3); border-left:5px solid transparent; border-right:5px solid transparent; }
+.broken { border-left-style:dashed; color:var(--sl-color-red-high); }
+.broken b { font-size:24px; line-height:24px; vertical-align:middle; padding-left:8px; }
+@media(max-width:600px) { .erasure { grid-template-columns:1fr; gap:32px; } }
+</style>

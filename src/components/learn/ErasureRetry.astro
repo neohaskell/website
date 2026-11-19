@@ -1,0 +1,17 @@
+<div class="erasure-retry" role="img" aria-label="Key erasure succeeds, but result command rejection leaves completion pending. An explicit retry of the same reference returns AlreadyErased and an accepted result records completion.">
+  <div class="node" data-diagram-role="integration">Key erased</div>
+  <div class="link failed">Result rejected <b aria-hidden="true">×</b></div>
+  <div class="node" data-diagram-role="query">Completion pending</div>
+  <div class="link">Retry same reference</div>
+  <div class="node" data-diagram-role="integration">AlreadyErased</div>
+  <div class="link">Result accepted</div>
+  <div class="node" data-diagram-role="event">Completion recorded</div>
+</div>
+<style>
+.erasure-retry { margin:32px 0; max-width:28rem; font-size:16px; }
+.node { padding:16px; border:1px solid var(--diagram-line); border-radius:8px; background:var(--diagram-surface); color:var(--diagram-ink); }
+.link { position:relative; border-left:2px solid var(--sl-color-gray-3); padding:16px 24px; margin-left:24px; }
+.link::after { content:''; position:absolute; bottom:0; left:-6px; border-top:8px solid var(--sl-color-gray-3); border-left:5px solid transparent; border-right:5px solid transparent; }
+.failed { color:var(--sl-color-red-high); border-left-style:dashed; }
+.failed b { margin-left:8px; }
+</style>
