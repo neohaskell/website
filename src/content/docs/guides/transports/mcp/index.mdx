@@ -1,17 +1,158 @@
 ---
-title: "Expose MCP tools and resources"
-description: "Page plan. How can an agent call this application through MCP?"
-tableOfContents: false
-pagefind: false
-prev: false
-next: false
-head:
-  - tag: meta
-    attrs:
-      name: robots
-      content: noindex
+title: Expose MCP tools and resources
+description: Let a local MCP client place mug-shop orders and read stock through the existing commands and query.
+tableOfContents:
+  minHeadingLevel: 2
+  maxHeadingLevel: 2
+prev: true
+next: true
 ---
 
-## Page plan <a id="page-plan" />
+An AI agent can request an order and read available stock through the Model Context Protocol, or MCP. The agent is a caller of the mug shop: `PlaceOrder` still decides whether to accept the order, and `AvailableStock` still supplies the stock answer. Changing the interface doesn't move those decisions into the agent.
 
-This page will register the stdio MCP transport for an existing feature and show initialization, tool discovery, a command call, and reading a query resource. A compact protocol transcript will distinguish commands as tools from queries as resources. The example will explain process ownership and the trusted execution context so readers do not mistake this local protocol for an authenticated remote HTTP service.
+This guide uses the project from [Expose an HTTP API](../), with the reserve policy from [Keep one mug in reserve](../../../tutorial/change-safely/). The shop opens with three mugs, each accepted order consumes one, and online orders leave one for in-person sales. If you're arriving directly, [Place an order over HTTP](../../../tutorial/http-orders/) explains the command declarations and shop setup used here.
+
+MCP calls a change-making operation a **tool** and readable information a **resource**. NeoHaskell exposes registered commands as tools and registered queries as resources. Here we'll add the local, standard-input/output transport and inspect a conversation with it.
+
+## The same shop behind another interface
+
+Ask your agent to add `McpTransport` to the allowed transports of `OpenShop` and `PlaceOrder`, register it in `App.hs`, and preserve the existing Features, Web configuration and stock policy. Have it read the project's active NeoHaskell guidance first and run `neo test` after the change. Opening a shop is a setup operation for this exercise; allowing it as a tool is an explicit choice.
+
+After the agent finishes, use the excerpts below to review its changes. They show the relevant parts of the existing modules, rather than a second set of edits to apply. In both command modules, the transport imports should include:
+
+```haskell wrap
+import Service.Transport.Mcp (McpTransport)
+import Service.Transport.Web (WebTransport)
+```
+
+The declaration in `src/Shop/Commands/PlaceOrder.hs` becomes:
+
+```haskell wrap
+type instance TransportsOf PlaceOrder =
+  '[WebTransport, McpTransport]
+```
+
+`OpenShop` needs the corresponding declaration with its own type name. This allows the commands to be reached through either interface. Their `decide` functions and the events they produce stay the same.
+
+In `src/App.hs`, look for this qualified import:
+
+```haskell wrap
+import Service.Transport.Mcp qualified as McpTransport
+```
+
+Inside the existing `EventModel.eventModel do` block, the new registration belongs before `EventModel.features`:
+
+```haskell wrap
+EventModel.withTransport McpTransport.McpTransport {
+  serverName = "example-mug-shop",
+  serverVersion = "0.1.0"
+}
+```
+
+These two strings identify this example server to its client; choose names and versions appropriate to your application. Keep `counterFlow`, `shopFlow`, the event store and the existing Web configuration. A transport registration starts an interface; the command declarations determine which tools it receives. Queries are shared across the registered transports, so `AvailableStock` needs no new transport declaration.
+
+With the saved `event-model.json`, run `neo inspect sync` and open `neo ide`. In **Ungrouped**, use **Fit View** and select `PlaceOrder` to follow its connection to `OrderPlaced`. Then inspect the arrows from `OrderPlaced` and `ShopOpened` into `AvailableStock`. MCP reaches this same behavior; it doesn't need a second order decision or a second stock query.
+
+## A local protocol conversation
+
+The stdio transport reads one JSON request per line from standard input and writes JSON responses to standard output. The client normally starts the application as a child process and owns those streams. There is no MCP URL to open in a browser.
+
+For this exercise, we can act as that client in a terminal. Stop any running copy of the shop with Ctrl+C. From the project root, start a fresh process with:
+
+```sh wrap
+LOG_LEVEL=Error nix develop --command cabal run -v0 all
+```
+
+This launches the application's executable through its generated Nix environment. Use this command rather than `neo run` for the stdio conversation: `neo run` closes the application's standard input. `-v0` silences Cabal's normal build messages, and `LOG_LEVEL=Error` suppresses routine application logs that would otherwise share the protocol's output. Keep these settings for the requests below. A client needs protocol responses on stdout; unexpected diagnostic output there needs fixing before using it as an MCP server.
+
+The example event store is in memory. Starting this process gives us a fresh shop history, separate from any HTTP process used earlier. The existing Web registration remains in the code, but this stdio session handles MCP first; it isn't a simultaneous HTTP session. Keep the process open while sending the requests, and stop it with Ctrl+C when finished. Closing stdin ends MCP input but can let the application proceed to its next registered transport.
+
+Paste each JSON object below as one complete line, pressing Enter after it. The requests use JSON-RPC: `method` names the operation and `id` connects a response to its request. The numeric IDs here are chosen for this conversation; they aren't shop identifiers. Keep `jsonrpc`, the method names and `protocolVersion` exactly as shown. The `clientInfo` name and version identify this example client and can be changed.
+
+```json wrap
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"example-client","version":"0.1.0"}}}
+```
+
+The response reports protocol version `2025-03-26`, tool and resource capabilities, and the `example-mug-shop` server identity. Complete initialization with a notification:
+
+```json wrap
+{"jsonrpc":"2.0","method":"notifications/initialized"}
+```
+
+This line has no response because it is a notification. Send it before discovery; a tool request sent earlier returns `Server not initialized`.
+
+## Discovering tools and resources
+
+Ask the running process what it exposes:
+
+```json wrap
+{"jsonrpc":"2.0","id":2,"method":"tools/list"}
+```
+
+The tool list contains `OpenShop` and `PlaceOrder`. Each has an `inputSchema` requiring `entityId`. Use these exact tool names, including capitalization, rather than the Web route names `open-shop` and `place-order`.
+
+Resource discovery uses a separate method:
+
+```json wrap
+{"jsonrpc":"2.0","id":3,"method":"resources/list"}
+```
+
+The resource list includes the stock query and the preserved Counter query. The stock entry has name `available-stock` and URI `neohaskell://queries/AvailableStock`. Use the returned URI literally: its final segment is `AvailableStock`, not the display name or an HTTP route. Counter's query is shared, but its commands won't appear as tools unless their declarations also permit MCP.
+
+## An order and its stock answer
+
+Open a shop with the setup tool:
+
+```json wrap
+{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"OpenShop","arguments":{"entityId":"9b4dbfcb-477f-49f2-9156-629a24457f86"}}}
+```
+
+The UUID is chosen for this example; another valid UUID works. Keep the required key `entityId`, and use the same identifier for opening and ordering. A fresh process lets us reuse this value without reopening an existing shop.
+
+Now request one order for that shop:
+
+```json wrap
+{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"PlaceOrder","arguments":{"entityId":"9b4dbfcb-477f-49f2-9156-629a24457f86"}}}
+```
+
+Each successful response contains `result.isError: false` and a text block beginning `Command accepted. Entity ID:` followed by that identifier. Acceptance records an event; it doesn't return the shop's stock. Read the query resource to get the maintained answer:
+
+```json wrap
+{"jsonrpc":"2.0","id":6,"method":"resources/read","params":{"uri":"neohaskell://queries/AvailableStock"}}
+```
+
+The response's `result.contents` contains an entry with `mimeType: "application/json"`. Its `text` field is a JSON string. Decoding that string gives the collection below once the query has caught up:
+
+```json wrap
+{
+  "items": [
+    {
+      "shopId": "9b4dbfcb-477f-49f2-9156-629a24457f86",
+      "availableMugs": 2
+    }
+  ],
+  "total": 1,
+  "hasMore": false,
+  "effectiveLimit": 100
+}
+```
+
+The resource returns a collection even though we've opened only one shop. This MCP read uses a limit of 100 and an offset of zero; adding `?id=...`, `q`, `limit` or `offset` to the URI doesn't select or filter its rows. Use the URI from discovery and find the matching `shopId` in `items`. For keyed reads, filtering or further pages, use the [Expose an HTTP API](../#collections-filters-and-pages).
+
+Query maintenance is asynchronous. If the resource is still empty or shows three mugs, read it again up to five times, waiting one second between reads. If it hasn't caught up, stop and ask your agent to check the query subscriptions and runtime output. Don't resend `PlaceOrder` to refresh stock: that would request another order.
+
+Reuse the `PlaceOrder` request with `id` changed to `7` to buy one more mug. Stock can then reach one. Send it once more with `id` changed to `8`; this order is rejected. Its response still has a JSON-RPC `result`, but that result contains `isError: true` and this content text:
+
+```text wrap
+Command rejected: Reserved for in-person sales
+```
+
+The rejected order records no `OrderPlaced`, so the query remains at one. A client must inspect `isError` as well as JSON-RPC errors: receiving a protocol response doesn't mean the shop accepted the order.
+
+## Who controls this process
+
+This MCP transport treats command calls as trusted local execution and bypasses the command authorization gate. The reserve decision still runs, but a tool call isn't a signed-in HTTP user. Query resources use an anonymous caller context and remain subject to the query's access policy; our stock query currently permits public reads.
+
+Choose which commands you expose with that authority in mind. A client allowed to launch this process can call `OpenShop` as well as `PlaceOrder`, using the process's configuration, credentials and storage. An agent's confirmation before calling a tool is a client behavior, not an authorization boundary enforced by this transport.
+
+Keep the stdio connection between processes you trust. Forwarding it to a remote caller doesn't add authentication, and configuring HTTP authentication doesn't protect these trusted MCP calls. The process owner and the tool declarations determine who can reach the local command authority.
