@@ -22,6 +22,8 @@ Run the documented path in an isolated directory when tools permit. Verify every
 
 For a running-service lesson, verify readiness with a real request, then exercise stopping and restarting the process. Download progress, a compilation success, a startup log, or a test that merely times out cannot establish that the server answers. Check optional modes against their implementation and observed behavior too; a help message promising automatic restart is not evidence that restart occurs. Keep the working path in the article and record unsupported optional behavior for its owning ticket. If that behavior is necessary to the page's stated result, treat it as a blocker.
 
+For transport configuration, follow settings through application startup as well as the transport record. Application-level configuration may replace transport defaults; verify browser-origin permissions with an allowed and an unlisted origin before teaching the declaration.
+
 For testing lessons, verify the runner's failure behavior as well as the example failure. A command may stop after unit failures and skip HTTP scenarios. Distinguish observed failures from consequences inferred for skipped checks. Capture the deliberate failure and restored success without changing the expected behavior.
 
 For intentional policy changes, revise the behavior agreement before changing test expectations. Verify both sides of the new boundary and preserve replay checks for histories accepted under the old policy; a new decision must not silently rewrite recorded facts.

@@ -1,17 +1,137 @@
 ---
-title: "Expose an HTTP API"
-description: "Page plan. How do I call my commands and queries over HTTP?"
-tableOfContents: false
-pagefind: false
-prev: false
-next: false
-head:
-  - tag: meta
-    attrs:
-      name: robots
-      content: noindex
+title: Expose an HTTP API
+description: Connect the mug shop to HTTP, inspect its generated contract, and configure access from a separate browser application.
+tableOfContents:
+  minHeadingLevel: 2
+  maxHeadingLevel: 2
+prev: true
+next: true
 ---
 
-## Page plan <a id="page-plan" />
+An HTTP API gives another program a way to request changes and read answers from the mug shop. The Web transport turns registered commands and queries into routes, and generates an OpenAPI contract describing those routes. We can inspect that contract and try requests in the running application's browser documentation.
 
-This page will expose an existing feature through the Web transport and inspect its generated routes and OpenAPI contract. A command request, rejected input, and query response will connect the application definition to observable HTTP behavior. Filtering and pagination will follow the [query contract](../../reference/framework/queries/). The examples will include transport registration and browser-origin configuration, then link to authentication before opening the interface to untrusted callers.
+This guide uses the shop from [Keep one mug in reserve](../../tutorial/change-safely/): it opens with three mugs, each order buys one, and online orders must leave one for in-person sales. If you're arriving directly, [Place an order over HTTP](../../tutorial/http-orders/) explains the existing command declarations and shop setup. Keep that project open; we won't create a second implementation of its decisions.
+
+## Application behavior and its interface
+
+Three declarations work together to expose the shop. The Feature registers its commands, events and query. Each command permits the Web transport, and the application starts that transport alongside its Features.
+
+In `src/Shop/Commands/PlaceOrder.hs`, this existing declaration permits HTTP access. `OpenShop` has the corresponding declaration with its own name:
+
+```haskell wrap
+type instance TransportsOf PlaceOrder = '[WebTransport]
+```
+
+The module imports `WebTransport` from `Service.Transport.Web`. This declaration selects an interface; it doesn't change the order's decision or reserve condition.
+
+In `src/App.hs`, inspect the following existing excerpt. The application name, configuration and event store surround it and remain unchanged:
+
+```haskell wrap
+EventModel.withTransport WebTransport.server
+EventModel.features do
+  counterFlow
+  shopFlow
+```
+
+`shopFlow` supplies the shop's registered behavior. Keeping `counterFlow` preserves the starter's Counter routes too. Adding a command module without registering it in a Feature doesn't make it an API endpoint.
+
+Run `neo inspect sync` with the saved `event-model.json`, then open `neo ide`. In **Ungrouped**, use **Fit View** and follow `PlaceOrder` to `OrderPlaced`, and then into `AvailableStock`. Follow `ShopOpened` into the same query. These are the two accepted facts that refresh the stock answer. The IDE lets you review the behavior behind the interface; the HTTP contract describes how callers reach it.
+
+## The generated contract
+
+If the application is running, stop it with Ctrl+C before this exercise. Run `neo run` from the project root and open the [built-in API documentation](http://127.0.0.1:8080/docs). This example's store is in memory, so the restart clears earlier shops and lets us reuse the example UUID below. Restart again after later source changes.
+
+The shop contributes these routes:
+
+| Method | Route | Purpose |
+| --- | --- | --- |
+| POST | `/commands/open-shop` | Record three opening mugs |
+| POST | `/commands/place-order` | Request a one-mug order |
+| GET | `/queries/available-stock/{id}` | Read one shop's stock |
+| GET | `/queries/available-stock` | Read a collection of stock answers |
+
+Open [the generated OpenAPI JSON](http://127.0.0.1:8080/openapi.json) to inspect the machine-readable contract. Its `paths` describe the routes; the schemas describe request and response shapes. Compare the `entityId` field for `place-order` with the command in your project. There is no quantity field because each command requests one mug.
+
+Under **ShopEntity** in the browser documentation, select **open-shop**, then **Test Request**. Use this **Body** and click **Send** once:
+
+```json wrap
+{"entityId":"9b4dbfcb-477f-49f2-9156-629a24457f86"}
+```
+
+The UUID is chosen for this example; another valid UUID works. Keep the required key `entityId` and reuse the response's identifier throughout the exercise. A successful request returns status `200 OK` with `tag: "Accepted"` and that `entityId`.
+
+For **place-order**, send the same body once. It also returns an accepted response. Read `GET /queries/available-stock/{id}` with that shop ID. Once the asynchronous query has refreshed, it returns:
+
+```json wrap
+{
+  "shopId": "9b4dbfcb-477f-49f2-9156-629a24457f86",
+  "availableMugs": 2
+}
+```
+
+Acceptance records the event before the query necessarily catches up. Read again if you still see three, or initially receive 404 after opening. An automated client should retry reads with a bounded wait rather than resend the command: another accepted order would buy another mug.
+
+Send **place-order** once more and wait for stock `1`. A third order returns status `400 Bad Request`:
+
+```json wrap
+{
+  "reason": "Reserved for in-person sales",
+  "tag": "Rejected"
+}
+```
+
+The stock remains one because rejection records no `OrderPlaced`. This is a valid command body rejected by the shop's decision. To compare it with invalid input, remove `entityId` from the body and send `{}`. That request also fails with status 400, but cannot reach the shop decision because it lacks the required identifier. A caller needs to inspect the response, rather than treating every 400 as the reserve rule.
+
+## Collections, filters and pages
+
+The keyed query returns one stock row directly. The collection query wraps rows in `items` and includes paging information. Open the following request in your browser, keeping the application running:
+
+```text wrap
+http://127.0.0.1:8080/queries/available-stock?limit=1&offset=0
+```
+
+With only our example shop present, the answer is:
+
+```json wrap
+{
+  "items": [
+    {
+      "shopId": "9b4dbfcb-477f-49f2-9156-629a24457f86",
+      "availableMugs": 1
+    }
+  ],
+  "total": 1,
+  "hasMore": false,
+  "effectiveLimit": 1
+}
+```
+
+`limit` requests a page size, and `offset` skips that many rows. `total` counts matching rows the caller may see, while `hasMore` tells you whether more remain after this page. Use `effectiveLimit` to see the size the server actually allowed. With several shops, increasing `offset` by that size requests the next page. These reads don't reserve stock or freeze the collection while orders arrive.
+
+The optional `q` parameter filters query fields using NeoQL expressions. For example, this request selects rows with exactly two mugs, so our shop at one no longer appears:
+
+```text wrap
+http://127.0.0.1:8080/queries/available-stock?q=.availableMugs%20%3D%3D%202&limit=1&offset=0
+```
+
+Here `%20` encodes a space and `%3D%3D` encodes `==`. Filtering changes which answers are returned, not the command's acceptance rule. The [Queries and projections](../../reference/framework/queries/) reference is the place for the query contract beyond this shop exercise.
+
+## A separate browser application
+
+The built-in documentation calls the API on its own origin. A frontend served from another origin, such as `http://127.0.0.1:3000`, needs the API to permit browser access. An origin includes the scheme, host and port; `localhost` and `127.0.0.1` are different hosts.
+
+Give your agent a bounded task: configure the Web transport for your frontend's exact origin, preserve all Features and shop decisions, and verify both an allowed and an unlisted origin. In `src/App.hs`, the transport registration can become:
+
+```haskell wrap
+EventModel.withTransport WebTransport.server
+EventModel.withCors @() (\_ -> WebTransport.CorsConfig {
+  allowedOrigins = ["http://127.0.0.1:3000"],
+  allowedMethods = ["GET", "POST", "OPTIONS"],
+  allowedHeaders = ["Content-Type", "Authorization"],
+  maxAge = Just 600
+})
+```
+
+This excerpt uses the existing qualified `WebTransport` import and `Just`, already available through `Core`. `withCors` configures browser access for the application. The `@()` and `\_` select a fixed configuration without reading application settings. The origin is an example frontend address; replace it with the address your browser actually loads. The methods and headers permit JSON requests and the browser's preliminary OPTIONS request. `maxAge` lets the browser cache that permission for 600 seconds. Restart the application, then inspect the frontend request in your browser's network tools for its response and CORS headers.
+
+CORS controls browser permission to read responses across origins. It doesn't identify a caller or stop a separate HTTP client from sending requests. The shop query currently uses public access, and opening a shop is still a public setup command. Before exposing this interface to untrusted callers, configure [Verify caller identity](../authentication/) and decide who may open shops, place orders and read stock.
