@@ -1,0 +1,31 @@
+<div class="query-projection" role="img" aria-label="Separate shop and cart histories reconstruct separate entity states. Each contributes to a shared staff query row with stock two and cart quantity one. The histories and command decisions remain separate.">
+  <div class="sources">
+    <div class="source">
+      <div class="facts" data-diagram-role="event"><strong>Shop history</strong><span>ShopOpened: 3 mugs</span><span>OrderPlaced: 1 mug</span></div>
+      <div class="link"><svg viewBox="0 0 20 40" aria-hidden="true"><path d="M10 0V36M3 29L10 36L17 29"/></svg><span>Reconstruct</span></div>
+      <div class="state"><strong>Shop state</strong><span>2 available</span></div>
+    </div>
+    <div class="source">
+      <div class="facts" data-diagram-role="event"><strong>Cart history</strong><span>Cart opened</span><span>1 mug added</span></div>
+      <div class="link"><svg viewBox="0 0 20 40" aria-hidden="true"><path d="M10 0V36M3 29L10 36L17 29"/></svg><span>Reconstruct</span></div>
+      <div class="state"><strong>Cart state</strong><span>1 mug in cart</span></div>
+    </div>
+  </div>
+  <div class="merge" aria-hidden="true"><svg viewBox="0 0 400 64" preserveAspectRatio="none"><path d="M100 0V24H200M300 0V24H200V60M194 52L200 60L206 52"/></svg></div>
+  <div class="answer" data-diagram-role="query"><strong>Staff query row</strong><span>Available: 2 mugs</span><span>In this cart: 1 mug</span></div>
+</div>
+<style>
+.query-projection{margin:32px 0;font-size:16px;line-height:1.5;}
+.sources{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+.source{display:flex;flex-direction:column;align-items:center;}
+.facts,.state,.answer{display:flex;flex-direction:column;gap:8px;padding:16px;box-sizing:border-box;width:100%;border:1px solid var(--sl-color-hairline);border-radius:8px;}
+.facts,.answer{color:var(--diagram-ink);background:var(--diagram-surface);border-color:var(--diagram-line);}
+.query-projection strong{font-size:16px;font-weight:500;}
+.link{display:flex;align-items:center;gap:8px;padding:8px 0;}
+.link svg{height:40px;width:20px;flex-shrink:0;}
+.query-projection svg{fill:none;stroke:var(--sl-color-gray-2);stroke-width:1.5;}
+.merge{height:64px;}
+.merge svg{width:100%;height:100%;}
+.answer{width:fit-content;min-width:200px;margin:auto;}
+@media(max-width:480px){.facts,.state{padding:12px 8px;}.sources{gap:8px;}.link{gap:4px;font-size:16px;}.facts span{overflow-wrap:anywhere;}}
+</style>

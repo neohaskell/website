@@ -1,17 +1,72 @@
 ---
-title: "Query projections and replay"
-description: "Page plan. How can the same history answer different questions, and how does a query catch up?"
-tableOfContents: false
-pagefind: false
-prev: false
-next: false
-head:
-  - tag: meta
-    attrs:
-      name: robots
-      content: noindex
+title: Query projections and replay
+description: Follow entity changes into maintained query answers, and distinguish saved rows from replay progress.
+prev: true
+next: true
 ---
 
-## Page plan <a id="page-plan" />
+import QueryProjection from '@components/learn/QueryProjection.astro';
 
-This page will explain query state as a separately maintained answer derived from selected event sources. The cart and stock activity query will show that a query can combine entities without merging their command boundaries. A diagram will separate event history, projection updates, and persisted checkpoint position. It will compare resuming compatible progress with rebuilding changed query state, including readiness during replay, without turning the explanation into a recovery runbook.
+The mug shop's stock answer and its history serve different readers. A customer needs to know whether a mug is available now. Staff may need to compare stock with the mugs customers have put in their carts. Both questions can use the same recorded facts without changing how the shop accepts an order.
+
+[History and current state](../history-and-state/) follows events into one entity's state. A **projection** takes that state and maintains the information a query needs. [Query available stock](/tutorial/stock-query/) builds the simplest example: `AvailableStock` keeps one stock row per shop. Here we'll follow the update path and then consider an answer that draws from more than one entity.
+
+## One answer can read separate histories
+
+Imagine a staff query showing available stock beside the quantity in one customer's cart. This is an illustrative extension of the mug shop, not an additional feature already built by the tutorial. The shop has two mugs available, and the cart contains one mug. Putting that mug in the cart does not reserve it; the stock decision still happens when an order is requested.
+
+<QueryProjection />
+
+The two histories remain separate. A cart command decides which items belong in that cart. A shop command decides whether the shop can accept an order. Their query contributions meet in a row for this cart and shop, but neither entity takes ownership of the other's decision.
+
+A useful answer can therefore cross entity boundaries without creating a command that changes both entities together. The query is a place to assemble information for reading. It does not make a combined transaction out of the changes it observes.
+
+## An event triggers a calculation from state
+
+The query slice declares the entity sources it reads and the events that should trigger updates. Those declarations matter: a query that listens when a mug enters a cart but not when it leaves can retain the wrong answer. Each participating entity also supplies a `QueryOf` implementation, which chooses the row identity with `queryId` and calculates an action with `combine`.
+
+When a matching event arrives, the updater fetches that entity's current reconstructed state. It then calls `combine` with the entity and the existing query row. The event triggers this work; its payload is not itself the input to `combine`. If several changes have arrived, the fetched state can already include later changes.
+
+For the existing stock query, the important excerpt is:
+
+```haskell wrap
+instance QueryOf ShopEntity AvailableStock where
+  queryId shop = shop.shopId
+  combine shop _ =
+    Update AvailableStock {
+      shopId = shop.shopId,
+      availableMugs = shop.availableMugs
+    }
+```
+
+`queryId` sends each shop to its own row. `combine` ignores the old row and replaces its fields from the shop's current state. `Update` supplies the replacement value. Other combines can return `Delete` to remove a row or `NoOp` to leave it as it is.
+
+The updater applies that action through the query store's atomic row update. For the illustrative cart-and-stock answer, both source mappings would need to agree on the cart-and-shop row identity. Each mapping would replace its own contribution while preserving the other source's fields. A shop serving many carts would need an explicit design for updating those rows; one `queryId` result does not automatically fan out to every cart. The simple `AvailableStock` implementation above updates one shop row and needs none of that coordination.
+
+## A maintained answer can lag
+
+Recording an accepted event and updating a query are separate work. An order can have been accepted while a stock read still shows the previous answer. A later read sees the updated row after the subscriber processes the change.
+
+Combining sources adds another distinction. The illustrative staff row might contain the latest cart quantity and an older stock contribution, or the reverse. An atomic update protects the individual row update; it does not mean that both sources were observed at one shared business instant.
+
+That is why a displayed stock number cannot authorize an order. The ordering decision checks the shop's entity state when the command runs. A customer who saw two mugs can still receive a rejection if another customer bought them before the request arrived. The query answered a question; it did not promise the next change would succeed.
+
+## Saved rows are different from replay progress
+
+On startup, the ordinary application marks its queries as rebuilding and replays retained history. Replay triggers projection work, which can reconstruct entities and update the query rows. The subscriber also coordinates newly arriving events with replay, then marks the queries ready after the overlap has been processed.
+
+There are three kinds of information here. The event store retains what happened. The query store holds calculated answers. A replay position tracks how far the subscriber has processed the history. Saving an answer does not by itself save that progress across processes.
+
+Configuring persistent query storage preserves rows, but ordinary application startup still begins replay from the start. It does not automatically resume from a persisted checkpoint. [Persist and rebuild queries](/guides/storage/query-rebuilds/) covers the separate storage configuration and restart checks.
+
+Replay updates rows that may already exist; it does not first empty the query store. The stock combine above is safe to repeat because it replaces stock from the entity. Combining the same two-mug shop twice still leaves two mugs. Subtracting one from the saved query row on each invocation would instead subtract again during replay. This repeat-safe property is called **idempotence**.
+
+For a query with several sources, repeat safety applies to each contribution. Replacing a cart's quantity should preserve the stock contribution and should not add that cart's quantity a second time. It also needs a deliberate policy for a source that no longer contributes: replay cannot remove an obsolete row that no update touches.
+
+## A changed answer needs its own identity
+
+Retained history lets a new query calculate another answer from existing facts. It does not make editing a deployed query safe. Keep its definitions and implementation available to existing callers, and introduce a separately named query and Feature slice for the changed answer.
+
+The new identity gives the replacement separate rows. Register its entity sources and triggering events, let startup replay populate it, and compare the recovered answers with known histories. Then check a fresh live change before moving callers. Reusing the old row shape or replaying over its saved values is not a substitute for designing the new calculation.
+
+The `/ready` endpoint reports whether startup replay has completed or failed. A ready response establishes that replay caught up; it does not guarantee every later live projection update succeeds. [Check readiness and failures](/guides/deployment/readiness-and-failures/) explains that operational distinction. Reading a query remains reading a maintained answer, while commands continue to make the decisions that change the shop.
