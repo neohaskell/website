@@ -1,17 +1,141 @@
 ---
-title: "Syntax and expressions"
-description: "Page plan. What does this expression mean?"
-tableOfContents: false
-pagefind: false
-prev: false
-next: false
-head:
-  - tag: meta
-    attrs:
-      name: robots
-      content: noindex
+title: Syntax and expressions
+description: Read modules, function calls, pipelines, records and branching expressions in NeoHaskell source.
+prev: true
+next:
+  label: Types and records
+  link: /reference/language/types/
 ---
 
-## Page plan <a id="page-plan" />
+import ExpressionFlow from '@components/learn/ExpressionFlow.astro';
 
-This page will make everyday source readable through modules and imports, function application, signatures, pipelines, record access, conditionals, `case` expressions, and `do` blocks. Each construct will get one compact source and result pair, with stable anchors for tutorial links. It will explain qualified operations and generated language extensions, using `let` statements inside `do` blocks for local bindings and linking type definitions to the next page.
+An AI agent's change is easier to review when you can follow the values through a few lines of source. This reference explains the syntax used in the mug-shop examples: a quantity enters a calculation, a condition chooses an answer, and a block names intermediate values. You can read these examples without knowing Haskell or running a shop application.
+
+An **expression** produces a value. `12 * 2` produces `24`; a function call such as `Text.toUpper "mug"` produces `"MUG"`. The examples below are small declarations and expressions, rather than edits to a deployed command. Their names and prices are chosen for this example.
+
+## Modules and imports <a id="modules-and-imports" />
+
+A module gives related declarations a name. In a project source directory, `ShopSyntax.hs` can begin like this:
+
+```haskell
+module ShopSyntax where
+
+import Core
+import Text qualified
+
+mugLabel :: Text
+mugLabel = Text.toUpper "mug"
+```
+
+The result of reading `mugLabel` is `"MUG"`. `module ShopSyntax where` starts the module; without an explicit export list, its locally defined declarations are available to importing modules. `import Core` brings common names such as `Text` and `Int` into scope. `import Text qualified` makes the module's operations available with their prefix, as in `Text.toUpper`. Importing a module makes names available; it does not call those operations.
+
+A dotted module name follows directories: `MyShop.MugOrder.Entity` corresponds to `src/MyShop/MugOrder/Entity.hs`. In `Text.toUpper`, the uppercase prefix names a module, while the lowercase part names its operation.
+
+## Function application <a id="function-application" />
+
+A function takes arguments and produces a result. Arguments follow the function name, separated by spaces:
+
+```haskell
+total price quantity = price * quantity
+
+mugTotal = total 12 2
+```
+
+`mugTotal` is `24`. Here `12` is the price of one mug and `2` is the quantity. In the definition, the names `price` and `quantity` stand for the arguments supplied by the caller. `=` defines the result; it does not update a variable.
+
+Function application binds more tightly than arithmetic. `total 12 2 + 3` means `(total 12 2) + 3`, which is `27`. Parentheses can make a calculated argument explicit: `total 12 (2 + 3)` produces `60`.
+
+## Type signatures <a id="type-signatures" />
+
+A signature states which values a declaration accepts and returns. The calculation above can include one:
+
+```haskell
+total :: Int -> Int -> Int
+total price quantity = price * quantity
+```
+
+`total 12 2` still produces `24`. Read `::` as "has type". The first two `Int` entries describe integer arguments; the last describes the result. The signature constrains the definition rather than performing the calculation. Supplying text where an `Int` is required is a type error.
+
+A signature such as `mugLabel :: Text` has no argument arrows because it names a text value. [Types and records](./types/) explains how to read and define more elaborate shapes.
+
+## Pipelines <a id="pipelines" />
+
+The pipe operator `|>` passes the value on its left to the function on its right. A chain lets us follow transformations in reading order:
+
+```haskell
+readyLabel =
+  "mug"
+    |> Text.toUpper
+    |> Text.append " ready"
+```
+
+`readyLabel` is `"MUG ready"`. The first operation capitalizes the text. The second adds a suffix to that result:
+
+<ExpressionFlow />
+
+`Text.append` takes the suffix first and the subject second. `Text.append " ready"` therefore leaves a function waiting for the subject, which the pipe supplies. The complete expression is equivalent to `Text.append " ready" (Text.toUpper "mug")`. A pipe passes an ordinary value; it does not start a background job or establish an application event connection.
+
+## Record access <a id="record-access" />
+
+A record groups named fields. Suppose the example has a `Mug` type with a text `label` and an integer `quantity`:
+
+```haskell
+mug = Mug {
+  label = "ceramic mug",
+  quantity = 2
+}
+
+requestedQuantity = mug.quantity
+```
+
+`requestedQuantity` is `2`. Inside the braces, `=` supplies each field's value. Outside the braces, `mug.quantity` reads the field from the value named `mug`. This lowercase prefix identifies a value, unlike the module prefix in `Text.toUpper`. Reading a field leaves the record unchanged. The record's type definition belongs with [Types and records](./types/).
+
+## Conditionals <a id="conditionals" />
+
+An `if` expression chooses between two values according to a Boolean condition:
+
+```haskell
+stockMessage available =
+  if available > 0 then "In stock" else "Sold out"
+```
+
+`stockMessage 2` produces `"In stock"`; `stockMessage 0` produces `"Sold out"`. Both branches are required because the expression must supply a result whichever way the condition goes. Their result types must agree. This example chooses text in both cases.
+
+## Case expressions <a id="case-expressions" />
+
+Some values describe alternatives rather than a yes-or-no condition. `Maybe Int` represents either an integer wrapped in `Just`, or its absence as `Nothing`. A `case` expression examines that shape:
+
+```haskell
+orderMessage requested =
+  case requested of
+    Nothing -> "Choose a quantity"
+    Just quantity -> Text.append " mugs" (toText quantity)
+```
+
+`orderMessage (Just 2)` produces `"2 mugs"`. `orderMessage Nothing` produces `"Choose a quantity"`. `Just quantity` both matches the present-value case and gives its integer the local name `quantity`. `toText` converts that integer to text before the suffix is appended. Patterns are tried from top to bottom; cover every possible alternative so the function has an answer for each input.
+
+Indentation groups the alternatives under `case`. Each `->` connects a matching pattern to its result, whereas the arrows in a type signature separate argument and result types.
+
+## Do blocks and local bindings <a id="do-blocks" />
+
+A `do` block combines operations in a context such as a `Task`. Its indentation groups the block, and local `let` statements name intermediate values:
+
+```haskell
+receipt :: Task Text Text
+receipt = do
+  let quantity = mug.quantity
+  let cost = total 12 quantity
+  pure (Text.append " credits" (toText cost))
+```
+
+Running this task successfully returns `"24 credits"`. In `Task Text Text`, the first `Text` is the error type and the second is the success type. `let` gives a name to an ordinary value inside the block. `pure` supplies its successful final value. Defining `receipt` constructs the task; the application's task runner executes it.
+
+You will also see `value <- operation` inside blocks. This obtains a successful result from an operation and binds its name for later lines; it differs from `let`, which names an ordinary expression. An error in a task stops that successful path. [Tasks and effects](../core/tasks/) explains execution and error handling.
+
+The same `do` spelling also appears in the Event Model's declaration builders. Its meaning depends on the surrounding types: a feature declaration describes application structure, while a task describes work to execute. Source line order in a feature is not a schedule for its commands.
+
+## The project's language environment <a id="language-extensions" />
+
+Neo generates a Cabal configuration with a base language setting and named extensions. These settings are part of how the compiler reads project source. For example, `ImportQualifiedPost` permits `import Text qualified`, `OverloadedRecordDot` permits `mug.quantity`, and `OverloadedStrings` allows a quoted literal to be used as `Text`. `BlockArguments` permits a `do` block to follow a function directly, as in `feature "Orders" do`.
+
+The generated configuration also enables `NoImplicitPrelude`, so examples import `Core` for common names instead of relying on Haskell's implicit standard import. When reviewing an unfamiliar operation, follow its import to find its definition. When moving an excerpt outside the project, carry its imports and required language settings too: a standalone file does not automatically inherit the generated project's extensions.

@@ -1,0 +1,14 @@
+<div class="expression-flow" role="img" aria-label="The text mug flows into Text.toUpper, producing MUG, then Text.append ready produces MUG ready.">
+  <code>"mug"</code><span class="connector" aria-hidden="true"></span>
+  <div><code>Text.toUpper</code><strong>"MUG"</strong></div><span class="connector" aria-hidden="true"></span>
+  <div><code>Text.append " ready"</code><strong>"MUG ready"</strong></div>
+</div>
+<style>
+.expression-flow { display:flex; align-items:center; margin:2rem 0; font-size:1rem; }
+.expression-flow > code,.expression-flow > div { border:1px solid var(--sl-color-gray-4); padding:1rem; border-radius:4px; background:var(--sl-color-gray-7,var(--sl-color-gray-6)); }
+.expression-flow code { font-size:1rem; white-space:nowrap; }
+.expression-flow strong { display:block; font:inherit; margin-top:0.75rem; color:var(--sl-color-text-accent); }
+.connector { flex:1; min-width:1rem; height:1px; background:var(--sl-color-gray-3); position:relative; }
+.connector::after { content:''; position:absolute; right:0; top:-3px; width:6px; height:6px; border-top:1px solid var(--sl-color-gray-3); border-right:1px solid var(--sl-color-gray-3); transform:rotate(45deg); }
+@media(max-width:650px) { .expression-flow { flex-direction:column; align-items:stretch; } .connector { flex:none; min-width:0; width:1px; height:24px; margin-left:24px; } .connector::after { top:auto; bottom:0; right:-3px; transform:rotate(135deg); } }
+</style>
