@@ -1,6 +1,8 @@
 ---
-title: Keep one mug in reserve
-description: Change the mug shop's order policy, review the decision diff, and check the new boundary without rewriting recorded history.
+title: Add a feature without breaking deployed code
+description: Freeze the deployed mug shop, add an online-order slice, and move callers to its reserve policy without rewriting existing contracts.
+sidebar:
+  label: Add a feature safely
 tableOfContents:
   minHeadingLevel: 2
   maxHeadingLevel: 2
@@ -8,47 +10,58 @@ prev: true
 next: true
 ---
 
-The mug shop now needs to keep one mug for customers who buy in person. An online order may take stock from two mugs to one, but it must leave that final mug alone. This changes an agreement we deliberately tested: buying the last mug used to be valid.
+Imagine the mug shop from [Test shop behavior](../test-behavior/) has been deployed. Customers can order its final mug through `PlaceOrder`. Other programs may already call that command, and its accepted `OrderPlaced` events are part of the shop's history. Those callers and facts now depend on the behavior we shipped.
 
-Use the shop from [Test shop behavior](../test-behavior/), including its decision, replay, stored-command, and live HTTP checks. Each order still buys one mug, and opening a shop still records three. We will change which orders the shop accepts, then use those checks to distinguish the intended difference from an accidental regression.
+The shop needs a new online policy: keep one mug for customers buying in person. We will add that behavior alongside the deployed command. In NeoHaskell, a deployed command, event, or query keeps its identity and implementation. New requirements get a new slice rather than a rewrite of deployed code, as [Model the whole process](../../introduction/event-modeling/#freeze-the-contract-when-it-is-deployed) explains.
 
-## The new agreement
+## Freezing the deployed shop
 
-Before asking the agent to edit code, revise the behavior table. The new rejection text below is our chosen reply for the reserve policy; the existing replies retain their meanings.
+Start from the tested shop before the reserve policy exists. Save and review the current work first. From the project root, freeze its domain files:
 
-| Starting situation | Previous decision | New decision | Stock after new decision |
-| --- | --- | --- | --- |
-| Three mugs | Accept | Accept | 2 |
-| Two mugs | Accept | Accept | 1 |
-| One mug | Accept | Reject: `Reserved for in-person sales` | 1 |
-| Zero mugs | Reject: `Sold out` | Reject: `Sold out` | 0 |
-| Shop does not exist | Reject: `Shop not found` | Reject: `Shop not found` | No shop row |
+```sh wrap
+neo lock --all
+```
 
-Only the one-mug outcome changes. The two-mug row checks the other side of that boundary: reserving one mug must not accidentally reserve two. Zero stock remains a useful case even though new online orders stop at one. An existing shop may already have sold every mug under the old policy.
+Neo discovers files beneath `Commands`, `Events`, and `Queries`, records their paths in `.locked-files`, and creates a local Git commit containing the manifest and those files. Review that commit as the deployed baseline. Keep the manifest in version control. Locking is an explicit preparation step; imagining a deployment does not run it for you.
 
-Give your agent this bounded task from the project root:
+The build now protects that baseline. If an agent changes the acceptance condition in the locked `src/Shop/Commands/PlaceOrder.hs`, running:
+
+```sh wrap
+neo build
+```
+
+refuses the build before compilation. The diagnostic identifies `src/Shop/Commands/PlaceOrder.hs` as a modified locked file. Restore the original contents, keeping unrelated work. Do not remove its lock or bypass the check to introduce the reserve policy. The protection catches a changed deployed file even when that edit would otherwise compile and pass newly edited tests.
+
+This check is part of `neo build`. Running tests alone does not establish that the frozen files are unchanged. The manifest covers the discovered domain files; it does not automatically freeze every application configuration or feature-composition file.
+
+## A new online-order feature
+
+The existing `PlaceOrder` continues to accept the final mug. The new command, `PlaceOnlineOrder`, uses the same shop and records the same fact when an order succeeds. Their one-mug boundary differs. The new command returns `Reserved for in-person sales` when it rejects the reserved mug:
+
+| Stock | Deployed command | Online command |
+| --- | --- | --- |
+| 3 or 2 | Accept | Accept |
+| 1 | Accept | Reject reserve |
+| 0 | Sold out | Sold out |
+| No shop | Shop not found | Shop not found |
+
+Ask your agent to add the feature, after reading the project's active guidance:
 
 ```text wrap
-Follow the project's active NeoHaskell guidance. Change online PlaceOrder so one mug remains for in-person sales. First update the behavior table and checks: stock 3 and 2 accept one OrderPlaced; stock 1 rejects with Reserved for in-person sales; stock 0 still rejects with Sold out; missing shop still rejects with Shop not found.
+The tested mug shop has been deployed and its Commands, Events and Queries are locked. Preserve every locked file byte-for-byte, including PlaceOrder and its existing tests and public behavior.
 
-Show the new reserve check failing against the old decision, then make the smallest decision change. Keep accepted event payloads and stream choice unchanged. Preserve ShopOpened, OrderPlaced, replay, AvailableStock, routes, and Feature/App composition. Do not rewrite recorded history.
+Create src/Shop/Commands/PlaceOnlineOrder.hs with a distinct PlaceOnlineOrder command. Copy the relevant existing command structure into this new module. It acts on ShopEntity and accepts exactly one existing OrderPlaced event at stock 3 or 2. At stock 1 reject with Reserved for in-person sales; preserve Sold out at zero and Shop not found for a missing shop. Permit WebTransport for this new command.
 
-Update stored-command checks to accept two orders from opening stock 3 and reject the third without changing history or stock 1. Keep exact payload assertions and distinct rejection checks. Keep the old replay sequence ending at zero as a historical compatibility check.
+Create a separate Shop.OnlineFeature with an onlineShopFlow and a new command slice. Register it alongside counterFlow and shopFlow in App.hs. Reuse the existing event and query unchanged. Add separate tests for the new command; retain checks that deployed PlaceOrder still accepts the final mug. Preserve historical replay 0,3,2,1,0 and unchanged history after rejection.
 
-Update tests/integration/http-orders.hurl to check live stock 3, 2, 1, reserve rejection, missing-shop rejection, and unchanged stock 1. Retry only query reads with a bounded deadline. Run neo --ci test and show the decision diff, changed expectations, actual results, and any checks skipped after a failure.
+Verify the new /commands/place-online-order route and asynchronous stock 3,2,1, followed by reserve rejection without another event. Keep /commands/place-order unchanged. Run neo build and neo --ci test. Show the added code, unchanged locked files, actual results and any skipped checks.
 ```
 
-Changing an expected result is justified here because we changed the agreement first. In the previous lesson, the same last-mug rejection was a bug. A failing test alone cannot decide which policy the shop should have; that decision belongs to you.
+Copying a small feature gives the new behavior its own place to evolve. We deliberately accept this duplication instead of adding a condition to the deployed command or changing a shared helper beneath it. [Model the whole process](../../introduction/event-modeling/#keep-growth-close-to-linear) explains the aim: comparable additions should require comparable work without reopening earlier slices.
 
-## The decision diff
+## Reading the new decision
 
-Ask the agent to show the change in `src/Shop/Commands/PlaceOrder.hs`. The old acceptance condition was:
-
-```haskell wrap
-if shop.availableMugs > 0
-```
-
-The new decision needs to distinguish a sold-out shop from a shop holding its reserve. This excerpt shows the decision inside the `Just shop` branch, with the surrounding function omitted:
+Inspect `src/Shop/Commands/PlaceOnlineOrder.hs`, not a patch to `PlaceOrder.hs`. The new command has its own type and filename. Its `EntityOf` still names `ShopEntity`, and its accepted branch still emits the existing `OrderPlaced`. Inside the `Just shop` branch, the new decision is:
 
 ```haskell wrap
 if shop.availableMugs <= 0
@@ -63,15 +76,36 @@ if shop.availableMugs <= 0
       "Reserved for in-person sales"
 ```
 
-The first condition preserves the sold-out reply. The second accepts an order only when subtracting one will leave at least one mug. At stock one, neither condition permits an order, so the decision returns the new reserve reply. The `Nothing` branch must still reject with `Shop not found`.
+The two conditions distinguish an empty shop from its reserved final mug. A rejection records no event, so we need no new event shape and no change to stock replay or `AvailableStock`. The omitted `Nothing` branch still returns `Shop not found`.
 
-Read the accepted branch too. It still proposes exactly one `OrderPlaced` for the same shop in the existing stream. No reserve event is needed: rejecting a request records no new fact. The shop's stock calculation still subtracts one for each accepted order.
+The new feature connects that command to its existing event. This excerpt belongs in `src/Shop/OnlineFeature.hs`, with the appropriate module declaration and imports:
 
-Use `neo ide` to inspect the shop in **Ungrouped**, then choose **Fit View**. Trace `PlaceOrder` to `OrderPlaced`, and follow `OrderPlaced` into `AvailableStock`. The connections should remain the same. This policy changes the decision inside that route, rather than adding another event or replacing the query. The graph helps you inspect that scope; the tests establish which requests now pass through it.
+```haskell wrap
+onlineShopFlow :: FeatureAction
+onlineShopFlow = feature "Online mug shop" do
+  chapter "Online ordering" do
+    slice "Place an online order" do
+      entity @ShopEntity do
+        command @PlaceOnlineOrder do
+          produces @OrderPlaced.Event
+```
 
-## Old history and new requests
+Import `onlineShopFlow` into `App.hs` and add it alongside the existing flows:
 
-A shop that previously accepted three orders from opening stock three has a real history ending at zero. Reserving a mug today does not make the third recorded order disappear. Keep `tests/Shop/ShopStockSpec.hs` replaying the original sequence:
+```haskell wrap
+EventModel.features do
+  counterFlow
+  shopFlow
+  onlineShopFlow
+```
+
+Run `neo inspect sync`, then open `neo ide`. In **Ungrouped**, choose **Fit View** and find both commands. Trace each to `OrderPlaced`, then follow that event into `AvailableStock`. The new route joins the existing stock calculation; the deployed route remains separately identifiable.
+
+## Existing callers and recorded history
+
+Adding the new route does not move callers automatically. Existing callers of `/commands/place-order` keep the deployed behavior and can still buy the final mug. Move online callers to `/commands/place-online-order` when they are ready. Until that migration is complete, the old route remains a way to buy the last mug. An application-wide reserve policy requires retiring or restricting that entry point after its consumers have moved; locking source alone does not change access to it.
+
+A shop that already sold three mugs has a real history ending at zero. Replay still gives:
 
 ```text wrap
 Initial state       0
@@ -81,24 +115,12 @@ Second OrderPlaced  1
 Third OrderPlaced   0
 ```
 
-Replay applies accepted facts; it doesn't ask today's decision to approve them again. Changing `update` to stop subtracting at one would misrepresent a mug already sold. Changing `AvailableStock` to report one for that history would give the same false answer. Both calculations remain unchanged, so a historical zero-stock shop still reports zero and rejects a new order with `Sold out`.
+Replay applies recorded facts without asking the new command to approve them again. Neither the event nor the query should be rewritten to pretend the third order never happened.
 
-A fresh shop follows the new policy instead. In `tests/Shop/PlaceOrderSpec.hs`, two commands should succeed, leaving one `ShopOpened` and two `OrderPlaced` events. Save that history before the third request. The reserve rejection must leave the complete recorded payloads unchanged, as must the missing-shop rejection. The query handler check should now expect one mug after both requests. Remember that manually driving this updater checks query maintenance, while the Hurl scenario checks the running subscription.
+## Checking both behaviors
 
-## Evidence for the changed boundary
+Run `neo build` to check the locked files and compile the addition, then `neo --ci test` for behavior. Keep the old command's tests and add the new policy's cases beside them. At stock one, the old command must accept while the new one rejects. Both should preserve the original sold-out and missing-shop replies. Check exact accepted event payloads and verify that rejection adds no event.
 
-With the revised expectations and the old decision, the verified shop failed two of its twelve examples: the reserve decision and the stored-command check. Neo skipped Hurl after that failing unit suite. Applying the decision change made those checks pass.
+Use the running application's built-in documentation, introduced in [Place an order over HTTP](../http-orders/), to open a fresh shop with an unused identifier. Send two requests to **place-online-order**, using that shop identifier. Its stock query should settle at one. A third online request returns `Reserved for in-person sales`; repeating it must leave both history and stock unchanged. Verify the old route's last-mug acceptance on a separate shop so the two checks do not consume each other's stock.
 
-Run `neo --ci test` after reviewing the diff. A report should connect each changed expectation to the table, rather than merely announce that the suite is green. In the verified shop, the updated checks produced these results:
-
-| Check | Expected after the policy change | Observed |
-| --- | --- | --- |
-| Decisions at stock three and two | Accept exactly one event in the existing stream | Passed |
-| Decision at stock one | Reject with the reserve reply | Passed |
-| Zero stock and missing shop | Preserve distinct original replies | Passed |
-| Historical replay | Preserve counts 0, 3, 2, 1, 0 | Passed |
-| Stored commands and live HTTP | Two accepted orders, reserve rejection, stock stays one | Passed |
-
-For the browser check, use the running application's built-in documentation as in [Place an order over HTTP](../http-orders/). Open a fresh shop with a new chosen identifier, then use **Test Request**, **Body**, and **Send** on `place-order` with that identifier. The first two requests succeed; the third returns `Reserved for in-person sales`. Read the keyed `AvailableStock` query again until its asynchronous update appears: it should settle at one. Repeating the rejected request must not consume that mug.
-
-Keep the source diff and actual check output with the agent's report. A request to change a rule should end with evidence for that rule and for the behavior it preserves.
+When the new feature is ready for deployment, review its checks and run `neo lock --all` again to include its new domain file. Future changes to this deployed behavior will get another identity and slice of their own.

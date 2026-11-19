@@ -12,13 +12,22 @@ import StorageRecovery from '../../../../components/learn/StorageRecovery.astro'
 
 An accepted order should still count after the application stops. The starter's in-memory event store keeps history only for the lifetime of its process. To keep the shop open with the same stock after a restart, we need to retain the events that opened it and recorded its orders.
 
-This guide uses the mug shop from [Keep one mug in reserve](../../tutorial/change-safely/): it opens with three mugs, accepts orders while more than one remains, and reserves the final mug for in-person sales. We'll use the browser interface from [Expose an HTTP API](../transports/) to observe the same shop on both sides of a restart. If you completed [Run commands from a terminal](../transports/cli/), you have already used disk persistence between short-lived CLI processes. Here we'll also check the query that reports stock.
+This guide uses the mug shop from [Add a feature safely](../../tutorial/change-safely/): it opens with three mugs, accepts orders while more than one remains, and reserves the final mug for in-person sales. We'll use the browser interface from [Expose an HTTP API](../transports/) to observe the same shop on both sides of a restart. If you completed [Run commands from a terminal](../transports/cli/), return to the preserved Web application composition for this guide. Keep the CLI command modules and their local event history untouched. Register `counterFlow`, `shopFlow`, and `onlineShopFlow` with Web, preserving the deployed domain files; include `StarterConfig` and the Web CORS configuration. The separate CLI composition is not a reason to rewrite any command's transports.
 
 ## A directory that outlives the process
 
-Ask your agent to prepare a Web-only configuration from the existing shop application, using its active NeoHaskell guidance. Preserve both `counterFlow` and `shopFlow`, their decisions, events, queries and tests. Register only `WebTransport.server`, and allow only `WebTransport` in every command's `TransportsOf` declaration, including the Counter commands. Keep the starter configuration and the application-level CORS settings from the HTTP guide. Omit the CLI and MCP registrations and imports in this version.
+If the active `App.hs` is the CLI variant, preserve it and restore the Web configuration:
 
-This gives us one HTTP server that can be stopped and restarted. Each command must name only registered transports; leaving a removed transport in a command declaration prevents startup. Restoring `EventModel.withConfig @StarterConfig` and its import matters if you're coming from the CLI-only version, which omitted them to leave the command arguments available to the CLI.
+```sh wrap
+cp src/App.hs .neo/examples/App.Cli.hs
+cp .neo/examples/App.Web.hs src/App.hs
+```
+
+The snapshot comes from [Expose MCP tools and resources](../transports/mcp/), before adding MCP. Review the current diff before copying so unrelated work is preserved. Keep all command modules and event directories.
+
+Use the preserved Web composition, with `counterFlow`, `shopFlow`, and `onlineShopFlow` registered. Their original commands already permit Web. Do not convert the separately named MCP or CLI commands back into Web commands, and do not edit any locked `TransportsOf` declaration. Keep those interface variants and their histories separately. This gives the restart exercise one HTTP server while preserving each deployed contract.
+
+Keep `EventModel.withConfig @StarterConfig`, its import, and the application-level CORS settings from the HTTP guide. Storage configuration changes belong in App.hs; they do not require rewriting command, event or query definitions.
 
 In `src/App.hs`, ask the agent to replace the existing event-store factory with this one, inside `EventModel.eventModel do` and before the Features:
 
@@ -38,11 +47,11 @@ Run from the same project root each time, because this path is relative to the w
 
 ## The same shop after a restart
 
-Start the application with `neo run`. In its browser documentation at `http://localhost:8080/docs`, use the generated Shop command routes as in [Expose an HTTP API](../transports/). Open a shop with a valid UUID you haven't used in this new history, then place one order with that same UUID. Read its `AvailableStock` query until the answer is two mugs. Query maintenance happens asynchronously, so an immediate response can precede the update.
+Start the application with `neo run`. In its browser documentation at `http://localhost:8080/docs`, use the generated Shop command routes as in [Expose an HTTP API](../transports/). Open a shop with a valid UUID you haven't used in this new history, then use **place-online-order** with that same UUID. Read its `AvailableStock` query until the answer is two mugs. Query maintenance happens asynchronously, so an immediate response can precede the update.
 
 Stop the application with Ctrl+C, wait for it to exit, and run `neo run` again from the same directory. Don't open the shop again: `ShopOpened` is already part of its retained history. Read the query for the same UUID until it reports two mugs again.
 
-Now place another order. It should be accepted, leaving one mug. A further order should be rejected with `Reserved for in-person sales`. Read stock again: it remains one. This last check matters because it exercises a decision against recovered entity state, rather than checking only that a browser can display an old answer. The rejected order adds no event.
+Now use **place-online-order** again. It should be accepted, leaving one mug. A further order should be rejected with `Reserved for in-person sales`. Read stock again: it remains one. This last check matters because it exercises a decision against recovered entity state, rather than checking only that a browser can display an old answer. The rejected order adds no event.
 
 If the shop is missing after restart, check the selected store, `persistent`, and the directory from which the process was launched before opening anything new. If a query is briefly empty, allow it to catch up before concluding that the history is missing.
 
@@ -52,7 +61,7 @@ If the shop is missing after restart, check the selected store, `persistent`, an
 
 <StorageRecovery />
 
-In this configuration, the events remain on disk while the query rows live in memory. Restarting loses those rows, but the query subscriber replays the retained events to rebuild them. It calculates two mugs from the opening three and one accepted order. Replay doesn't place another order or append another `OrderPlaced` event.
+In this configuration, the events remain on disk while the query rows live in memory. Restarting loses those rows, but the query subscriber replays the retained events to rebuild them. It calculates two mugs from the opening three and one accepted order. Replay doesn't use **place-online-order** again or append another `OrderPlaced` event.
 
 The same distinction is visible in the native IDE. With `event-model.json` saved, run `neo inspect sync` and open `neo ide`. Select `AvailableStock` in the model and inspect its connections from `ShopOpened` and `OrderPlaced`. Those are the inputs that rebuild the answer. The diagram still describes the same shop behavior after a storage change; it doesn't prove that your disk or database is retained. The restart exercise checks that part.
 

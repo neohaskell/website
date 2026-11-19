@@ -8,27 +8,32 @@ prev: true
 next: true
 ---
 
-A terminal command can place an order through the same decision used by HTTP and MCP. The application CLI turns command fields into flags, invokes the decision, and prints its response. This is your application's interface. The `neo` development tool still creates, builds and tests the project; `neo` itself has no `shop place-order` command.
+A terminal command can place an order through the same decision used by HTTP and MCP. The application CLI turns command fields into flags, invokes the decision, and prints its response. This is your application's interface. The `neo` development tool still creates, builds and tests the project; `neo` itself has no `shop place-cli-order` command.
 
-This guide uses the mug shop from [Expose MCP tools and resources](../mcp/). It opens with three mugs, accepts one-mug orders while more than one remains, and reserves the last mug for in-person sales. For the underlying behavior, see [Keep one mug in reserve](../../../tutorial/change-safely/). We'll run a separate local CLI configuration so each invocation performs one operation and exits.
+This guide uses the mug shop from [Expose MCP tools and resources](../mcp/). It opens with three mugs, accepts one-mug orders while more than one remains, and reserves the last mug for in-person sales. For the underlying behavior, see [Add a feature safely](../../../tutorial/change-safely/). We'll run a separate local CLI configuration so each invocation performs one operation and exits.
 
 ## A configuration for one operation
 
-Ask your agent to prepare a CLI-only version of the existing application, after reading its active NeoHaskell guidance. Preserve `counterFlow`, `shopFlow`, all decisions, events, queries and tests. Replace the registered Web and MCP transports with `CliTransport`, and change **every** command's `TransportsOf` declaration, including the starter Counter commands, to allow only that transport. Keep the previous interface configuration in version control so it can be restored later.
+The CLI exercise uses `src/App.hs` as its active configuration. Preserve the current MCP composition, then start from the Web snapshot saved in [Expose MCP tools and resources](../mcp/):
 
-These are excerpts to review after the agent's edit, rather than a second set of changes to apply. Each command module needs this import:
-
-```haskell wrap
-import Service.Transport.Cli (CliTransport)
+```sh wrap
+cp src/App.hs .neo/examples/App.Mcp.hs
+cp .neo/examples/App.Web.hs src/App.hs
 ```
 
-For `PlaceOrder`, the declaration becomes:
+Only run the copy commands when those snapshots match your reviewed work; preserve unrelated changes before switching. The new command modules and existing event directories stay in place.
+
+Prepare a separate local CLI configuration with new command identities. Ask your agent to copy the opening and online-order command structure into `OpenCliShop` and `PlaceCliOrder`, with fresh CLI slices in `Shop.CliFeature`. Preserve every deployed command, event and query file byte-for-byte. The new commands use the same `ShopEntity`, `ShopOpened`, `OrderPlaced` and reserve decision, and the CLI feature registers the unchanged `AvailableStock` query with both event inputs.
+
+This local composition registers `cliShopFlow` rather than the Web and MCP Features or Counter commands. Their source and saved application configurations remain intact; this local switch does not alter the deployed application. We are building a separate terminal interface, not replacing their deployed application.
+
+Each new command imports `CliTransport` from `Service.Transport.Cli`. For `PlaceCliOrder`, inspect:
 
 ```haskell wrap
-type instance TransportsOf PlaceOrder = '[CliTransport]
+type instance TransportsOf PlaceCliOrder = '[CliTransport]
 ```
 
-`OpenShop` and each Counter command need the corresponding declaration with their own type name. Every named transport must be registered: leaving `WebTransport` or `McpTransport` in a command declaration while removing its registration prevents startup.
+`OpenCliShop` has the corresponding declaration under its new name. Every declared transport must be registered. Copying the old command with its old Web declaration unchanged into this CLI-only composition would prevent startup.
 
 In `src/App.hs`, the import and registration are:
 
@@ -38,9 +43,11 @@ import Service.Transport.Cli qualified as CliTransport
 
 ```haskell wrap
 EventModel.withTransport CliTransport.cli
+EventModel.features do
+  cliShopFlow
 ```
 
-The registration belongs inside the existing `EventModel.eventModel do` block before `EventModel.features`. This exercise runs only the CLI. Adding it alongside the existing long-running transports would not give us a process that reliably exits after its terminal operation.
+These registrations replace the feature and transport registration in this local CLI composition, with `cliShopFlow` imported from `Shop.CliFeature`. This exercise runs only the CLI. Adding it alongside the existing long-running transports would not give us a process that reliably exits after its terminal operation.
 
 The CLI configuration also omits `EventModel.withConfig @StarterConfig` and its import. That starter configuration parses process arguments for settings such as the HTTP port, before the CLI transport can read them. Here the CLI needs those arguments for the entity group, command and flags. Remove the Web-only `withCors` declaration and unused Web and MCP imports from this variant; keep `Starter.Config.hs` for the other interfaces.
 
@@ -60,17 +67,17 @@ The factory now takes `()` because this variant doesn't load `StarterConfig`. Pr
 
 Start with an unused directory and a fresh shop identifier. Don't reuse a shop identifier already opened in this directory, and don't delete existing history to make an example work. Changing the path to another unused directory gives a separate exercise without changing the old history.
 
-With the saved `event-model.json`, run `neo inspect sync` and open `neo ide`. In **Ungrouped**, use **Fit View** and select `PlaceOrder`. Its connection to `OrderPlaced`, and the event connections into `AvailableStock`, should remain. We've changed how commands arrive and where history lives; the shop's behavior still has the same shape.
+With the saved `event-model.json`, run `neo inspect sync` and open `neo ide`. In **Ungrouped**, use **Fit View** and select `PlaceCliOrder`. Its connection to `OrderPlaced`, and the event connections into `AvailableStock`, should remain. We've changed how commands arrive and where history lives; the shop's behavior still has the same shape.
 
 ## Entity groups and command flags
 
 From the project root, open a shop:
 
 ```sh wrap
-LOG_LEVEL=Error nix develop --command cabal run -v0 all -- shop open-shop --entity-id 9b4dbfcb-477f-49f2-9156-629a24457f86
+LOG_LEVEL=Error nix develop --command cabal run -v0 all -- shop open-cli-shop --entity-id 9b4dbfcb-477f-49f2-9156-629a24457f86
 ```
 
-The launcher builds and runs the application in its Nix environment. Cabal's `--` separates its own arguments from the application's arguments. `shop` comes from `ShopEntity`: the transport removes the `Entity` suffix and uses kebab case. `open-shop` comes from `OpenShop`, and `--entity-id` comes from the command field `entityId`. These names are generated, rather than shell aliases or new business operations.
+The launcher builds and runs the application in its Nix environment. Cabal's `--` separates its own arguments from the application's arguments. `shop` comes from `ShopEntity`: the transport removes the `Entity` suffix and uses kebab case. `open-cli-shop` comes from `OpenCliShop`, and `--entity-id` comes from the command field `entityId`. These names are generated, rather than shell aliases or new business operations.
 
 The UUID is chosen for this example; another valid, unused UUID works. Use that same value for each order below. The successful invocation prints this JSON object, shown here with line breaks for readability:
 
@@ -84,7 +91,7 @@ The UUID is chosen for this example; another valid, unused UUID works. Use that 
 The process exits after handling the command. The accepted `ShopOpened` event remains on disk with opening stock three. Place one order in a new process:
 
 ```sh wrap
-LOG_LEVEL=Error nix develop --command cabal run -v0 all -- shop place-order --entity-id 9b4dbfcb-477f-49f2-9156-629a24457f86
+LOG_LEVEL=Error nix develop --command cabal run -v0 all -- shop place-cli-order --entity-id 9b4dbfcb-477f-49f2-9156-629a24457f86
 ```
 
 It prints the same `Accepted` response shape and records one `OrderPlaced` event. Stock is now two. Run that order command once more: it is accepted again, leaving one mug. A third order returns this object:
@@ -96,7 +103,7 @@ It prints the same `Accepted` response shape and records one `OrderPlaced` event
 }
 ```
 
-The decision has found the shop's retained history and applied the reserve policy. It records no event for the rejected order. Using a different valid UUID that hasn't been opened returns `Shop not found`; supplying an invalid UUID reaches decoding and returns `Failed` with `Invalid input for command PlaceOrder`. Keep flag names exact. A missing or unrecognized argument instead fails CLI parsing before a command runs.
+The decision has found the shop's retained history and applied the reserve policy. It records no event for the rejected order. Using a different valid UUID that hasn't been opened returns `Shop not found`; supplying an invalid UUID reaches decoding and returns `Failed` with `Invalid input for command PlaceCliOrder`. Keep flag names exact. A missing or unrecognized argument instead fails CLI parsing before a command runs.
 
 ## JSON results in scripts
 
@@ -105,7 +112,7 @@ The transport currently prints JSON for command responses. It doesn't expose `--
 A domain rejection still exits with status zero: the command was handled, even though the decision refused the order. Checking only `$?` would treat the reserved-mug response as success. If you use `jq`, which is a separate JSON-processing tool, capture the output and require an `Accepted` tag:
 
 ```sh wrap
-reply=$(LOG_LEVEL=Error nix develop --command cabal run -v0 all -- shop place-order --entity-id 9b4dbfcb-477f-49f2-9156-629a24457f86) &&
+reply=$(LOG_LEVEL=Error nix develop --command cabal run -v0 all -- shop place-cli-order --entity-id 9b4dbfcb-477f-49f2-9156-629a24457f86) &&
   printf '%s\n' "$reply" | jq -e '.tag == "Accepted"'
 ```
 

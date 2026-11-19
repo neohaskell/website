@@ -12,6 +12,8 @@ The shop can accept an order as long as it has a mug left. With one mug availabl
 
 Use the project from [Create the shop feature](../first-feature/). It already has an internal `OpenShop` command that records three mugs in `ShopOpened`, and the shop's state subtracts one mug for each `OrderPlaced`. [Plan the mug shop](../) describes the cases we're building against.
 
+The shop in this tutorial has not been deployed yet. Once a command, event or query is deployed, keep its implementation unchanged and add a new slice for different behavior, as [Add a feature safely](../change-safely/) demonstrates.
+
 ## Which shop receives the order?
 
 An order needs to identify the shop whose stock it will use. Since every order is for one mug, the command carries just that shop's identifier. Give your agent this task from the project root.

@@ -10,64 +10,64 @@ next: true
 
 An agent can change the mug shop's code, but deciding which orders the shop should accept remains your job. A useful task gives the agent that decision, the source it should work from, and the evidence you need to review the result. The conversation then has something more precise to return to than "it works."
 
-This guide uses the shop from [Keep one mug in reserve](../../tutorial/change-safely/). Each online order buys one mug. Opening a shop records three mugs; two orders succeed, leaving one for customers buying in person. The next online order is rejected. If you arrived here directly, that page supplies the decision and tests used below. Install the project guidance through [Set up your agent](../../getting-started/) before asking an agent to change NeoHaskell APIs.
+This guide uses the shop from [Add a feature safely](../../tutorial/change-safely/). Each online order buys one mug. Opening a shop records three mugs; two orders succeed, leaving one for customers buying in person. The next online order is rejected. If you arrived here directly, that page supplies the decision and tests used below. Install the project guidance through [Set up your agent](../../getting-started/) before asking an agent to change NeoHaskell APIs.
 
 ## A task with a boundary
 
-The reserve change makes a useful example of a complete agent task. If your shop already has that change, use the prompt to review it rather than applying it again. On a shop that still sells the last mug, the same prompt requests implementation. Tell the agent which of those starting states applies.
+The reserve change makes a useful example of a complete agent task. If your shop already has that change, use the prompt to review it rather than applying it again. On a shop where PlaceOnlineOrder does not exist yet, the same prompt requests the new command and slice. Tell the agent which of those starting states applies.
 
 Begin in the project root. Ask the agent to identify the current project revision and any uncommitted changes, then read `AGENTS.md` and `.neo/agent-guidance/active.md`. The project revision identifies the application you are changing. The active guidance identifies the framework source its API instructions match; these are separate revisions. The agent should preserve existing work and show you any disagreement between the starting code and the task before editing it.
 
 You can reuse this prompt by replacing its behavior and permitted files for another change:
 
 ```text wrap
-Work in this project. Identify its current revision and uncommitted changes. Read AGENTS.md and .neo/agent-guidance/active.md, then follow the guidance matched to the pinned framework. Inspect the current PlaceOrder decision before editing.
+Work in this project. Identify its current revision and uncommitted changes. Read AGENTS.md and .neo/agent-guidance/active.md, then follow the guidance matched to the pinned framework. Inspect the deployed PlaceOrder and its locks before adding behavior.
 
-Review the reserve policy if already implemented. Otherwise implement it: online orders at stock 3 and 2 accept exactly one OrderPlaced in the existing stream. Stock 1 rejects with Reserved for in-person sales. Stock 0 rejects with Sold out. A missing shop rejects with Shop not found.
+Review PlaceOnlineOrder if already implemented. Otherwise create it in a new module and a separate online feature: online orders at stock 3 and 2 accept exactly one OrderPlaced in the existing stream. Stock 1 rejects with Reserved for in-person sales. Stock 0 rejects with Sold out. A missing shop rejects with Shop not found.
 
-Limit edits to src/Shop/Commands/PlaceOrder.hs and the affected shop tests, including tests/integration/http-orders.hurl. Preserve event payloads, replay, AvailableStock, routes, and Feature/App composition. Preserve unrelated work. If another change is necessary, explain why before expanding scope.
+Keep all locked files byte-identical. Add src/Shop/Commands/PlaceOnlineOrder.hs and Shop.OnlineFeature, register onlineShopFlow alongside the existing Features, and add separate tests. Preserve deployed PlaceOrder, its routes and tests, existing events, replay and AvailableStock. Preserve unrelated work. If another change is necessary, explain why before expanding scope.
 
-For implementation, show the new reserve expectations failing against the old decision before repairing it. Preserve historical replay 0,3,2,1,0. Check unchanged history after rejections and live HTTP stock 3,2,1. Retry only query reads with a bounded deadline.
+For implementation, test the new command separately and retain the old command’s last-mug acceptance check. Preserve historical replay 0,3,2,1,0. Check unchanged history after rejections and live HTTP stock 3,2,1. Retry only query reads with a bounded deadline.
 
-Run neo --ci test. Show the focused diff, actual results, and any skipped checks. Separate decision tests, manually driven query checks, and live subscription evidence. Do not change an agreed expectation merely to make a failing check pass.
+Run neo build to check locked files, then neo --ci test. Show the focused diff, actual results, and any skipped checks. Separate decision tests, manually driven query checks, and live subscription evidence. Do not change an agreed expectation merely to make a failing check pass.
 ```
 
-The paths narrow the edit, while the acceptance cases explain why an edit is needed. Both matter. A one-line condition change can violate the agreement, and a correct reserve decision can arrive with unrelated changes you never requested. The final report should let you assess behavior and scope separately.
+The permitted additions bound the work, while the acceptance cases explain the new behavior. Both matter. Editing the deployed condition violates its frozen boundary, and a correct reserve decision can arrive with unrelated changes you never requested. The final report should let you assess behavior and scope separately.
 
 ## Reading the proposed change
 
-Ask for the diff of `src/Shop/Commands/PlaceOrder.hs` before accepting the result. In the reserve change, the important comparison is the acceptance condition inside the existing `Just shop` branch:
+Ask for the added `src/Shop/Commands/PlaceOnlineOrder.hs` and its Feature registration, together with confirmation that locked files are unchanged. Compare its decision with the deployed command as two separate definitions:
 
-```diff wrap
-- if shop.availableMugs > 0
-+ if shop.availableMugs > 1
-```
+| Command | Acceptance condition |
+| --- | --- |
+| Deployed `PlaceOrder` | `shop.availableMugs > 0` |
+| New `PlaceOnlineOrder` | `shop.availableMugs > 1` |
 
-This is a focused comparison, not the entire patch. The full decision must also distinguish zero stock from the reserved mug. At zero it retains `Sold out`; at one it returns `Reserved for in-person sales`. The missing-shop branch retains `Shop not found`. Read those replies alongside the condition, because a single rejection message would hide which situation occurred.
+This comparison is not an instruction to edit the deployed condition. The new command also distinguishes zero stock from its reserve: zero returns `Sold out`, one returns `Reserved for in-person sales`, and a missing shop returns `Shop not found`.
 
 The accepted branch should still use `Decider.acceptExisting` and contain exactly one `OrderPlaced` with the same shop identifier. An online rejection creates no new event. There is no need to change how accepted orders subtract stock, or to make the query report a different count from the recorded history.
 
-The native IDE helps inspect that scope. Run `neo ide`, open **Ungrouped**, and choose **Fit View**. Find `PlaceOrder`, follow its connection to `OrderPlaced`, and follow that event into `AvailableStock`. Also find the connection from `ShopOpened` to `AvailableStock`: opening stock and accepted orders both contribute to the answer. The reserve policy leaves these connections intact. If the agent proposes another event or removes a query input, ask how that fits the permitted change. The graph shows the connections; reading the decision and exercising its cases establishes what it accepts.
+The native IDE helps inspect that scope. Run `neo ide`, open **Ungrouped**, and choose **Fit View**. Find `PlaceOnlineOrder`, follow its connection to `OrderPlaced`, and follow that event into `AvailableStock`. Also find the connection from `ShopOpened` to `AvailableStock`: opening stock and accepted orders both contribute to the answer. The new command adds a separate connection to the unchanged event. Keep the deployed PlaceOrder connection too. If the agent proposes another event or removes a query input, ask how that fits the permitted change. The graph shows the connections; reading the decision and exercising its cases establishes what it accepts.
 
 ## When a successful build is the wrong answer
 
-Suppose the agent reports that compilation succeeded, but its decision still accepts an order whenever stock is greater than zero. That expression is valid code. At stock one, however, it accepts the very order we agreed to reject. A compiler checks whether the program fits its types; the reserve agreement gives us the expected behavior.
+Suppose the new PlaceOnlineOrder has not been deployed or locked yet. The agent reports that compilation succeeded, but its decision still accepts an order whenever stock is greater than zero. That expression is valid code. At stock one, however, it accepts the very order we agreed to reject. A compiler checks whether the program fits its types; the reserve agreement gives us the expected behavior.
 
 A correction should name the mismatch and preserve the agreement:
 
 ```text wrap
-At stock 1, PlaceOrder still accepts an online order. The agreed result is Reserved for in-person sales with no new event and unchanged stock 1. Compilation does not check that policy.
+At stock 1, the undeployed PlaceOnlineOrder still accepts an online order. The agreed result is Reserved for in-person sales with no new event and unchanged stock 1. Compilation does not check that policy.
 
-Read the project's active NeoHaskell guidance and inspect the decision against its boundary tests. Keep stock 2 accepted, stock 0 sold out, and the missing-shop reply unchanged. Show the failing reserve check, repair only the decision, and rerun neo --ci test. Keep historical replay ending at zero.
+Read the project's active NeoHaskell guidance and inspect the decision against its boundary tests. Keep stock 2 accepted, stock 0 sold out, and the missing-shop reply unchanged. Show the failing reserve check, repair only the undeployed PlaceOnlineOrder decision, and rerun neo --ci test. Keep historical replay ending at zero.
 ```
 
-This gives the agent an observed failure to explain. Asking it simply to "fix the tests" would leave open whether it should correct the decision or weaken the expected result. We changed expectations in the reserve lesson because the business agreement changed first. Here the agreement is unchanged, so the implementation must meet it.
+This gives the agent an observed failure to explain. Asking it simply to "fix the tests" would leave open whether it should correct the decision or weaken the expected result. The reserve lesson added expectations for a separate new command while preserving the deployed command’s tests. Here the agreement is unchanged, so the implementation must meet it.
 
 The active guidance also matters when a proposed repair uses an unfamiliar API. Ask the agent to follow the index in `.neo/agent-guidance/active.md` to the instructions matched to the project's pinned framework. A plausible method name from another revision is not enough. If the index reports unavailable guidance, use the recovery instructions in [Set up your agent](../../getting-started/) before continuing that API change.
 
 ## Evidence you can review
 
-Run `neo --ci test` from the project root, or have the agent run it and retain the output. In the verified reserve shop, twelve examples and four Hurl scenarios pass. Those results answer different questions:
+Run `neo --ci test` from the project root, or have the agent run it and retain the output. Check the results for the current project revision, including both command identities. Those results answer different questions:
 
 | Evidence | What to inspect |
 | --- | --- |
@@ -78,6 +78,6 @@ Run `neo --ci test` from the project root, or have the agent run it and retain t
 
 Neo stops before Hurl when the unit suite fails. A report from that run cannot establish that the live HTTP scenarios passed. Ask for the result after the repair too, with any skipped checks named explicitly.
 
-You can also inspect the running shop through its built-in documentation, as in [Place an order over HTTP](../../tutorial/http-orders/). Open a fresh shop with a new chosen identifier and use that returned shop identifier for `place-order`. Under **Test Request**, edit **Body** and choose **Send**. Two orders should succeed; the third should return the reserve reply. Read the keyed `AvailableStock` query until its asynchronous answer reaches one. Repeat the rejected order and read again: that final mug should remain.
+You can also inspect the running shop through its built-in documentation, as in [Place an order over HTTP](../../tutorial/http-orders/). Open a fresh shop with a new chosen identifier and use that returned shop identifier for `place-online-order`. Under **Test Request**, edit **Body** and choose **Send**. Two orders should succeed; the third should return the reserve reply. Read the keyed `AvailableStock` query until its asynchronous answer reaches one. Repeat the rejected order and read again: that final mug should remain.
 
 The source diff, the checks, and the interface answer should describe the same change. When they disagree, give the agent the specific disagreement and the original acceptance case. That keeps the next correction small enough for you to understand and review.

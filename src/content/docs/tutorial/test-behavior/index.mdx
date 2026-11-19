@@ -12,6 +12,8 @@ The mug shop accepts an order when at least one mug remains. A sold-out shop rej
 
 Use the project from [Place an order over HTTP](../http-orders/), with its existing `Shop` Feature, application composition, and `AvailableStock` query. Each accepted order buys one mug. Opening a shop records three mugs, and rejections must leave both its history and stock unchanged. This page turns that agreement into checks and uses one deliberate mistake to see whether they catch it.
 
+This exercise uses the shop before its first deployment. The deliberate fault below belongs only in that undeployed development copy. If your shop is already deployed, preserve its locked source and use a separate new slice as described in [Add a feature safely](../change-safely/).
+
 ## The agreement as checks
 
 The table from [Plan the mug shop](../) describes outcomes, rather than particular testing tools. We can make each row precise enough for the agent to test:

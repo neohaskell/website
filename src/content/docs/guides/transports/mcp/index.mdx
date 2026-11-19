@@ -8,31 +8,41 @@ prev: true
 next: true
 ---
 
-An AI agent can request an order and read available stock through the Model Context Protocol, or MCP. The agent is a caller of the mug shop: `PlaceOrder` still decides whether to accept the order, and `AvailableStock` still supplies the stock answer. Changing the interface doesn't move those decisions into the agent.
+An AI agent can request an order and read available stock through the Model Context Protocol, or MCP. The agent is a caller of the mug shop: `PlaceMcpOrder` still decides whether to accept the order, and `AvailableStock` still supplies the stock answer. Changing the interface doesn't move those decisions into the agent.
 
-This guide uses the project from [Expose an HTTP API](../), with the reserve policy from [Keep one mug in reserve](../../../tutorial/change-safely/). The shop opens with three mugs, each accepted order consumes one, and online orders leave one for in-person sales. If you're arriving directly, [Place an order over HTTP](../../../tutorial/http-orders/) explains the command declarations and shop setup used here.
+This guide uses the project from [Expose an HTTP API](../), with the reserve policy from [Add a feature safely](../../../tutorial/change-safely/). The shop opens with three mugs, each accepted order consumes one, and online orders leave one for in-person sales. If you're arriving directly, [Place an order over HTTP](../../../tutorial/http-orders/) explains the command declarations and shop setup used here.
 
 MCP calls a change-making operation a **tool** and readable information a **resource**. NeoHaskell exposes registered commands as tools and registered queries as resources. Here we'll add the local, standard-input/output transport and inspect a conversation with it.
 
 ## The same shop behind another interface
 
-Ask your agent to add `McpTransport` to the allowed transports of `OpenShop` and `PlaceOrder`, register it in `App.hs`, and preserve the existing Features, Web configuration and stock policy. Have it read the project's active NeoHaskell guidance first and run `neo test` after the change. Opening a shop is a setup operation for this exercise; allowing it as a tool is an explicit choice.
+Before adding MCP, save the working Web composition outside `src`:
 
-After the agent finishes, use the excerpts below to review its changes. They show the relevant parts of the existing modules, rather than a second set of edits to apply. In both command modules, the transport imports should include:
+```sh wrap
+mkdir -p .neo/examples
+cp src/App.hs .neo/examples/App.Web.hs
+```
+
+This local snapshot preserves the Web-only registration for the later storage exercise. The original command files remain in place and locked.
+
+The Web commands may already be deployed and locked. Ask your agent to copy their structure into new `OpenMcpShop` and `PlaceMcpOrder` command modules, retaining the opening-stock and reserve behavior respectively. Give these new commands their own MCP feature and slices, registered alongside the existing Features. Reuse `ShopEntity`, `ShopOpened`, `OrderPlaced`, and `AvailableStock` unchanged. Preserve every locked file and existing Web route.
+
+For the new commands, select `McpTransport` at creation time. Register MCP in `App.hs` alongside Web. These are new command identities; changing an existing frozen command's `TransportsOf` would edit its deployed contract. Run `neo build` as well as the behavior checks before using the new tools.
+
+The new command module imports:
 
 ```haskell wrap
 import Service.Transport.Mcp (McpTransport)
-import Service.Transport.Web (WebTransport)
 ```
 
-The declaration in `src/Shop/Commands/PlaceOrder.hs` becomes:
+In the new `src/Shop/Commands/PlaceMcpOrder.hs`, inspect:
 
 ```haskell wrap
-type instance TransportsOf PlaceOrder =
-  '[WebTransport, McpTransport]
+type instance TransportsOf PlaceMcpOrder =
+  '[McpTransport]
 ```
 
-`OpenShop` needs the corresponding declaration with its own type name. This allows the commands to be reached through either interface. Their `decide` functions and the events they produce stay the same.
+`OpenMcpShop` needs the corresponding declaration with its own type name. These new commands permit MCP only. Their copied decisions preserve the respective behavior while the original Web commands stay unchanged.
 
 In `src/App.hs`, look for this qualified import:
 
@@ -49,9 +59,9 @@ EventModel.withTransport McpTransport.McpTransport {
 }
 ```
 
-These two strings identify this example server to its client; choose names and versions appropriate to your application. Keep `counterFlow`, `shopFlow`, the event store and the existing Web configuration. A transport registration starts an interface; the command declarations determine which tools it receives. Queries are shared across the registered transports, so `AvailableStock` needs no new transport declaration.
+These two strings identify this example server to its client; choose names and versions appropriate to your application. Register `mcpShopFlow` alongside `counterFlow`, `shopFlow`, and `onlineShopFlow`; keep the event store and the existing Web configuration. A transport registration starts an interface; the command declarations determine which tools it receives. Queries are shared across the registered transports, so `AvailableStock` needs no new transport declaration.
 
-With the saved `event-model.json`, run `neo inspect sync` and open `neo ide`. In **Ungrouped**, use **Fit View** and select `PlaceOrder` to follow its connection to `OrderPlaced`. Then inspect the arrows from `OrderPlaced` and `ShopOpened` into `AvailableStock`. MCP reaches this same behavior; it doesn't need a second order decision or a second stock query.
+With the saved `event-model.json`, run `neo inspect sync` and open `neo ide`. In **Ungrouped**, use **Fit View** and select `PlaceMcpOrder` to follow its connection to `OrderPlaced`. Then inspect the arrows from `OrderPlaced` and `ShopOpened` into `AvailableStock`. MCP has its own command slice while sharing the unchanged event and stock query. The original Web commands remain separate.
 
 ## A local protocol conversation
 
@@ -89,7 +99,7 @@ Ask the running process what it exposes:
 {"jsonrpc":"2.0","id":2,"method":"tools/list"}
 ```
 
-The tool list contains `OpenShop` and `PlaceOrder`. Each has an `inputSchema` requiring `entityId`. Use these exact tool names, including capitalization, rather than the Web route names `open-shop` and `place-order`.
+The tool list contains `OpenMcpShop` and `PlaceMcpOrder`. Each has an `inputSchema` requiring `entityId`. Use these exact tool names, including capitalization, rather than the Web route names `open-shop` and `place-online-order`.
 
 Resource discovery uses a separate method:
 
@@ -97,14 +107,14 @@ Resource discovery uses a separate method:
 {"jsonrpc":"2.0","id":3,"method":"resources/list"}
 ```
 
-The resource list includes the stock query and the preserved Counter query. The stock entry has name `available-stock` and URI `neohaskell://queries/AvailableStock`. Use the returned URI literally: its final segment is `AvailableStock`, not the display name or an HTTP route. Counter's query is shared, but its commands won't appear as tools unless their declarations also permit MCP.
+Register the new MCP feature alongside the existing Features so its commands are included. The resource list includes the stock query and the preserved Counter query. The stock entry has name `available-stock` and URI `neohaskell://queries/AvailableStock`. Use the returned URI literally: its final segment is `AvailableStock`, not the display name or an HTTP route. Counter's query is shared, but its commands won't appear as tools unless their declarations also permit MCP.
 
 ## An order and its stock answer
 
 Open a shop with the setup tool:
 
 ```json wrap
-{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"OpenShop","arguments":{"entityId":"9b4dbfcb-477f-49f2-9156-629a24457f86"}}}
+{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"OpenMcpShop","arguments":{"entityId":"9b4dbfcb-477f-49f2-9156-629a24457f86"}}}
 ```
 
 The UUID is chosen for this example; another valid UUID works. Keep the required key `entityId`, and use the same identifier for opening and ordering. A fresh process lets us reuse this value without reopening an existing shop.
@@ -112,7 +122,7 @@ The UUID is chosen for this example; another valid UUID works. Keep the required
 Now request one order for that shop:
 
 ```json wrap
-{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"PlaceOrder","arguments":{"entityId":"9b4dbfcb-477f-49f2-9156-629a24457f86"}}}
+{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"PlaceMcpOrder","arguments":{"entityId":"9b4dbfcb-477f-49f2-9156-629a24457f86"}}}
 ```
 
 Each successful response contains `result.isError: false` and a text block beginning `Command accepted. Entity ID:` followed by that identifier. Acceptance records an event; it doesn't return the shop's stock. Read the query resource to get the maintained answer:
@@ -139,9 +149,9 @@ The response's `result.contents` contains an entry with `mimeType: "application/
 
 The resource returns a collection even though we've opened only one shop. This MCP read uses a limit of 100 and an offset of zero; adding `?id=...`, `q`, `limit` or `offset` to the URI doesn't select or filter its rows. Use the URI from discovery and find the matching `shopId` in `items`. For keyed reads, filtering or further pages, use the [Expose an HTTP API](../#collections-filters-and-pages).
 
-Query maintenance is asynchronous. If the resource is still empty or shows three mugs, read it again up to five times, waiting one second between reads. If it hasn't caught up, stop and ask your agent to check the query subscriptions and runtime output. Don't resend `PlaceOrder` to refresh stock: that would request another order.
+Query maintenance is asynchronous. If the resource is still empty or shows three mugs, read it again up to five times, waiting one second between reads. If it hasn't caught up, stop and ask your agent to check the query subscriptions and runtime output. Don't resend `PlaceMcpOrder` to refresh stock: that would request another order.
 
-Reuse the `PlaceOrder` request with `id` changed to `7` to buy one more mug. Stock can then reach one. Send it once more with `id` changed to `8`; this order is rejected. Its response still has a JSON-RPC `result`, but that result contains `isError: true` and this content text:
+Reuse the `PlaceMcpOrder` request with `id` changed to `7` to buy one more mug. Stock can then reach one. Send it once more with `id` changed to `8`; this order is rejected. Its response still has a JSON-RPC `result`, but that result contains `isError: true` and this content text:
 
 ```text wrap
 Command rejected: Reserved for in-person sales
@@ -153,6 +163,6 @@ The rejected order records no `OrderPlaced`, so the query remains at one. A clie
 
 This MCP transport treats command calls as trusted local execution and bypasses the command authorization gate. The reserve decision still runs, but a tool call isn't a signed-in HTTP user. Query resources use an anonymous caller context and remain subject to the query's access policy; our stock query currently permits public reads.
 
-Choose which commands you expose with that authority in mind. A client allowed to launch this process can call `OpenShop` as well as `PlaceOrder`, using the process's configuration, credentials and storage. An agent's confirmation before calling a tool is a client behavior, not an authorization boundary enforced by this transport.
+Choose which commands you expose with that authority in mind. A client allowed to launch this process can call `OpenMcpShop` as well as `PlaceMcpOrder`, using the process's configuration, credentials and storage. An agent's confirmation before calling a tool is a client behavior, not an authorization boundary enforced by this transport.
 
 Keep the stdio connection between processes you trust. Forwarding it to a remote caller doesn't add authentication, and configuring HTTP authentication doesn't protect these trusted MCP calls. The process owner and the tool declarations determine who can reach the local command authority.

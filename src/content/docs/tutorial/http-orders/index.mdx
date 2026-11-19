@@ -12,6 +12,8 @@ The mug shop can already decide whether to accept an order and maintain its stoc
 
 Use the project from [Query available stock](../stock-query/). It already registers `OpenShop`, `PlaceOrder`, and `AvailableStock` in the shop's Feature, and includes that Feature in the application's Event Model. The commands are still internal. The query is public, but a new running application has no shop until we open one there. The shops created by tests belong to separate stores.
 
+We are still preparing this shop for its first deployment, so its transport declarations can be completed here. For an already deployed command, preserve its declaration and introduce a separately named command slice instead, following [Add a feature safely](../change-safely/).
+
 ## The HTTP entry points
 
 A transport is an interface through which a caller reaches application behavior. The starter already runs the Web transport, which serves HTTP. Each command also declares which transports may expose it. Give your agent this task from the project root:

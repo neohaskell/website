@@ -10,16 +10,16 @@ next: true
 
 An HTTP API gives another program a way to request changes and read answers from the mug shop. The Web transport turns registered commands and queries into routes, and generates an OpenAPI contract describing those routes. We can inspect that contract and try requests in the running application's browser documentation.
 
-This guide uses the shop from [Keep one mug in reserve](../../tutorial/change-safely/): it opens with three mugs, each order buys one, and online orders must leave one for in-person sales. If you're arriving directly, [Place an order over HTTP](../../tutorial/http-orders/) explains the existing command declarations and shop setup. Keep that project open; we won't create a second implementation of its decisions.
+This guide uses the shop from [Add a feature safely](../../tutorial/change-safely/): it opens with three mugs, each order buys one, and online orders must leave one for in-person sales. If you're arriving directly, [Place an order over HTTP](../../tutorial/http-orders/) explains the existing command declarations and shop setup. Keep that project open; we won't create a second implementation of its decisions.
 
 ## Application behavior and its interface
 
 Three declarations work together to expose the shop. The Feature registers its commands, events and query. Each command permits the Web transport, and the application starts that transport alongside its Features.
 
-In `src/Shop/Commands/PlaceOrder.hs`, this existing declaration permits HTTP access. `OpenShop` has the corresponding declaration with its own name:
+In `src/Shop/Commands/PlaceOnlineOrder.hs`, this existing declaration permits HTTP access. `OpenShop` has the corresponding declaration with its own name:
 
 ```haskell wrap
-type instance TransportsOf PlaceOrder = '[WebTransport]
+type instance TransportsOf PlaceOnlineOrder = '[WebTransport]
 ```
 
 The module imports `WebTransport` from `Service.Transport.Web`. This declaration selects an interface; it doesn't change the order's decision or reserve condition.
@@ -31,11 +31,12 @@ EventModel.withTransport WebTransport.server
 EventModel.features do
   counterFlow
   shopFlow
+  onlineShopFlow
 ```
 
 `shopFlow` supplies the shop's registered behavior. Keeping `counterFlow` preserves the starter's Counter routes too. Adding a command module without registering it in a Feature doesn't make it an API endpoint.
 
-Run `neo inspect sync` with the saved `event-model.json`, then open `neo ide`. In **Ungrouped**, use **Fit View** and follow `PlaceOrder` to `OrderPlaced`, and then into `AvailableStock`. Follow `ShopOpened` into the same query. These are the two accepted facts that refresh the stock answer. The IDE lets you review the behavior behind the interface; the HTTP contract describes how callers reach it.
+Run `neo inspect sync` with the saved `event-model.json`, then open `neo ide`. In **Ungrouped**, use **Fit View** and follow `PlaceOnlineOrder` to `OrderPlaced`, and then into `AvailableStock`. Follow `ShopOpened` into the same query. These are the two accepted facts that refresh the stock answer. The IDE lets you review the behavior behind the interface; the HTTP contract describes how callers reach it.
 
 ## The generated contract
 
@@ -46,11 +47,11 @@ The shop contributes these routes:
 | Method | Route | Purpose |
 | --- | --- | --- |
 | POST | `/commands/open-shop` | Record three opening mugs |
-| POST | `/commands/place-order` | Request a one-mug order |
+| POST | `/commands/place-online-order` | Request a one-mug order |
 | GET | `/queries/available-stock/{id}` | Read one shop's stock |
 | GET | `/queries/available-stock` | Read a collection of stock answers |
 
-Open [the generated OpenAPI JSON](http://127.0.0.1:8080/openapi.json) to inspect the machine-readable contract. Its `paths` describe the routes; the schemas describe request and response shapes. Compare the `entityId` field for `place-order` with the command in your project. There is no quantity field because each command requests one mug.
+Open [the generated OpenAPI JSON](http://127.0.0.1:8080/openapi.json) to inspect the machine-readable contract. Its `paths` describe the routes; the schemas describe request and response shapes. Compare the `entityId` field for `place-online-order` with the command in your project. There is no quantity field because each command requests one mug.
 
 Under **ShopEntity** in the browser documentation, select **open-shop**, then **Test Request**. Use this **Body** and click **Send** once:
 
@@ -60,7 +61,7 @@ Under **ShopEntity** in the browser documentation, select **open-shop**, then **
 
 The UUID is chosen for this example; another valid UUID works. Keep the required key `entityId` and reuse the response's identifier throughout the exercise. A successful request returns status `200 OK` with `tag: "Accepted"` and that `entityId`.
 
-For **place-order**, send the same body once. It also returns an accepted response. Read `GET /queries/available-stock/{id}` with that shop ID. Once the asynchronous query has refreshed, it returns:
+For **place-online-order**, send the same body once. It also returns an accepted response. Read `GET /queries/available-stock/{id}` with that shop ID. Once the asynchronous query has refreshed, it returns:
 
 ```json wrap
 {
@@ -71,7 +72,7 @@ For **place-order**, send the same body once. It also returns an accepted respon
 
 Acceptance records the event before the query necessarily catches up. Read again if you still see three, or initially receive 404 after opening. An automated client should retry reads with a bounded wait rather than resend the command: another accepted order would buy another mug.
 
-Send **place-order** once more and wait for stock `1`. A third order returns status `400 Bad Request`:
+Send **place-online-order** once more and wait for stock `1`. A third order returns status `400 Bad Request`:
 
 ```json wrap
 {
