@@ -1,0 +1,12 @@
+<div class="neo-build-flow" role="img" aria-label="Normal build: source passes through a lock check, then configuration reconciliation and compilation. A changed locked file stops before reconciliation.">
+  <div class="step">Source and neo.json</div>
+  <div class="connector" aria-hidden="true"></div>
+  <div class="gate">Lock check</div>
+  <div class="branches">
+    <div class="success"><div class="connector" aria-hidden="true"></div><div class="step">Unchanged locked files</div><div class="connector" aria-hidden="true"></div><div class="step">Reconcile generated files</div><div class="connector" aria-hidden="true"></div><div class="step">Compile</div></div>
+    <div class="failure"><div class="connector" aria-hidden="true"></div><div class="stop">Changed locked file<br /><strong>Build stopped</strong></div></div>
+  </div>
+</div>
+<style>
+.neo-build-flow{font-size:1rem;line-height:1.5;max-width:34rem;margin:2rem auto;text-align:center}.neo-build-flow *{margin:0}.step,.gate,.stop{border:1px solid var(--sl-color-gray-4);padding:12px 16px;border-radius:4px}.gate{border:2px solid var(--sl-color-text-accent)}.connector{height:24px;width:0;border-left:2px solid var(--sl-color-gray-3);margin:auto}.branches{display:grid;grid-template-columns:1fr 1fr;gap:24px}.stop{border:2px dashed var(--sl-color-red);color:var(--sl-color-red-high)}.branches>.success,.branches>.failure{min-width:0}@media(max-width:480px){.branches{gap:12px}.step,.gate,.stop{padding:12px 8px}}
+</style>

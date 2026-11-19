@@ -1,17 +1,111 @@
 ---
-title: "Neo commands"
-description: "Page plan. Which command and flags do I need for local development?"
-tableOfContents: false
-pagefind: false
-prev: false
-next: false
-head:
-  - tag: meta
-    attrs:
-      name: robots
-      content: noindex
+title: Neo commands
+description: Project creation, builds, application execution, tests and domain-file locks with Neo.
+tableOfContents:
+  minHeadingLevel: 2
+  maxHeadingLevel: 2
+prev: true
+next: true
 ---
 
-## Page plan <a id="page-plan" />
+import NeoBuildFlow from '../../../../components/learn/NeoBuildFlow.astro';
 
-This page will document `neo new`, `build`, `run`, `test`, and `lock`, with invocation, working directory, inputs, flags, and source-defined outcomes in a compact command table. Global verbose and CI options, watch behavior, library creation, and the `build` `lock` check will have anchors. It will link model tools and agent setup commands to their own bounded pages, while installation and the complete first launch remain in getting started.
+Neo is the development command-line tool for a NeoHaskell project. It reads `neo.json`, prepares the generated build files, and invokes the project's tools. These commands work on source code; the [application CLI](../../guides/transports/cli/) is a separate transport for sending business commands to a running application process.
+
+This reference assumes the environment described in [Install NeoHaskell](../../getting-started/installation/). [Create a project](../../getting-started/create-project/) and [Run the application](../../getting-started/run/) provide the first-project walkthrough. Here, `mug-shop` names the project directory.
+
+## Command lookup <a id="commands" />
+
+Run `new` from the directory that should contain the project. Run the other commands from the project root, beside `neo.json`. They use the current directory rather than searching upward for a project.
+
+| Invocation | Main input | Outcome and options |
+| --- | --- | --- |
+| `neo new mug-shop` | Name and setup answers | Creates a project directory. `--ci` uses defaults; `--library` omits the application launcher. |
+| `neo build` | Configuration and source | Checks locked files, reconciles generated artifacts, then builds. `--watch` enters the interactive reload session. |
+| `neo run` | Configuration and application source | Reconciles and invokes the application through Cabal. `--watch` enters the reload session instead. |
+| `neo test` | Unit tests and discovered Hurl scenarios | Reconciles, runs unit tests, then HTTP scenarios if present. `--watch` enters the reload session instead. |
+| `neo lock --all` | Discovered domain files | Adds command, event and query paths to `.locked-files`. A search argument selects matching files. |
+
+Each command accepts `--help`. `neo --version` identifies the installed tool; its version is separate from the framework revision selected by the project.
+
+## Global output options <a id="global-options" />
+
+`-v` or `--verbose` is accepted globally, but the current dispatcher does not use it to change logging. `--ci` selects noninteractive output without prompts or terminal animations. The presence of the `CI` environment variable selects the same mode, even if its value is `false`. Both are global options and can appear before or after the subcommand.
+
+```sh
+neo --ci build
+```
+
+For an agent or a captured log, this gives a plain-text build result. It does not replace compilation with a simulation, skip tests, or select fake integration behavior. Watch mode requires an interactive terminal and rejects `--ci`.
+
+## Project and library creation <a id="new" />
+
+`neo new` interviews you about project metadata when run interactively. Supply an explicit project name in CI mode:
+
+```sh
+neo new mug-shop --ci
+```
+
+Neo creates the directory, expands the starter, prepares configuration and initializes Git with an initial commit. An existing target directory is an error. The generated application includes Counter, which [Find your project files](../../getting-started/project-files/) explains before you replace it with shop behavior.
+
+A reusable library has no application launcher or executable Cabal stanza:
+
+```sh
+neo new mug-tools --library --ci
+```
+
+Use library creation for code another project will depend on. It does not produce a server to launch with `neo run`.
+
+## Generated files and builds <a id="build" />
+
+The build begins with the lock check, before reconciling project artifacts. Reconciliation translates `neo.json` into generated Nix and Cabal configuration and synchronizes framework-matched agent guidance. A successful compilation confirms that the code builds; it does not establish that a shipment provider accepted an order or that an HTTP scenario passed.
+
+<NeoBuildFlow />
+
+[Project configuration](../configuration/project/) owns the configuration fields. Change those inputs rather than treating a generated Cabal file as the permanent source of project settings.
+
+### Locked domain files <a id="lock-check" />
+
+`neo build` refuses changes to paths listed in `.locked-files`, including staged, unstaged and untracked changes. `--skip-lock-check` explicitly bypasses that pre-build check; it does not unlock the files or establish that a deployed change is compatible. `neo run` and `neo test` do not perform the same pre-build lock check.
+
+Deployed command, event and query behavior stays frozen. [Add a feature safely](../../tutorial/first-feature/) explains how a new identity preserves old behavior. Lock discovery covers conventional command, event and query directories, not every source file that can affect deployed behavior.
+
+## Application execution <a id="run" />
+
+From `mug-shop`, a non-watch invocation is:
+
+```sh
+neo run --ci
+```
+
+Neo reconciles the project and uses Nix to invoke Cabal's application run. The process stays attached while the application runs. A server's startup output is only a first signal: use its real command or query endpoint to establish that it answers. Application arguments belong to the application's own transport interface; `neo run` has no general trailing-argument forwarding option.
+
+## Unit and HTTP tests <a id="test" />
+
+```sh
+neo test --ci
+```
+
+Unit tests run first. A failure stops this path before Hurl scenarios run. If Neo discovers `.hurl` scenarios under `tests/`, it starts the application, waits for an HTTP response on `127.0.0.1:8080`, executes the scenarios and stops its spawned application. No discovered scenarios means that only the unit-test phase runs. Keep the test port free so another process cannot satisfy readiness in place of the application under test.
+
+The normal test path has a 60-second application-readiness window. Changing scenario URLs alone does not change this readiness address. [Test behavior](../../tutorial/test-behavior/) explains assertions and deliberate failure checks.
+
+## Interactive reload sessions <a id="watch" />
+
+`build`, `run` and `test` accept `--watch`, but currently share the same implementation: an interactive GHCi session watches modifications under `src/`, reconciles configuration, and reloads code. The command name changes the display, not the work performed after a change.
+
+Consequently, `neo run --watch` does not currently provide an application restart loop, and `neo test --watch` does not rerun the unit and Hurl suites. Use the normal commands above when you need those results. This distinction also means that changing a test file outside `src/` is not a watched source modification.
+
+## Lock selection and Git checks <a id="lock" />
+
+```sh
+neo lock --all
+```
+
+This records all discovered domain paths in `.locked-files`; it does not copy their contents into a separate archive. A search such as `neo lock PlaceMugOrder --ci` filters discovered paths. Without CI mode, Neo can present an interactive selection. With several CI search matches, it prints candidates and succeeds without locking them; use a more specific search. Locking also stages the selected files and manifest and attempts a Git commit. Keep unrelated changes out of the staging area first. Inspect Git history afterward: the printed completion message does not verify that Git accepted the commit.
+
+`neo lock install` installs the Git pre-commit hook, replacing an existing hook. `neo lock check` performs the same modified-path check used by `neo build`; the pre-commit hook invokes it before a commit. Neither substitutes for preserving deployed semantics in source outside the discovered paths.
+
+[Model tools](./model-tools/) documents `ide`, `inspect` and `validate`. [Agent commands](./agent-commands/) covers shared skills and source-matched guidance.
+
+The [Neo command definitions](https://github.com/neohaskell/NeoHaskell/blob/414602b9510a92dfac647bc68d6afadfb594502c/neo/src/cli.rs) list the flags; command implementations determine the behavior described here.
