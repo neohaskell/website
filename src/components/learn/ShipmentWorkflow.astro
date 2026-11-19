@@ -1,0 +1,29 @@
+<div class="shipment-workflow" role="img" aria-label="PlaceOrder passes the shop decision and storage to record OrderPlaced in shop history. An integration calls the shipping provider. Provider failure stops that path. A booking response leads to RecordShipmentBooking, a separate shipment decision and storage. Refusal stops that path; acceptance records ShipmentBooked in shipment history. OrderPlaced remains recorded in both failure cases.">
+  <section class="history">
+    <h3>Shop history</h3>
+    <div class="node" data-diagram-role="command">PlaceOrder</div>
+    <div class="link">Shop decision and storage<svg viewBox="0 0 20 28" aria-hidden="true"><path d="M10 0V24M4 18L10 24L16 18" /></svg></div>
+    <div class="node" data-diagram-role="event">Recorded OrderPlaced</div>
+  </section>
+  <div class="link" aria-hidden="true"><svg viewBox="0 0 20 28"><path d="M10 0V24M4 18L10 24L16 18" /></svg></div>
+  <div class="node" data-diagram-role="integration">Integration calls shipping provider</div>
+  <div class="fork"><div class="branch"><div class="outcome failure"><span aria-hidden="true">×</span> Provider failure: stop</div></div><div class="branch"><div class="node">Booking response</div></div></div>
+  <div class="link" aria-hidden="true"><svg viewBox="0 0 20 28"><path d="M10 0V24M4 18L10 24L16 18" /></svg></div>
+  <section class="history">
+    <h3>Shipment history</h3>
+    <div class="node" data-diagram-role="command">RecordShipmentBooking</div>
+    <div class="link">Shipment decision and storage<svg viewBox="0 0 20 28" aria-hidden="true"><path d="M10 0V24M4 18L10 24L16 18" /></svg></div>
+    <div class="fork"><div class="branch"><div class="outcome failure"><span aria-hidden="true">×</span> Refused: no local booking event</div></div><div class="branch"><div class="node" data-diagram-role="event"><span>Accepted: recorded</span><span>ShipmentBooked</span></div></div></div>
+  </section>
+</div>
+<style>
+.shipment-workflow{margin:32px 0;font-size:16px;line-height:1.5;}
+.history{border:1px solid var(--sl-color-hairline);border-radius:8px;padding:16px;}
+.history h3{font-size:16px;font-weight:500;margin:0 0 16px;}
+.node{display:flex;flex-direction:column;padding:12px;border:1px solid var(--diagram-line);border-radius:8px;background:var(--diagram-surface);color:var(--diagram-ink);text-align:center;overflow-wrap:anywhere;}
+.link{display:flex;flex-direction:column;align-items:center;text-align:center;padding:8px;gap:4px;}
+.link svg{width:20px;height:28px;fill:none;stroke:var(--sl-color-gray-2);stroke-width:1.5;}
+.fork{position:relative;margin:0 0 0 8px;}.fork::before{content:"";position:absolute;top:0;left:0;width:50%;border-top:1px solid var(--sl-color-gray-2);}.fork > .branch{margin:0;position:relative;padding:12px 0 12px 24px;}.branch::before{content:"";position:absolute;left:0;top:0;bottom:0;border-left:1px solid var(--sl-color-gray-2);}.branch:last-child::before{bottom:50%;}.branch::after{content:"";position:absolute;left:0;top:50%;width:24px;border-top:1px solid var(--sl-color-gray-2);}.outcome{margin:0;padding:8px 12px;border-left:2px dashed var(--sl-color-red);color:var(--sl-color-text);font-size:16px;}
+.failure span{color:var(--sl-color-red);font-size:20px;margin-right:8px;}
+@media(max-width:480px){.history{padding:12px;}}
+</style>

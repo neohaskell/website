@@ -1,17 +1,65 @@
 ---
-title: "Workflows across entities"
-description: "Page plan. How does one recorded fact cause another part of the application to act?"
-tableOfContents: false
-pagefind: false
-prev: false
-next: false
-head:
-  - tag: meta
-    attrs:
-      name: robots
-      content: noindex
+title: Workflows across entities
+description: Follow an accepted mug order through shipping work and a separate shipment decision, including failures between them.
+prev: true
+next: true
 ---
 
-## Page plan <a id="page-plan" />
+import ShipmentWorkflow from '@components/learn/ShipmentWorkflow.astro';
 
-This page will explain how outbound integrations react to recorded events and issue commands to another entity, while inbound integrations introduce commands from outside. The existing cart-to-stock declaration will provide a small sequence figure with two separate decisions and histories. The explanation will identify where later work can fail and why an earlier event remains a fact. Provider configuration and retry procedures will stay in the integration guide.
+The mug shop accepts an order for its last mug. That settles whether the customer can buy it, but someone still needs to arrange shipment. The shipping provider may be unavailable, and the application may refuse to record a provider response that no longer fits the shipment's state. What, then, does accepting the order promise?
+
+A workflow connects these separate pieces of work. One entity records a fact; an integration reacts to it and can send a command to another entity. The receiving entity makes its own decision. Following those boundaries lets us say precisely which part has completed and which part still needs attention.
+
+[Pure decisions and effects](../pure-decisions/) separates the stock decision from provider work. Here we'll follow that separation across two histories. The shipment commands and events below are illustrative names for the behavior we want to model, rather than additions to the stock-only tutorial application.
+
+## Two decisions, two histories
+
+`PlaceOrder` asks the shop to accept an order. Its decision checks the shop's stock and proposes `OrderPlaced` when a mug is available. After the executor checks the stream and successfully appends that event, the order is a recorded fact in the shop's history.
+
+An outbound integration reacts to that recorded event. It translates the order into shipping-provider input, runs the provider work, and maps the result into a command for a separate shipment entity. In the successful path shown here, that command is `RecordShipmentBooking`. Its decision checks whether this booking can be recorded before proposing `ShipmentBooked`.
+
+<ShipmentWorkflow />
+
+The connection between the histories is causal: the accepted order is the reason for arranging shipment. It is not a single transaction covering both entities and the provider. If recording the booking is refused, `OrderPlaced` remains in the shop's history. There is no automatic reversal of the order or restoration of stock.
+
+The same distinction holds before the provider is involved. An accepting decision only proposes events; storage can still fail. The integration reacts to recorded events, rather than to a proposal that has not been saved. [Command outcomes](../command-outcomes/) explains that first boundary.
+
+## The integration carries the handoff
+
+The shop and shipment have different responsibilities. The shop decides whether it can sell a mug. The shipment decides which shipping facts it can accept. Keeping a separate shipment identity gives that work its own history, instead of treating every provider response as another stock change.
+
+The application owns the mapping between them. It must carry enough information to connect the shipment to the accepted order and choose the intended shipment identity. An order identifier and a shipment identifier serve different purposes, even if a particular application derives one from the other. A provider response must return to the right shipment rather than create an unrelated history.
+
+There are two mappings to review: the recorded order into provider input, and provider output into the receiving command. The reusable provider code should not need to import the shop's domain types. The application supplies those meanings at the integration boundary.
+
+The application must also wire the receiving command for internal dispatch. Exposing it only through the web transport does not make it callable by an integration. The [integration runtime](https://github.com/neohaskell/NeoHaskell/blob/414602b9510a92dfac647bc68d6afadfb594502c/core/service/Service/Application/Integrations.hs) runs the outbound work and dispatches its command output; a drawn connection alone does not execute that handoff.
+
+## A later failure leaves an earlier fact intact
+
+Suppose the provider cannot book the shipment. The integration can map that failure into a command that records the shipping problem. That failure mapping belongs to the application too. A logged task error, by itself, is not a shipment event and will not produce a business status row merely because the order was accepted.
+
+Now consider a different case: the provider books successfully, but the receiving command rejects the result. Perhaps that shipment is already in a state where this booking cannot be accepted. The external booking may exist even though no `ShipmentBooked` event was recorded. Treating provider success as proof of local completion would hide this case.
+
+These outcomes need different observations:
+
+| Observation | What it establishes |
+| --- | --- |
+| Order command accepted and events stored | The shop has recorded the order. |
+| Provider returns a booking | The provider reports a booking; the shipment decision is still separate. |
+| Shipment command accepted and events stored | The shipment has recorded the booking. |
+| Shipment query shows booked | The maintained answer now reflects that shipment fact. |
+
+Query maintenance is asynchronous, so a successful shipment command need not make its query row immediately visible. Conversely, receiving an order acceptance does not mean the provider has finished. A screen that needs shipping confirmation must observe the shipment outcome, rather than relabel the order response as "Shipped".
+
+If the business decides that an unshippable order should be cancelled, model cancellation as another command with its own decision and recorded events. That adds a later fact explaining the response to the problem. It does not erase the fact that the order was originally accepted.
+
+## Pending work and repeated attempts
+
+A pending shipment is a business state worth modeling. It lets the application distinguish work still to do from work that succeeded or needs intervention. An inbound worker can periodically look for pending shipments and issue commands to advance them. Unlike the outbound integration, its trigger comes from outside the recorded order event, such as a timer tick.
+
+The supplied `Integration.Timer` provides periodic inbound work. A tick is an opportunity to check pending work, not evidence that a shipment was booked. The application still has to select pending shipments, map them to commands, and observe the outcomes. The supplied timer and a typed inbound declaration are separate APIs; provider and worker wiring belongs in [Run an inbound worker](/guides/integrations/inbound-workers/).
+
+Repeated attempts introduce another question: what if the provider completed the booking but the application failed before recording it? Retrying without checking can book twice. Use a stable reference for the intended booking and the provider's supported duplicate-prevention or lookup behavior. The shipment decision also needs an explicit rule for a repeated result. Protecting the local history from duplicate completion does not undo a duplicate external booking.
+
+A recorded event is therefore a reason to perform work, not a promise of exactly one external effect or automatic recovery after every interruption. Recovery needs a defined pending state, a way to discover what happened at the provider, and a deliberate next command. Check provider failure and receiving-command refusal independently, using a controlled provider with known responses. An accepted order alone cannot distinguish either failure from completed shipping.
