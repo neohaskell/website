@@ -1,17 +1,95 @@
 ---
-title: "Generate a document"
-description: "Page plan. How do I keep a server-generated file for its owner?"
-tableOfContents: false
-pagefind: false
-prev: false
-next: false
-head:
-  - tag: meta
-    attrs:
-      name: robots
-      content: noindex
+title: Generate a document
+description: Create an owned retained document and understand stable job keys, retries, and recovery.
+tableOfContents:
+  minHeadingLevel: 2
+  maxHeadingLevel: 2
+prev: true
+next: true
 ---
 
-## Page plan <a id="page-plan" />
+import RetainedDocumentFlow from '../../../../../components/learn/RetainedDocumentFlow.astro';
 
-This page will follow a document request through an outbound handler that generates bytes, stores an owned retained file, and emits a command recording its reference. A retry example will reuse a stable creation key and compare matching content with a conflicting attempt. The figure will distinguish retained documents from pending uploads and show why both the blob directory and file metadata need durable storage.
+After accepting a mug order, the shop can generate a receipt for its customer. The receipt's bytes belong in file storage; the order's history needs only the reference that identifies them. A retry should recover the same receipt rather than produce a second document for the same job.
+
+[Upload and retrieve files](../) introduced the blob directory, file metadata, and owner-checked downloads. Here we'll use `createFile` to create a server-generated, retained document. Unlike a pending upload, a retained file has no temporary-upload expiry. Retained describes its lifecycle, however, not whether its storage survives an application restart.
+
+## A document job and its reference
+
+A document job captures who owns the receipt and which receipt revision to generate. An authorized command records that request as an event. An outbound integration reacts to the event, renders bytes, and calls `createFile`. It then emits a completion command containing the returned `FileRef`.
+
+<RetainedDocumentFlow />
+
+File creation and completion-command acceptance are separate operations. The file can exist even if the completion command fails. Retrying the same job can recover its reference and try recording completion again. The completion decision should accept a repeated reference without recording duplicate business work, and reject a reference that conflicts with an already completed job.
+
+For this example, use a plain-text receipt so that the storage behavior can be inspected without introducing a PDF renderer. A PDF follows the same path with PDF bytes and `application/pdf` permitted by the file configuration.
+
+## The authorized request
+
+Ask your agent to add a receipt Feature in a development copy of the mug shop:
+
+> Add a new receipt request command, event, outbound integration, and completion command. Preserve existing deployed definitions. Authorize the request, capture the authenticated user's ID as the owner, and record a stable document job key in the request event. Render a plain-text receipt from that recorded request. Use createFile, then emit the completion command with its returned reference. Register the new Feature and allow InternalTransport on the completion command so the integration can dispatch it. Make repeated completion safe. Add tests for successful completion and completion rejection, keeping the created file reference available for recovery.
+
+Use [Verify caller identity](../../authentication/) to configure authentication before working with personal receipts. The temporary-upload example used a shared anonymous owner; that setup cannot distinguish customers.
+
+The owner and job key must come from the authorized request, not from freshly generated values each time the integration runs. `createFile` is trusted server access: it accepts the supplied owner and does not discover the signed-in caller. Never let an untrusted request choose another customer's owner ID.
+
+A key such as `receipt-order-42-revision-1` is an application-chosen example. It identifies one logical document revision, not a filename or a required framework value. Reuse that key when retrying this revision. Choose a new key for a revised receipt. Keys are scoped to their owner, so two owners using the same key have separate documents.
+
+## Creating the retained file
+
+Keep the `EventModel.withFileUpload` configuration factory from [Upload and retrieve files](../). The existing `text/plain` allowlist permits our receipt. The application supplies file access to integration actions through `context.fileAccess`; without file configuration, that field is `Nothing`.
+
+The following excerpt belongs inside an `Integration.action`. It assumes qualified `Integration` and `Task` imports, an authorized event payload, rendered `receiptBytes`, and the application's new `RecordReceipt` command. These domain names are yours to define; the file-access API is supplied by NeoHaskell.
+
+```haskell
+files <- case context.fileAccess of
+  Nothing -> Task.throw
+    (Integration.ValidationError "File storage is not configured")
+  Just access -> Task.yield access
+
+fileRef <- files.createFile Integration.CreateFileRequest {
+  owner = payload.ownerId,
+  creationKey = payload.documentJobKey,
+  filename = "receipt.txt",
+  contentType = "text/plain",
+  content = receiptBytes
+}
+  |> Task.mapError
+    (\_ -> Integration.UnexpectedError "Receipt storage failed")
+
+Integration.emitCommand RecordReceipt {
+  documentId = payload.documentId,
+  fileRef = fileRef
+}
+```
+
+`createFile` returns a task producing either `Integration.FileCreationError` or a `FileRef`. This short excerpt maps storage errors into an integration error before emitting the command. In the complete handler, preserve the specific error in your internal diagnostics so a creation conflict can be distinguished from a storage failure. A failed creation must not emit a successful completion command.
+
+The request's bytes, size, owner, job key, and metadata are checked before creation. The configured maximum size and content-type allowlist apply to server-generated files too. With `storeOriginalFilename = True`, `receipt.txt` becomes the stored download filename. If filename storage is disabled, filenames are not part of the stored metadata comparison.
+
+## What a retry preserves
+
+Run the job once, keep its returned reference, then run it again with the same owner, key, metadata, and bytes. Both attempts return the same reference. Download it through `GET /files/<reference>` using the owner's authenticated identity and compare its bytes with the generated receipt. A different signed-in user is denied access even with the reference.
+
+A completed job preserves the first completed document. The retry cases differ in a way that matters when a renderer changes:
+
+| Attempt with the same owner and key | Result |
+| --- | --- |
+| Same metadata and bytes, retained blob exists | Same reference |
+| Same metadata, different valid bytes, retained blob exists | Same reference and original bytes |
+| Different stored filename or valid content type | `FileCreationConflict` |
+| Missing retained blob, original bytes supplied | Original reference and restored bytes |
+| Missing retained blob, different bytes supplied | `FileCreationConflict` |
+
+Every request still passes input validation. A retry with an oversized document or a disallowed content type does not bypass configuration merely because the key already exists. Before the first creation completes, recovering that reserved job also requires its original bytes.
+
+This makes a stable rendering input important. Record the receipt's business inputs and revision, and avoid making its bytes depend on the current clock or mutable order details. If a new document is intended, give it a new revision key. Reusing an old key is not a way to replace an existing receipt. The [creation implementation](https://github.com/neohaskell/NeoHaskell/blob/414602b9510a92dfac647bc68d6afadfb594502c/core/service/Service/FileUpload/Create.hs) distinguishes recovering a completed file from repairing missing bytes.
+
+## Recovery and durable storage
+
+Test the failure between creating the file and accepting the completion command. Once the receiving command's required conditions are satisfied, rerun the same job with its original inputs. Preserve the deployed command definition; recovery is not an instruction to weaken its decision. It should recover the retained reference and record completion. Inspect the query or event that exposes completion as well as the downloaded bytes: file creation alone does not prove that the business operation completed.
+
+An abandoned job can leave a retained file without a completed receipt record. Reconcile those jobs explicitly in the application or operational process. Pending-upload cleanup does not remove retained documents, and `createFile` adds no file-deletion API.
+
+For persistence across process restarts, keep both the blob directory and durable file metadata. The preceding guide's `InMemoryStateStore` loses its owner, reference, and creation-key records on restart. Persisting mug-shop events does not reconstruct those records, and keeping only the blob directory cannot recover the retry identity. Use the `PostgresStateStore` file backend for durable metadata, preserve its database and the blob directory together, and keep the application history containing the document references. Verify a restart by retrieving the same receipt and retrying the same job without creating a new request or deleting history.

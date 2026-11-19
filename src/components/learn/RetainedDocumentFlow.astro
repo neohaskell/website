@@ -1,0 +1,20 @@
+<figure class="document-flow" aria-label="A document job creates retained bytes and file metadata, then records the reference through a completion command">
+  <div class="node" data-diagram-role="event">Receipt requested<br /><span>owner + stable job key</span></div>
+  <div class="connector" aria-hidden="true"></div>
+  <div class="node" data-diagram-role="integration">Render receipt<br /><span>createFile</span></div>
+  <div class="connector" aria-hidden="true"></div>
+  <div class="storage">
+    <div>Blob directory<br /><span>document bytes</span></div>
+    <div>File metadata<br /><span>owner + key + retained ref</span></div>
+  </div>
+  <div class="completion">Completion can fail <span aria-hidden="true">X</span></div>
+  <div class="node" data-diagram-role="command">Record receipt<br /><span>reference, without bytes</span></div>
+</figure>
+<style>
+.document-flow{margin:2rem 0;padding:1.5rem;border:1px solid var(--sl-color-gray-5);border-radius:8px;font-size:16px;line-height:1.5;text-align:center}
+.node{border:1px solid var(--diagram-line);background:var(--diagram-surface);color:var(--diagram-ink);padding:1rem;border-radius:6px}
+.completion{margin:1rem 0;padding:.5rem;border-block:2px dashed var(--sl-color-red);color:var(--sl-color-red-high)}
+.node span,.storage span{font-size:16px}.connector{height:28px;width:2px;background:var(--sl-color-gray-3);margin:auto;position:relative}.connector:after{content:'';position:absolute;bottom:0;left:-4px;border-left:5px solid transparent;border-right:5px solid transparent;border-top:7px solid var(--sl-color-gray-3)}
+.storage{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--sl-color-gray-3);border-radius:6px}.storage>div{padding:1rem}.storage>div+div{border-left:1px solid var(--sl-color-gray-3)}.document-flow p{font-size:16px;margin:1rem 0 0}
+@media(max-width:500px){.document-flow{padding:1rem}.storage{grid-template-columns:1fr}.storage>div+div{border-left:0;border-top:1px solid var(--sl-color-gray-3)}}
+</style>
