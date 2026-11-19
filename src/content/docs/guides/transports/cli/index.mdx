@@ -1,17 +1,114 @@
 ---
-title: "Run commands from a terminal"
-description: "Page plan. How do I invoke my application behavior from a terminal?"
-tableOfContents: false
-pagefind: false
-prev: false
-next: false
-head:
-  - tag: meta
-    attrs:
-      name: robots
-      content: noindex
+title: Run commands from a terminal
+description: Invoke the mug shop through its application CLI, retain local history between commands, and inspect JSON results in scripts.
+tableOfContents:
+  minHeadingLevel: 2
+  maxHeadingLevel: 2
+prev: true
+next: true
 ---
 
-## Page plan <a id="page-plan" />
+A terminal command can place an order through the same decision used by HTTP and MCP. The application CLI turns command fields into flags, invokes the decision, and prints its response. This is your application's interface. The `neo` development tool still creates, builds and tests the project; `neo` itself has no `shop place-order` command.
 
-This page will register the application CLI transport and invoke a command using the generated entity and command grouping. It will pair terminal inputs with successful and rejected outcomes and explain how output mode affects scripting. The example will identify the local operator trust boundary and distinguish this application interface from the neo development CLI used to create and manage a project.
+This guide uses the mug shop from [Expose MCP tools and resources](../mcp/). It opens with three mugs, accepts one-mug orders while more than one remains, and reserves the last mug for in-person sales. For the underlying behavior, see [Keep one mug in reserve](../../../tutorial/change-safely/). We'll run a separate local CLI configuration so each invocation performs one operation and exits.
+
+## A configuration for one operation
+
+Ask your agent to prepare a CLI-only version of the existing application, after reading its active NeoHaskell guidance. Preserve `counterFlow`, `shopFlow`, all decisions, events, queries and tests. Replace the registered Web and MCP transports with `CliTransport`, and change **every** command's `TransportsOf` declaration, including the starter Counter commands, to allow only that transport. Keep the previous interface configuration in version control so it can be restored later.
+
+These are excerpts to review after the agent's edit, rather than a second set of changes to apply. Each command module needs this import:
+
+```haskell wrap
+import Service.Transport.Cli (CliTransport)
+```
+
+For `PlaceOrder`, the declaration becomes:
+
+```haskell wrap
+type instance TransportsOf PlaceOrder = '[CliTransport]
+```
+
+`OpenShop` and each Counter command need the corresponding declaration with their own type name. Every named transport must be registered: leaving `WebTransport` or `McpTransport` in a command declaration while removing its registration prevents startup.
+
+In `src/App.hs`, the import and registration are:
+
+```haskell wrap
+import Service.Transport.Cli qualified as CliTransport
+```
+
+```haskell wrap
+EventModel.withTransport CliTransport.cli
+```
+
+The registration belongs inside the existing `EventModel.eventModel do` block before `EventModel.features`. This exercise runs only the CLI. Adding it alongside the existing long-running transports would not give us a process that reliably exits after its terminal operation.
+
+The CLI configuration also omits `EventModel.withConfig @StarterConfig` and its import. That starter configuration parses process arguments for settings such as the HTTP port, before the CLI transport can read them. Here the CLI needs those arguments for the entity group, command and flags. Remove the Web-only `withCors` declaration and unused Web and MCP imports from this variant; keep `Starter.Config.hs` for the other interfaces.
+
+## History between invocations
+
+The in-memory store used in earlier exercises disappears when its process ends. Opening a shop in one CLI invocation would leave the next invocation with no shop to order from. For this local exercise, ask the agent to enable the simple store's disk persistence and use a separate directory:
+
+```haskell wrap
+EventModel.withEventStore
+  (\(_ :: ()) -> SimpleEventStore {
+    basePath = Path.fromText ".neo/cli-events" |> Maybe.getOrDie,
+    persistent = True
+  })
+```
+
+The factory now takes `()` because this variant doesn't load `StarterConfig`. Preserve the existing `Maybe`, `Path` and `SimpleEventStore` imports. The store writes accepted events beneath `.neo/cli-events` and loads them on the next invocation. Run commands sequentially from the same project root, with no other process using that directory. This is a local exercise, not a shared production store.
+
+Start with an unused directory and a fresh shop identifier. Don't reuse a shop identifier already opened in this directory, and don't delete existing history to make an example work. Changing the path to another unused directory gives a separate exercise without changing the old history.
+
+With the saved `event-model.json`, run `neo inspect sync` and open `neo ide`. In **Ungrouped**, use **Fit View** and select `PlaceOrder`. Its connection to `OrderPlaced`, and the event connections into `AvailableStock`, should remain. We've changed how commands arrive and where history lives; the shop's behavior still has the same shape.
+
+## Entity groups and command flags
+
+From the project root, open a shop:
+
+```sh wrap
+LOG_LEVEL=Error nix develop --command cabal run -v0 all -- shop open-shop --entity-id 9b4dbfcb-477f-49f2-9156-629a24457f86
+```
+
+The launcher builds and runs the application in its Nix environment. Cabal's `--` separates its own arguments from the application's arguments. `shop` comes from `ShopEntity`: the transport removes the `Entity` suffix and uses kebab case. `open-shop` comes from `OpenShop`, and `--entity-id` comes from the command field `entityId`. These names are generated, rather than shell aliases or new business operations.
+
+The UUID is chosen for this example; another valid, unused UUID works. Use that same value for each order below. The successful invocation prints this JSON object, shown here with line breaks for readability:
+
+```json wrap
+{
+  "entityId": "9b4dbfcb-477f-49f2-9156-629a24457f86",
+  "tag": "Accepted"
+}
+```
+
+The process exits after handling the command. The accepted `ShopOpened` event remains on disk with opening stock three. Place one order in a new process:
+
+```sh wrap
+LOG_LEVEL=Error nix develop --command cabal run -v0 all -- shop place-order --entity-id 9b4dbfcb-477f-49f2-9156-629a24457f86
+```
+
+It prints the same `Accepted` response shape and records one `OrderPlaced` event. Stock is now two. Run that order command once more: it is accepted again, leaving one mug. A third order returns this object:
+
+```json wrap
+{
+  "reason": "Reserved for in-person sales",
+  "tag": "Rejected"
+}
+```
+
+The decision has found the shop's retained history and applied the reserve policy. It records no event for the rejected order. Using a different valid UUID that hasn't been opened returns `Shop not found`; supplying an invalid UUID reaches decoding and returns `Failed` with `Invalid input for command PlaceOrder`. Keep flag names exact. A missing or unrecognized argument instead fails CLI parsing before a command runs.
+
+## JSON results in scripts
+
+The transport currently prints JSON for command responses. It doesn't expose `--output`, `--pretty` or `--quiet` switches. `LOG_LEVEL=Error` suppresses routine application logs, while Cabal's `-v0` suppresses normal build messages. Error diagnostics can still appear, so a script must check that it actually received valid JSON.
+
+A domain rejection still exits with status zero: the command was handled, even though the decision refused the order. Checking only `$?` would treat the reserved-mug response as success. If you use `jq`, which is a separate JSON-processing tool, capture the output and require an `Accepted` tag:
+
+```sh wrap
+reply=$(LOG_LEVEL=Error nix develop --command cabal run -v0 all -- shop place-order --entity-id 9b4dbfcb-477f-49f2-9156-629a24457f86) &&
+  printf '%s\n' "$reply" | jq -e '.tag == "Accepted"'
+```
+
+For the shop now at one mug, `jq` prints `false` and returns a nonzero status. A malformed JSON response also fails this check. This keeps the process result separate from the business result instead of assuming every completed invocation placed an order.
+
+The application CLI uses a trusted local operator context. It bypasses the command authorization gate, while still running the domain decision that protects the last mug. Give access to this executable and its event directory only to operators who should have that authority. A terminal command is not an authenticated remote API, and this CLI transport doesn't expose query reads merely because the application defines `AvailableStock`.

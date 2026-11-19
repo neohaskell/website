@@ -26,6 +26,8 @@ For transport configuration, follow settings through application startup as well
 
 For stdio transports, verify the launch path preserves standard input and keeps protocol output separate from routine logs. Exercise initialization, discovery, a real command and a query read. Check resource parameters against the transport implementation rather than assuming parity with HTTP, and distinguish trusted command execution from query access policy.
 
+For application CLI lessons, verify argument ownership before the transport runs, generated entity groups and field flags, and every declared transport registration. Exercise process exit, retained history across invocations, actual output switches and domain rejection exit status before teaching scripting. Distinguish the development CLI from the application interface.
+
 For testing lessons, verify the runner's failure behavior as well as the example failure. A command may stop after unit failures and skip HTTP scenarios. Distinguish observed failures from consequences inferred for skipped checks. Capture the deliberate failure and restored success without changing the expected behavior.
 
 For intentional policy changes, revise the behavior agreement before changing test expectations. Verify both sides of the new boundary and preserve replay checks for histories accepted under the old policy; a new decision must not silently rewrite recorded facts.
