@@ -1,0 +1,28 @@
+<div class="file-flow" role="img" aria-label="Uploading writes file bytes and pending ownership metadata. Download checks that metadata before reading bytes. Expired references cannot be downloaded even when bytes remain on disk.">
+  <div class="flow-node">Upload document</div>
+  <div class="fork" aria-hidden="true"><span>↓</span><span>↓</span></div>
+  <div class="stores">
+    <div class="flow-node">Write bytes<br /><strong>Blob directory</strong></div>
+    <div class="flow-node">Write owner and expiry<br /><strong>File state store</strong></div>
+  </div>
+  <div class="flow-arrow" aria-hidden="true">↓</div>
+  <div class="flow-node">Download with returned reference</div>
+  <div class="flow-arrow" aria-hidden="true">↓</div>
+  <div class="flow-node">Check file state:<br />owner matches and upload is unexpired?</div>
+  <div class="branches">
+    <div><span class="flow-arrow" aria-hidden="true">↓</span><div class="flow-node">Yes: read blob<br />and return bytes</div></div>
+    <div><span class="flow-arrow denied" aria-hidden="true">×</span><div class="flow-node denied">No: retrieval denied</div></div>
+  </div>
+</div>
+<style>
+  .file-flow { margin: 2rem 0; padding: 1.5rem; border: 1px solid var(--sl-color-gray-5); border-radius: .75rem; font-size: 1rem; line-height: 1.5; text-align: center; }
+  .flow-node { border: 1px solid var(--sl-color-gray-3); border-radius: .5rem; padding: .75rem; }
+  .flow-node strong { font-weight: 500; }
+  .flow-arrow { display: block; line-height: 2rem; font-size: 1.5rem; }
+  .stores, .branches { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  .fork { display: grid; grid-template-columns: 1fr 1fr; position: relative; margin-top: 1rem; font-size: 1.5rem; line-height: 2rem; }
+  .fork::before { content: ''; position: absolute; left: 25%; right: 25%; top: 0; border-top: 1px solid var(--sl-color-gray-3); }
+  .fork::after { content: ''; position: absolute; left: 50%; height: 1rem; top: -1rem; border-left: 1px solid var(--sl-color-gray-3); }
+  .denied { color: var(--sl-color-red-high); border-color: var(--sl-color-red); }
+  @media (max-width: 35rem) { .file-flow { padding: 1rem; } .stores, .branches { gap: .5rem; } .flow-node { padding: .5rem; } }
+</style>

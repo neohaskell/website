@@ -1,17 +1,94 @@
 ---
-title: "Upload and retrieve files"
-description: "Page plan. How do I attach a user file and restrict its retrieval?"
-tableOfContents: false
-pagefind: false
-prev: false
-next: false
-head:
-  - tag: meta
-    attrs:
-      name: robots
-      content: noindex
+title: Upload and retrieve files
+description: Configure file storage, upload a mug-shop document, and understand ownership and temporary-upload expiry.
+tableOfContents:
+  minHeadingLevel: 2
+  maxHeadingLevel: 2
+prev: true
+next: true
 ---
 
-## Page plan <a id="page-plan" />
+import FileUploadFlow from '../../../../components/learn/FileUploadFlow.astro';
 
-This page will configure file metadata and blob storage, upload a document, attach its file reference to a command, and retrieve it as its owner. A sequence will distinguish pending uploads, confirmed attachments, expiration, and missing blobs. Paired requests will demonstrate permitted and denied retrieval, while the persistence discussion will keep the file bytes, ownership metadata, and application events separate.
+A mug order might need a delivery note or a customer's design document. Those files have bytes, a filename, and an owner. Keeping the file is a different responsibility from recording that an order was placed: an application event can refer to a document without containing the document's bytes.
+
+This guide adds temporary uploads to the Web application from [Keep events across restarts](../storage/). We'll upload a small text document, retrieve it through its returned reference, and follow what happens when that reference expires. Use a local development copy for this exercise. The starter has no sign-in configuration, so its uploads share one anonymous identity. Personal files require authentication before users can be distinguished.
+
+## Bytes and file state
+
+NeoHaskell stores uploaded bytes in a blob directory. A separate file state store records the reference, owner, metadata, and pending-upload expiry. The download route checks that state before returning bytes from the directory.
+
+<FileUploadFlow />
+
+The returned `FileRef` identifies the upload. It is neither a filesystem path nor permission to read the file. With authentication configured, the Web transport uses the signed-in user's JWT subject as the owner and compares it with the downloader's identity. A different user cannot retrieve the file merely by knowing its reference.
+
+File state is also separate from the mug shop's event history and query rows. Keeping `ShopOpened` and `OrderPlaced` on disk does not preserve an in-memory file state store. Keeping the blob directory alone does not preserve its ownership records either.
+
+## Upload configuration
+
+In `src/App.hs`, add the file-upload types beside the existing imports:
+
+```haskell
+import Service.FileUpload.Core
+  ( FileUploadConfig (..)
+  , FileStateStoreBackend (..)
+  )
+```
+
+Inside `EventModel.eventModel do`, add this setting beside the existing Web transport registration. Keep the event-store configuration and Features already present.
+
+```haskell
+EventModel.withFileUpload @() (\_ -> FileUploadConfig {
+  blobStoreDir = ".neo/uploads",
+  stateStoreBackend = InMemoryStateStore,
+  maxFileSizeBytes = 1048576,
+  pendingTtlSeconds = 120,
+  cleanupIntervalSeconds = 15,
+  allowedContentTypes = Just ["text/plain"],
+  storeOriginalFilename = True
+})
+```
+
+The factory receives `()`, meaning it needs no application configuration value. This example accepts text files up to 1 MiB and keeps their original filenames. `.neo/uploads` is the directory chosen for this exercise; use another directory if appropriate. NeoHaskell creates it when needed. The `Just` value supplies an allowlist containing one content type; `Nothing` would permit any content type.
+
+A pending upload expires after 120 seconds. That deliberately short interval lets us observe expiry during the exercise. `cleanupIntervalSeconds` is a cleanup-worker setting, but ordinary application startup does not launch that worker. Expiry prevents retrieval; it does not establish that bytes have been removed from disk.
+
+Start the application using `neo --ci run`. The new configuration enables `POST /files/upload` and `GET /files/<reference>` alongside the existing command and query routes. The visual IDE models application behavior; use the HTTP requests below to exercise file transfer.
+
+## The returned reference
+
+Create a small text file named `delivery-note.txt` containing `Leave the mug at reception.` This is sample document content, not a required instruction. The file endpoints use multipart upload and binary download, so we'll use `curl` to exercise them directly. With the application running on its default port:
+
+```sh
+curl --form 'file=@delivery-note.txt;type=text/plain' \
+  http://127.0.0.1:8080/files/upload
+```
+
+The JSON response contains `fileRef`, `filename`, `contentType`, `sizeBytes`, and `expiresAt`. Copy the actual `fileRef` returned by your application. It begins with `file_`. Uploading identical bytes again as the same owner can return the existing reference and its original expiry, so re-uploading does not necessarily extend its lifetime. The response does not expose the internal blob-storage key.
+
+Retrieve the document before its two-minute expiry. Replace `RETURNED_FILE_REF` with that copied value:
+
+```sh
+curl --include \
+  http://127.0.0.1:8080/files/RETURNED_FILE_REF
+```
+
+A successful response returns the text with HTTP 200, `Content-Type: text/plain`, and an attachment filename. This local exercise uses the same shared anonymous owner for both requests. Opening another browser or omitting an authorization header does not create a different owner in an application without authentication.
+
+For an authenticated application, send the uploader's bearer token on both requests. After uploading as one user, repeat the download with another signed-in user's token. The owner receives HTTP 200; the other user receives HTTP 403 with `Access denied`. Authentication setup belongs to [Verify caller identity](../authentication/), where the application establishes who is calling it.
+
+## Expiry and attachments
+
+Wait more than 120 seconds after the upload, keeping the application running, then repeat its download. An expired pending reference returns HTTP 404 with `File expired`. The bytes may still exist in the blob directory, but their presence does not override the expiry check.
+
+A confirmed attachment is a different lifecycle state: it no longer has the pending-upload expiry. The current command pipeline does not automatically resolve or confirm a `FileRef` supplied in a command. Adding a field containing the reference therefore does not turn this temporary upload into a permanent order attachment. Keep that distinction when asking your agent to add document behavior; accepting an order must not promise that a pending upload will remain downloadable.
+
+The [file lifecycle implementation](https://github.com/neohaskell/NeoHaskell/blob/414602b9510a92dfac647bc68d6afadfb594502c/core/service/Service/FileUpload/Lifecycle.hs) separates pending, confirmed, retained, and deleted files. Server-created retained documents have their own creation operation and retry contract. They are a different path from uploading a customer document.
+
+## Retaining the complete file
+
+`InMemoryStateStore` is useful for this exercise because it requires no database. Restarting the application loses those file records even if `.neo/uploads` remains intact. A download then cannot find the reference. The simple event store used by the mug shop does not reconstruct these records.
+
+For durable file metadata, select `PostgresStateStore` in the file-upload configuration. Its fields are `pgHost`, `pgPort`, `pgDatabase`, `pgUser`, `pgPassword`, `pgSslMode`, and `pgSslRootCert`. Supply them from application configuration and preserve the database along with the blob directory. The event-store and query-store settings remain separate choices, even when all three use the same PostgreSQL server.
+
+A reference whose metadata exists but whose blob is missing returns HTTP 500 with `File content missing`. Recovering event history or query rows cannot recreate those bytes. A usable backup therefore needs the file state and blob directory together, as well as any application history that refers to the files.
