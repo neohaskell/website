@@ -1,17 +1,92 @@
 ---
-title: "Query available stock"
-description: "Page plan. How do I read the remaining stock?"
-tableOfContents: false
-pagefind: false
+title: Query available stock
+description: Derive the mug shop's available stock from its recorded events and read the answer through a query.
+tableOfContents:
+  minHeadingLevel: 2
+  maxHeadingLevel: 2
 prev: true
 next: true
-head:
-  - tag: meta
-    attrs:
-      name: robots
-      content: noindex
 ---
 
-## Page plan <a id="page-plan" />
+A shopper needs to know how many mugs are available. The shop's history can explain how that number came about, but the shopper shouldn't have to count its events. We'll give the application a query that returns the shop's identifier and its current available stock.
 
-This page will turn the shop's current state into a stock query and show why its answer is separate from the event history. Readers will follow one accepted order from three mugs to two, then verify that a rejected order changes neither history nor stock. A compact history-and-answer figure will accompany the projection code and its declared event inputs. The lesson will explain that the HTTP query may need time to reflect an accepted command.
+Use the project from [Accept or reject an order](../decide-orders/). Its internal `OpenShop` command records three mugs in `ShopOpened`. Each accepted one-mug order records `OrderPlaced`, and the shop's state subtracts one. At zero, `PlaceOrder` replies `Sold out` without recording an event. [Plan the mug shop](../) describes the behavior we're building.
+
+## History and the current answer
+
+After opening the shop and accepting one order, we have two recorded facts and two mugs available. The query keeps a separate row for the answer. A row is one shop's query data, identified by that shop's UUID.
+
+| Recorded history | AvailableStock answer |
+| --- | --- |
+| `ShopOpened`, openingStock 3 | 3 mugs |
+| Same opening, then one `OrderPlaced` | 2 mugs |
+| Same opening, then three `OrderPlaced` | 0 mugs |
+| Same history after a sold-out attempt | 0 mugs |
+
+The rows above are successive checkpoints for the same shop. The history retains the opening and accepted orders; the query row replaces its previous count. There is no sold-out event to apply. Rejection leaves both the recorded history and the derived stock unchanged.
+
+The calculation that maintains this answer is called a projection. For this query, it copies the count already calculated by `ShopEntity`; it doesn't subtract another mug.
+
+## A query row for each shop
+
+Give your agent this task from the project root. The commands remain internal, so the tests will open the shop and place orders without adding shop command HTTP routes.
+
+```text wrap
+Follow the project's active NeoHaskell guidance. Add AvailableStock in src/Shop/Queries/AvailableStock.hs, using CounterView as the query pattern. Return shopId and availableMugs from ShopEntity. Use shopId as queryId and replace the row with the current entity values in combine. Make this stock query public using the starter's access functions.
+
+Declare the query in Shop/Feature.hs. It reads ShopEntity on ShopOpened.Event and OrderPlaced.Event. Keep Counter working and leave shop command HTTP unchanged.
+
+In a fresh test store, run OpenShop, then PlaceOrder for the same shop. Exercise the query updater and read its answer: first 3 mugs, then 2. Accept two more orders and check 0. Try a sold-out order and an unopened shop ID; check their replies and that neither adds history or changes the stock answer. Wait for projection updates in asynchronous tests. Run neo test.
+```
+
+Start the source review with the row declaration in `src/Shop/Queries/AvailableStock.hs`.
+
+```haskell wrap
+data AvailableStock = AvailableStock {
+  shopId :: Uuid,
+  availableMugs :: Int
+}
+```
+
+These are the fields returned to a caller. `shopId` is the identifier returned when the shop was opened, not a new identifier for each read. `availableMugs` is a whole number. The module also needs the imports, access functions, and derivation marker from the Counter query pattern. Before `deriveQuery`, `canAccess = publicAccess` allows anonymous query access and `canView = publicView` allows its rows to be returned. That is appropriate for the shop's public stock count.
+
+```haskell wrap
+deriveQuery ''AvailableStock [''ShopEntity]
+
+instance QueryOf ShopEntity AvailableStock where
+  queryId shop = shop.shopId
+  combine shop _ =
+    Update AvailableStock {
+      shopId = shop.shopId,
+      availableMugs = shop.availableMugs
+    }
+```
+
+The paired apostrophes before the type names are Haskell syntax for referring to those types during code generation. `deriveQuery` supplies the supporting instances for `AvailableStock` and declares `ShopEntity` as its contributing entity type. The `QueryOf` instance describes how that entity supplies the row.
+
+`queryId` chooses which row to update. `combine` receives the current shop and the previous query row. The underscore ignores that previous row because this answer needs only the shop's current values. `Update` replaces the row with the record inside the braces. After the first accepted order, the shop already has two mugs, so the replacement row also has two.
+
+## The events that refresh the answer
+
+The query's declaration in `src/Shop/Feature.hs` connects it to changes in the shop. This excerpt belongs inside a slice, such as `slice "Show available stock" do`.
+
+```haskell wrap
+query @AvailableStock do
+  readsFrom @ShopEntity do
+    onEvent @ShopOpened.Event
+    onEvent @OrderPlaced.Event
+```
+
+The `@` selects a type for each declaration. `readsFrom` names the entity supplying the state, while `onEvent` names each event payload that should trigger a refresh. Both inputs matter: opening establishes three mugs, and accepted orders reduce the count. Declaring the entity in `deriveQuery` alone doesn't subscribe this slice to its events.
+
+With the model saved as `event-model.json`, run `neo inspect sync` from the project root and reload the graphical IDE, or open it with `neo ide`. In **Ungrouped**, use **Fit View** and locate `AvailableStock`. Follow the incoming event connections from `ShopOpened` and `OrderPlaced`. Compare them with the two `onEvent` lines. The diagram lets you review what refreshes the query; the `combine` excerpt explains what answer it writes.
+
+## Reading an updated answer
+
+Run the application with `neo run` and open its [built-in API documentation](http://localhost:8080/docs). Find `GET /queries/available-stock` under the queries. Use **Try it out** and **Execute** to read the collection. A newly started tutorial application has no opened shop, so its `items` array is empty. The tests use their own stores; their shop is not added to this running application.
+
+The same query also provides `GET /queries/available-stock/{id}` for one row. Once a shop has been opened in the running application, use its returned shop ID as `id`. This route returns the row itself. The collection route wraps rows in `items`, alongside `total`, `hasMore`, and `effectiveLimit`. A missing row returns 404; an empty collection has no rows to return. Adding a browser-callable shop command is separate work.
+
+Review the tests with your agent to follow an actual shop through the query. After `OpenShop`, check three mugs. After the first accepted `PlaceOrder`, check two. After the third, check zero, then compare both the history and stock answer before and after the sold-out attempt. Check `Shop not found` separately with an unopened UUID. Reading a query does not record another order.
+
+Query updates run asynchronously. An accepted command means its events were recorded; it doesn't mean the HTTP query has already refreshed. A read made immediately afterward may still show the earlier count. Read again until the expected value appears, and give automated checks a bounded wait that fails if it never does. The order decision uses the shop's state to accept or reject, so a shopper seeing an older count cannot make a sold-out order succeed.
