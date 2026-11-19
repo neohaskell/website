@@ -154,3 +154,129 @@ StarterConfig launch contract exist. Re-run the full ticket, including failure,
 completion, cleanup and rendered IDE checks. Framework implementation and article
 authoring were not started. Existing ignored evidence and the separate query
 persistence claim remain untouched.
+
+## Owner amendment and local-service verification
+
+Nick subsequently deferred fake/test mode and approved a controlled local
+service path, then requested autonomous writing wherever possible. That amendment
+supersedes the fake-mode requirement as an authoring gate. The earlier fake-mode
+failures remain evidence, not prerequisites for this revised exercise.
+
+### Executed outbound path
+
+A copy-on-write copy of the retained project was made at
+`.agents-state/integration-map/local-provider/project`. Experiments changed only
+this copy. Its application uses fresh MyShop.MugOrder and MyShop.Shipment
+modules, an in-memory store and explicit loopback binding. All retained projects,
+frozen definitions and histories remain unchanged. The copied project's active
+source-matched guidance identifies framework revision
+`414602b9510a92dfac647bc68d6afadfb594502c`.
+
+Neo 0.18.0 `build --ci` built the new application successfully. The executable
+launches without application arguments. `EventModel.withPort 8099` and
+`EventModel.withHost "127.0.0.1"` set the verification listener explicitly. An
+attempt to pass `--port 8099` failed at configuration parsing, while setting PORT
+alone left the transport at 8080. Do not teach either as an established port
+selection route here.
+
+The supplied Integration.Http Request posts the accepted new order payload to a
+fixture bound to `127.0.0.1:9443`. No provider credentials or external endpoints
+are configured. The fixture is a controlled HTTP server, not an integration
+provider implementation or framework fake. Contrary to an initial reading of a
+module comment, the actual get/post operations used here allow plain HTTP. The
+separate getSecure/sendSecure path enforces HTTPS. No TLS bypass, global trust
+change or certificate setup was needed.
+
+The app owns response decoding and maps a returned status to RecordShipment. The
+shipment command has its own entity, decision and history. The application must
+register that receiving command with InternalTransport. A WebTransport-only
+receiver compiles and exposes an HTTP command, but the integration's callback
+fails at runtime with `Command dispatch handler unavailable`. The source's
+IncludesInternalTransport check explains that result. Correcting the new
+receiver to InternalTransport made the complete callback path run. Do not edit
+a deployed receiver's transports to retrofit this; create a new command identity.
+
+The repeatable Python harness records exact requests and responses, fixture
+calls, application logs and shutdown. It executes the newly built application
+and checks these distinct results:
+
+| Scenario | Order acceptance | Shipment result |
+| --- | --- | --- |
+| Provider returns 200 and booked | Accepted | ShipmentStatus converges to booked |
+| Provider returns 503 | Accepted | App maps response to provider-failed; ShipmentStatus converges to that value |
+| Provider returns a value refused by the shipment decision | Accepted | Dispatcher logs command rejection; no ShipmentStatus row exists |
+
+A provider's 503 response reached onSuccess in this run. The callback's name does
+not imply business success or a 2xx response. The app's status check is essential.
+The noRetry setting made one request in each exercised status scenario. Source
+inspection still exposes an off-by-one risk on textual transport-error retries;
+this run does not prove noRetry always means one attempt. HTTP retries,
+dispatcher processing and receiving-command rejection remain separate concerns.
+No exactly-once or durable-delivery guarantee follows from these results.
+
+The source order and shipment streams use the same example UUID but belong to
+different entities. Query convergence is asserted after command acceptance,
+with a bounded exponential-backoff wait. A 404 after a logged receiver rejection
+is evidence of no query row in that controlled case, not a general distributed
+completion protocol. Provider records and structured application logs are saved
+alongside the query results.
+
+### Executed supplied timer check
+
+A separate native harness calls Integration.runInbound on supplied Timer.every
+with a 100 ms interval and records callback count. It observed three callbacks
+after a 250 ms interval. AsyncTask.cancel followed by waitCatch joined the
+worker; a further 250 ms produced no additional callbacks, yielding `(3,3,3)`.
+This ran through `nix develop --command cabal exec -- runghc` in the isolated
+project. It exercises the supplied timer and cancellation/join, not a shipment
+query, typed worker registration or arbitrary resource release. The harness
+records submissions only; it does not pretend those callbacks are accepted
+business commands.
+
+### Remaining native IDE and inbound contracts
+
+Native Neo 0.18.0 `inspect integrations`, `inspect sync` and `ide --port 2330
+--ci` were exercised against this isolated project. A real Chromium capture
+shows BookShipment and its command target. However, inspection reports
+`handlesEvents: []` for the payload-typed handler despite its executable Feature
+onEvent registration. Source sync supplies no MugOrderPlaced-to-BookShipment
+edge. It also represents the reactive command-emitting handler as `kind:
+"inbound"`. The IDE source maps Reactive to inbound; the inspector discovers
+handled events through case-arm scanning rather than the typed declaration.
+This is a concrete mismatch between executed registration and inferred model,
+not evidence that the HTTP workflow failed. A manual drag attempt did not
+establish the missing saved edge. No graph was manufactured to conceal it.
+
+The supplied Timer.every returns legacy Integration.Inbound. Model-backed
+inbound TH requires Config -> TypedInbound Outputs. The inspected facade offers
+asInbound in the other direction, but no supported inverse bridge was found.
+The testbed's typed periodic worker is a handwritten loop, not supplied
+Timer.every. Teaching the planned supplied timer plus executable typed DSL and
+native IDE nodes would therefore require an API route not established here.
+It must not become beginner provider implementation by accident.
+
+Fake mode is no longer the blocker. The revised native prerequisite remains
+open because the approved beginner scope also requires faithful native IDE
+connections and the supplied inbound path. No public article was authored or
+claimed through that open prerequisite. The remaining checks are narrowly
+identified; no compilation or source-only result is substituted for them.
+Framework implementation remains out of scope. Resource release also remains
+unverified and belongs to the later resource guide's own acceptance.
+
+### Evidence and review
+
+Ignored `.agents-state/integration-map/local-provider` contains generate.py,
+check_runtime.py, runtime-final.log, runtime-results.json, provider-calls.json,
+app-runtime.log, build logs, TimerCheck.hs in the copied project, timer-3.log,
+source-inspection JSON, native IDE screenshots and DOM captures. Earlier failed
+attempts and pre-final runtime receipts were preserved. The independent
+technical review is technical-path-review.md. Its source-backed findings about
+plain HTTP, InternalTransport, callback status handling and the untyped timer
+were reconciled with runtime evidence. No external provider request, framework
+edit, translation, push or deployment was performed.
+
+The configured await-work skill path and searches in the installed skill roots
+were unavailable. No claim was made that it loaded. Finite native checks used
+explicit deadlines and exponential backoff, and owned subprocesses were joined
+and cleaned up. The separate query-persistence claim and website server were
+preserved.
