@@ -1,76 +1,92 @@
 ---
 title: Set up your agent
-description: Prepare your development environment, install the NeoHaskell agent skills, and build a first behavior you can check.
+description: Install NeoHaskell workflow skills, locate guidance for your project's framework revision, and give your agent a bounded first task.
 tableOfContents:
   minHeadingLevel: 2
   maxHeadingLevel: 2
 prev: true
-next: false
+next: true
 ---
 
-<p class="docs-lead">Prepare your environment and give your AI agent a small, well-defined first task.</p>
+An agent needs both a way to approach the work and accurate information about the code it will change. NeoHaskell supplies these separately: shared **skills** guide development tasks, while project guidance describes the APIs for the exact framework revision your application uses.
 
-Start with [The work behind the code](../introduction/) if commands, decisions, events, and queries are new to you. This guide uses the same shop example: accept an order when stock is available, and reject it when the shop is sold out.
+Use the project from [Create a project](./create-project/), open at its root directory containing `neo.json`. [Run the application](./run/) covers the first build, and [Find your project files](./project-files/) shows where Counter's behavior lives. You don't need to change Counter to prepare your agent.
 
-## Prepare your environment <a id="prepare-your-environment" />
+## Workflow skills in the project <a id="install-agent-skills" />
 
-The **Neo CLI** creates, builds, runs, and tests an application. Its [prerequisites and installation instructions](https://github.com/neohaskell/NeoHaskell/blob/cacc8069070721539ae0aac53286ce9492e906a5/neo/README.md#prerequisites) name Nix and Git; the documented source installation also uses Rust's Cargo. Follow the [project creation and run guide](https://github.com/neohaskell/NeoHaskell/blob/cacc8069070721539ae0aac53286ce9492e906a5/docs/agent/project-and-cli.md#create-and-run-an-application) to create your application repository before installing agent skills.
+A skill is a set of instructions your coding agent can load for a particular job. The [NeoHaskell skills collection](https://github.com/neohaskell/skills) includes guidance for understanding an application, implementing a feature, and checking its behavior. Installing it gives the agent those instructions; it doesn't add an ordering feature or change the running application.
 
-To inspect the Counter application first, read the [starter's requirements and quickstart](https://github.com/neohaskell/NeoHaskell/blob/cacc8069070721539ae0aac53286ce9492e906a5/neo/starter/README.md#requirements). Its default event store is in memory: recorded events disappear when the process ends. The [storage guide](https://github.com/neohaskell/NeoHaskell/blob/cacc8069070721539ae0aac53286ce9492e906a5/docs/agent/storage.md) explains persistent storage options.
+Neo 0.18.0 includes an installer for this collection. From your project root, run:
 
-These links describe the inspected framework revision. Use the instructions that match the version your application pins. The agent-skills installer separately requires **Node.js 22.20 or newer**.
-
-Before continuing, have your application repository open and your coding agent ready to work in it. The current skills collection supports **Claude Code** and **Codex**.
-
-## Install agent skills <a id="install-agent-skills" />
-
-The NeoHaskell skills give your coding agent project-specific guidance. Run this command from your application's Git root:
-
-```sh title="Terminal" wrap
-npx skills add neohaskell/skills --skill '*'
+```sh
+neo skills setup --tool codex --ci
 ```
 
-The installer asks which agent and installation scope to use. Select the complete collection so related skills and resources are available together. Keep the installed files and lockfile with your project.
+This selects Codex and installs the complete collection without interactive questions. Neo fetches the skills from GitHub, so it needs a network connection. Without a `--skill` filter, related skills and their supporting resources are installed together.
 
-The command and installer requirements come from the [NeoHaskell skills README](https://github.com/neohaskell/skills/blob/0ff0872d554e79d955f4c92f9b905056b908e9ae/README.md), checked on 9 November 2026. Consult the [current installation instructions](https://github.com/neohaskell/skills#readme) for updates.
+Neo also has installation targets for Claude Code, Kiro, and Cursor. The [collection's own installation instructions](https://github.com/neohaskell/skills#install) describe its separate installer for Claude Code and Codex. Use one installation route for your project; the command above uses Neo's built-in route.
 
-## Describe a first task <a id="describe-a-first-task" />
+In your editor, open `.agents/skills/neohaskell-feature-pipeline/SKILL.md`. If your editor hides directories beginning with a dot, open that path directly. The file starts with the skill's identity:
 
-Give the agent the behavior you want, including what should happen when the command cannot be accepted. You can use this task for the shop example:
-
-```text title="Example task for your agent" wrap
-Let a customer order one ceramic mug.
-
-Accept the order only when the quantity is positive and enough stock is available.
-
-Record an accepted order as OrderPlaced, and provide a query for remaining stock.
-
-If there is not enough stock, reject the command without recording an accepted-order event.
-
-Check both accepted and rejected outcomes.
+```yaml wrap
+name: neohaskell-feature-pipeline
 ```
 
-Start with this one behavior. Add payments, shipping, and other conditions as separate changes once you can check the first result.
+This is the name from the file's opening metadata. Below it, the instructions connect understanding the application, implementing a change, and verifying the result. The name lets you request that workflow explicitly. Its default scope includes the application's interface, so a task limited to backend behavior should say so.
 
-## Check the result <a id="check-the-result" />
+Keep the installed project skills with your application's version-controlled files so another developer or agent has the same instructions. Treat later skill updates as a separate change you can review.
 
-Ask the agent to demonstrate both an accepted order and a rejected order. For each case, start from the stock shown below and compare the result with the model.
+## Guidance for the code you have <a id="prepare-your-environment" />
 
-| Starting stock | Command | Expected event | Stock afterward |
-| --- | --- | --- | --- |
-| 3 mugs | Order 1 mug | `OrderPlaced` | 2 mugs |
-| 0 mugs | Order 1 mug | No accepted-order event | 0 mugs |
+Shared workflow instructions don't determine which NeoHaskell APIs your project has. That comes from the framework revision selected by your project settings, introduced in [Create a project](./create-project/#review-the-project-settings).
 
-Also check that zero or negative quantities are rejected. Technical checks help you catch implementation mistakes; you still decide whether the behavior matches what your application should do.
+Open the root `AGENTS.md` in your editor. Neo's generated instruction points the agent to `.neo/agent-guidance/active.md` before changing NeoHaskell APIs. Open that file too. When guidance is available, its opening metadata includes:
 
-If a result is unexpected, describe the difference to the agent using the same vocabulary: the command, the decision, the event, and the query. That gives you a concrete behavior to correct.
+```yaml
+status: ready
+```
 
-For syntax, testing guidance, release notes, or help, use [Resources and project status](../resources/).
+The following `source-sha` field identifies the framework commit, and a link opens the corresponding guidance index. The long identifier belongs to your project's framework source; it is independent of the shared skills collection's version. Follow that index when you or your agent need an API definition.
 
-<section class="docs-plan" data-pagefind-ignore>
+Neo synchronizes this guidance during `neo build`, `neo run`, and `neo test`. If the index reports that guidance is unavailable, fix the source or network problem it names, then run `neo guidance retry` from the project root. Check the index again before asking the agent to implement an API change.
 
-## Page plan <a id="page-plan" />
+You can check that your agent is using both kinds of instructions with a read-only request:
 
-This page will retain its existing agent installation guidance, shop task, and accepted-versus-rejected checks while linking environment preparation and first-run work to dedicated pages. It will distinguish shared workflow skills from guidance matched to the application's framework revision, explain the supported agent choices for the documented CLI version, and verify the installed instructions in the project. The first request will remain small enough for the reader to judge before entering the application tutorial.
+> Without changing files, read AGENTS.md and .neo/agent-guidance/active.md. Report the framework revision and open its guidance index. Then read .agents/skills/neohaskell-feature-pipeline/SKILL.md and explain which instructions describe the APIs and which describe the development workflow.
 
-</section>
+Compare its answer with the files in your editor. Naming a skill and locating the matching API guidance are concrete checks you can make before giving the agent an implementation task.
+
+## A first behavior to describe <a id="describe-a-first-task" />
+
+For the mug shop from [The work behind the code](../introduction/), accepting an order commits mugs to the customer and reduces available stock. A useful first task states that promise and what must happen when the order cannot be accepted.
+
+The request below is an example for when you begin the shop, rather than a change to make to Counter during setup. It limits the first implementation to backend behavior:
+
+```text wrap
+Use neohaskell-feature-pipeline for backend behavior only.
+Let a customer order ceramic mugs in a requested quantity.
+Accept only positive quantities when enough stock is available.
+Record an accepted order as OrderPlaced and provide a query for remaining stock.
+Reject other quantities without recording OrderPlaced or reducing stock.
+Check acceptance, insufficient stock, zero, and negative quantities.
+Keep payments, shipping, and a frontend outside this change.
+```
+
+`OrderPlaced` is the event name chosen for this example. The quantity is an input to the command, so the decision must check it even when a screen would normally prevent entering zero. Payments and shipping can become separate changes after this behavior works.
+
+## Evidence for the result <a id="check-the-result" />
+
+Before implementation, agree on cases that distinguish acceptance from rejection. Each row below is an independent example starting with the stock shown, rather than a sequence of orders:
+
+Acceptance records `OrderPlaced`; every rejection below records no `OrderPlaced` and leaves stock unchanged.
+
+| Stock before | Quantity | Result and stock after |
+| --- | --- | --- |
+| 3 mugs | 1 | Accept; 2 mugs |
+| 0 mugs | 1 | Reject; 0 mugs |
+| 3 mugs | 4 | Reject; 3 mugs |
+| 3 mugs | 0 or negative | Reject; 3 mugs |
+
+These numbers are example inputs, not required configuration values. Ask the agent to show the decision and its tests alongside the observed query answers. For rejection, inspect both the absence of an accepted-order event and the unchanged stock. A stock answer alone doesn't establish why an order was refused.
+
+[Find your project files](./project-files/) used the same inspection pattern for Counter: read the rejection condition, the accepted event's state update, and the test beside the intended behavior. Technical checks can catch implementation mistakes; deciding whether these cases express the shop's promise remains your work.
