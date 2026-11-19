@@ -1,17 +1,84 @@
 ---
 title: "neo.json and dependencies"
-description: "Page plan. Which project settings control generated build files and framework versions?"
-tableOfContents: false
-pagefind: false
-prev: false
-next: false
-head:
-  - tag: meta
-    attrs:
-      name: robots
-      content: noindex
+description: "Project metadata, framework source and dependencies, and the build files Neo generates from them."
 ---
 
-## Page plan <a id="page-plan" />
+import ProjectManifestFlow from '@components/learn/ProjectManifestFlow.astro';
 
-This page will describe `neo.json` name, version, neo-version, project type, metadata, license default, and dependency entries, separating these from runtime environment settings. A small complete manifest and field table will explain generated Cabal and Nix ownership and link supported dependency forms. A source-selection section will identify the local framework override as an advanced development setting, while release compatibility remains explicit rather than equating main with a published version.
+`neo.json` is the project manifest in your application's root directory. It tells Neo what package you are building, which NeoHaskell source to use, and which additional packages it needs. If you reached this reference before creating an application, [Create a project](../../../getting-started/create-project/) introduces the generated starter.
+
+These settings describe the project that gets built. Ports, credentials and other values loaded when the application starts belong in [runtime configuration](../).
+
+## The manifest and generated files
+
+Neo reads `neo.json` before `neo build`, `neo run` and `neo test`. It reconciles the manifest with the modules in `src/` and writes the build configuration. For a shop named `mug-shop`, that relationship looks like this:
+
+<ProjectManifestFlow />
+
+Edit the manifest rather than maintaining a second set of dependency declarations in `mug-shop.cabal`, `cabal.project` or `flake.nix`. Neo regenerates those files; manual edits can be overwritten on the next reconciliation. Cabal describes the package and build targets, while Nix supplies the development environment. The generated `cabal.project` connects Cabal to the selected package sources.
+
+Here is a complete manifest for an executable shop, with no additional dependencies:
+
+```json wrap
+{
+  "name": "mug-shop",
+  "version": "0.1.0",
+  "neo-version": "414602b9510a92dfac647bc68d6afadfb594502c",
+  "type": "executable",
+  "description": "An online mug shop",
+  "author": "Mug Shop Team",
+  "license": "Apache-2.0",
+  "dependencies": {}
+}
+```
+
+The starter may omit fields that have defaults. `neo new` writes `MIT` as its license; the `Apache-2.0` fallback applies only when `license` is omitted. Choose the license intended for your project.
+
+The two version fields have different jobs. `version` identifies your shop package. `neo-version` selects the NeoHaskell source used to build it; the example pins a full Git commit. Keep the source chosen by your starter unless you intend to update it.
+
+<div class="manifest-fields">
+
+| Field | Meaning and default |
+| --- | --- |
+| `name` | Required package name, also used for the generated `.cabal` filename. |
+| `version` | Required version string for your package. |
+| `neo-version` | Required NeoHaskell Git reference or full 40-character commit SHA. |
+| `type` | `executable` by default, or `library`. A library has no generated application launcher target. |
+| `description` | Optional package description. |
+| `author` | Optional package author. |
+| `license` | Package license identifier. Defaults to `Apache-2.0` when omitted. |
+| `dependencies` | Object mapping package names to dependency strings. Defaults to an empty object. |
+
+</div>
+
+Neo supplies the core dependencies itself, so an empty `dependencies` object does not mean the application has no libraries. The `neo` dependency name is reserved and is skipped during dependency resolution; select NeoHaskell through `neo-version`.
+
+A manifest uses ordinary JSON: quote field names and string values, and omit comments and trailing commas. Unknown fields are ignored, so a misspelled optional field can silently fall back to its default. Review the names as well as the JSON syntax.
+
+## Dependency sources
+
+Each entry adds a package to the generated build configuration. The key is the package name, with a `hackage:` prefix when selecting Hackage explicitly. The value chooses a version range or a source location. These are alternative entry forms, not packages every shop needs:
+
+<div class="dependency-forms">
+
+| Form | Example entry | Resolution |
+| --- | --- | --- |
+| NeoPackages | `"some-package": "^1.2.3"` | Looks up the package in NeoPackages and selects a matching upstream version tag. |
+| Hackage | `"hackage:some-package": "^1.2.3"` | Converts the range into a Cabal dependency constraint. |
+| Git | `"some-package": "git:https://example.com/team/some-package.git#main"` | Uses the repository and reference after `#`. |
+| GitHub | `"some-package": "github:team/some-package#main"` | Expands the owner/repository shorthand into a GitHub URL. |
+| Local directory | `"some-package": "file:../some-package"` | Uses a package directory relative to the project. |
+
+</div>
+
+The names and repositories above illustrate the syntax. Use the actual package name and an available source when adding a dependency. A bare package name searches NeoPackages; it does not fall back to Hackage when the package is absent. Git and GitHub entries default to `main` when no reference is supplied. Use a commit SHA after `#` when you need a fixed source rather than a moving branch. Local directories must be available to anyone building the project.
+
+Version ranges use npm-style syntax, including `^1.2.3`, `~1.2.3`, exact `1.2.3`, and `>=1.2.3 <2.0.0`. For example, `^1.2.3` allows versions from 1.2.3 up to, but excluding, 2.0.0. Write that form in `neo.json`, rather than Cabal's `^>=` notation. The [dependency parser](https://github.com/neohaskell/neohaskell/blob/414602b9510a92dfac647bc68d6afadfb594502c/neo/src/reconcile/dep_spec.rs) defines the supported forms.
+
+After changing the manifest, run `neo --ci build` from the project root. Neo resolves the sources and regenerates the build files before Cabal builds the package. A successful build checks that the selected packages compile together. Run `neo --ci test` to check your application's behavior after the dependency change; [Neo commands](../../cli/) explains those command boundaries.
+
+## Framework source and compatibility
+
+`neo-version` accepts a Git reference such as a branch or tag, or a full commit SHA. A branch such as `main` can resolve to different code later. A published Neo CLI version, a framework Git reference and your application's `version` are separate identities; sharing a number does not establish compatibility. Keep the generated starter and its selected framework source together, then build and test deliberately when updating them.
+
+For advanced work on NeoHaskell itself, `NEO_NEOHASKELL_SOURCE` overrides `neo-version`. Its value must be an absolute path to a readable Git checkout. Neo resolves that checkout's committed `HEAD` and uses it for both Cabal and Nix sources. Uncommitted framework edits are not the selected revision. Unset the variable to return to the source specified by your manifest. This is a development override, not an application runtime setting or a substitute for checking release compatibility.
