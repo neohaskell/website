@@ -1,0 +1,23 @@
+<div class="decision-boundary" role="img" aria-label="Command, shop state and request context feed a decision description. The interpreter supplies controlled operations and returns proposed events. Only after storage records OrderPlaced does an integration contact the shipping provider.">
+  <div class="inputs"><span data-diagram-role="command">PlaceOrder</span><span>Shop: 1 mug</span><span>Request context</span></div>
+  <div class="connection" aria-hidden="true"><svg viewBox="0 0 20 32"><path d="M10 0V28M4 22L10 28L16 22"/></svg></div>
+  <div class="stage"><strong>Decision description</strong><span>Stock above zero: propose OrderPlaced</span></div>
+  <div class="connection" aria-hidden="true"><svg viewBox="0 0 20 32"><path d="M10 0V28M4 22L10 28L16 22"/></svg></div>
+  <div class="stage interpreter"><strong>Interpreter</strong><span>UUID and protected-value operations when requested</span><span>Result: proposed events</span></div>
+  <div class="connection"><svg viewBox="0 0 20 32" aria-hidden="true"><path d="M10 0V28M4 22L10 28L16 22"/></svg><span>Storage checks and append</span></div>
+  <div class="stage" data-diagram-role="event"><strong>Recorded OrderPlaced</strong></div>
+  <div class="connection" aria-hidden="true"><svg viewBox="0 0 20 32"><path d="M10 0V28M4 22L10 28L16 22"/></svg></div>
+  <div class="stage" data-diagram-role="integration"><strong>Shipping integration</strong><span>Run provider work separately</span></div>
+</div>
+<style>
+.decision-boundary{margin:32px 0;font-size:16px;line-height:1.5;}
+.inputs{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;}
+.inputs span,.stage{border:1px solid var(--sl-color-hairline);border-radius:8px;padding:12px 16px;}
+.stage{display:flex;flex-direction:column;gap:8px;text-align:center;}
+.stage strong{font-size:16px;font-weight:500;}
+[data-diagram-role]{color:var(--diagram-ink);background:var(--diagram-surface);border-color:var(--diagram-line);}
+.connection{display:flex;align-items:center;justify-content:center;gap:8px;min-height:40px;}
+.connection svg{width:20px;height:32px;fill:none;stroke:var(--sl-color-gray-2);stroke-width:1.5;flex-shrink:0;}
+.interpreter{border-style:dashed;}
+@media(max-width:480px){.inputs{flex-direction:column;align-items:center;}.stage{padding:12px;}.connection{font-size:16px;}}
+</style>

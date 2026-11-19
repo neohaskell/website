@@ -1,17 +1,78 @@
 ---
-title: "Pure decisions and effects"
-description: "Page plan. What does purity mean when a decision needs context or generated values?"
-tableOfContents: false
-pagefind: false
-prev: false
-next: false
-head:
-  - tag: meta
-    attrs:
-      name: robots
-      content: noindex
+title: Pure decisions and effects
+description: Separate business acceptance, controlled decision interpretation and external work through the mug shop's order and shipment.
+prev: true
+next: true
 ---
 
-## Page plan <a id="page-plan" />
+import DecisionBoundary from '@components/learn/DecisionBoundary.astro';
 
-This page will separate constructing a decision from interpreting it and performing effects. A boundary figure will place command data, current entity state, and request context beside the decision description, with UUID generation and protected-value operations in the interpreter. It will explain which inputs must be controlled for repeatable tests and why purity does not prove the intended business behavior. Network integrations will lead to the workflow explanation and task guide.
+The mug shop has one mug left. A customer asks to buy it, and the shop must decide whether to accept the order. Arranging shipment is a different job: it contacts a provider, can take time, and can fail even after the shop has accepted the order.
+
+A **pure function** calculates a result from its inputs without performing external work. NeoHaskell uses this separation to keep the stock rule readable and testable on its own. The command's decision constructs a description of acceptance or rejection. The runtime interprets that description, checks storage conditions, and records the accepted events. An integration can then react to those recorded facts and perform business side effects such as booking shipment.
+
+[Accept or reject an order](/tutorial/decide-orders/) builds the stock rule. Here we'll examine what purity means around that rule, including the controlled operations that happen when a decision is interpreted.
+
+## From a decision to a recorded fact
+
+The decision receives three inputs: the command data, the entity's current state if it exists, and the request context. For `PlaceOrder`, those mean the selected shop, its available stock, and information about the caller. The stock-only rule doesn't need the caller's identity; an ownership rule would need to inspect it.
+
+<DecisionBoundary />
+
+The figure follows an accepted order. A sold-out decision instead ends with a rejection and proposes no events. Even an accepting decision has not yet recorded anything: the executor must still satisfy the stream conditions and store the events. [Command outcomes](/concepts/command-outcomes/) explains that distinction.
+
+Once `OrderPlaced` is recorded, an outbound integration can request shipment. This puts the provider call after acceptance rather than hiding it inside the stock condition. A provider failure is then a shipping outcome to handle, while the accepted order remains part of the shop's history.
+
+## The inputs belong to the rule
+
+The ordinary single-tenant command contract has this shape, with the application's concrete types left as type variables:
+
+```haskell wrap
+command
+  -> Maybe entity
+  -> RequestContext
+  -> Decision event
+```
+
+`Maybe entity` distinguishes an existing entity from one with no history. The mug-shop decision rejects `Nothing` with `Shop not found`. For `Just shop`, it checks `shop.availableMugs > 0`. At one mug, it proposes an `OrderPlaced`; at zero, it rejects with `Sold out`.
+
+These are inputs for reasoning, not values the decision silently fetches from a database or a browser. The executor loads the entity before calling the decision. Request context is also supplied explicitly. Keep that context distinct from `DecisionContext`, which supplies capabilities to the interpreter rather than information about the caller.
+
+A test can therefore supply the one-mug state directly and inspect the proposed event without starting HTTP or contacting a shipping provider. Supplying zero stock tests a different branch of the same rule. Purity makes those cases easier to isolate; it doesn't tell us whether the rule is the right one. A perfectly repeatable condition such as `availableMugs > 1` would still reject the last valid mug. The agreement with the shop owner determines what the test should expect.
+
+## Describing work and interpreting it
+
+`Decision` is a structured description. Its operations include accepting, rejecting, requesting a UUID, and protecting or transforming a protected value. Constructing that description is separate from running the operations it contains.
+
+The interpreter's public signature makes the next boundary visible:
+
+```haskell wrap
+runDecision
+  :: DecisionContext
+  -> Decision event
+  -> Task Text (CommandResult event)
+```
+
+`DecisionContext` supplies the UUID generator. `CommandResult` carries either an acceptance with proposed events and stream conditions, or a rejection reason. `Task Text ...` describes execution that can fail with a text error. Returning a task is not itself a successful execution of it.
+
+For example, requesting a fresh UUID in a decision does not calculate a fixed identifier from the command. When the interpreter reaches that operation, it runs the supplied generator and passes the result into the rest of the decision. Tests that assert a particular identifier should supply a known generator result. A test that needs several generated identifiers must supply the intended sequence.
+
+Protected values make the distinction more visible. Interpreting protection performs cryptographic work and collects new keys. Transforming an existing protected value can require key lookup. The key-aware interpreter, `runDecisionWithKeys`, accepts that lookup capability; `runDecision` does not provide an existing-key store. These operations can fail independently of a business rejection. [Erase a protected value](/guides/storage/erase-protected-values/) explains the separate key lifecycle.
+
+So "pure decisions" describes the separation of the business description from its execution. It is not a promise that the whole command pipeline performs no effects, nor a universal compiler guarantee that application code cannot escape the intended boundary. The [decision implementation](https://github.com/neohaskell/NeoHaskell/blob/414602b9510a92dfac647bc68d6afadfb594502c/core/service/Decider.hs) defines the supported operations and their interpreter.
+
+## External work has its own outcome
+
+An integration is the application boundary for business side effects. In our shipping example, the application maps a recorded order into the provider's input. Provider work runs as a task, and its output can become a command for a separate shipment entity. That receiving command makes its own decision before a shipment event can be recorded.
+
+There are therefore several outcomes to distinguish. The shop may reject the order before any shipping work begins. An accepted order may be followed by a provider failure. A successful provider response may still be followed by rejection of the receiving command. None of those later results rewrites the shop's earlier acceptance into a rejection.
+
+[Workflows across entities](../event-driven-workflows/) develops those separate histories and decisions. [Tasks and effects](/reference/core/tasks/) covers sequencing and failure handling for the work itself. Keeping the two contracts separate means that a successful task is not mistaken for business acceptance, and business acceptance is not mistaken for completed external work.
+
+## Repeatable checks at each boundary
+
+For the stock rule, control the command, entity state and request context. Check one mug, zero mugs and a missing shop, then inspect the exact proposed events or rejection reason. If the decision requests generated values, control those interpreter capabilities too. Protected-value tests also need deliberate key states and a distinction between semantic results and randomized ciphertext.
+
+A decision test does not prove storage or shipping. Check recorded history through the command executor, and check provider work separately against a controlled service with known responses. For a shipment workflow, inspect the receiving command's result and recorded shipment state as well as the provider response. [Test shop behavior](/tutorial/test-behavior/) already separates decision checks from stored-command and running-query checks for this reason.
+
+Finally, replay is reconstruction from recorded events. It applies entity updates; it does not rerun the original order decision or book shipment again as part of calculating stock. Keeping external actions out of that calculation lets us recover the shop's state without repeating its business side effects.
