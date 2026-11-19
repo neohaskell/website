@@ -1,0 +1,13 @@
+<div class="collection-total" role="img" aria-label="Quantities 2, 0 and 3 are filtered to 2 and 3, priced at 12 each to give 24 and 36, then reduced from zero to a total of 60.">
+  <div class="stage"><span>Quantities</span><div class="cells"><b>2</b><b>0</b><b>3</b></div></div>
+  <div class="link">takeIf (&gt; 0)<span aria-hidden="true">↓</span></div>
+  <div class="stage"><span>Ordered quantities</span><div class="cells"><b>2</b><b>3</b></div></div>
+  <div class="link">map (* 12)<span aria-hidden="true">↓</span></div>
+  <div class="stage"><span>Line totals</span><div class="cells"><b>24</b><b>36</b></div></div>
+  <div class="link">reduce (+) 0<span aria-hidden="true">↓</span></div>
+  <div class="answer"><span>Total</span><strong>60</strong></div>
+</div>
+<style>
+.collection-total{margin:2rem 0;padding:1.5rem;border:1px solid var(--sl-color-hairline);border-radius:.5rem;font-size:16px;line-height:1.6;display:flex;flex-direction:column;align-items:center;gap:.75rem}.stage{display:flex;align-items:center;justify-content:space-between;gap:2rem;width:100%;max-width:25rem}.cells{display:flex;gap:.5rem}.cells b{margin:0;font:inherit;font-variant-numeric:tabular-nums;min-width:2.5rem;text-align:center;border:1px solid var(--sl-color-gray-3);border-radius:.25rem;padding:.25rem}.link{display:flex;flex-direction:column;align-items:center;font-family:var(--sl-font-mono);font-size:16px}.link span{line-height:1.2;color:var(--sl-color-gray-3)}.answer{display:flex;align-items:center;justify-content:space-between;width:100%;max-width:25rem;border-top:2px solid var(--sl-color-text-accent);padding-top:.75rem}.answer strong{font-size:1.5rem;font-weight:500}@media(max-width:600px){.collection-total{padding:1rem}.stage{gap:1rem}}
+:global(.collection-signatures){overflow-x:auto;margin:1.5rem 0}:global(.collection-signatures table){display:table;min-width:100%;width:max-content}:global(.collection-signatures td code){white-space:nowrap;overflow-wrap:normal}:global(.collection-signatures th),:global(.collection-signatures td){max-width:26rem}
+</style>

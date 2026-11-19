@@ -1,17 +1,179 @@
 ---
 title: "Arrays and maps"
-description: "Page plan. How do I transform a collection or look up an item?"
-tableOfContents: false
-pagefind: false
-prev: false
-next: false
-head:
-  - tag: meta
-    attrs:
-      name: robots
-      content: noindex
+description: "Construct, find, transform, combine and reduce collections with Array and Map."
 ---
 
-## Page plan <a id="page-plan" />
+import CollectionTotal from '@components/learn/CollectionTotal.astro';
 
-This page will group `Array` and `Map` operations by constructing, finding, transforming, combining, and reducing data. Signature tables will make pipeline argument order explicit, while small examples will show an absent index or key, empty collections, and a simple total. Related operations will have anchors on one page, with linked canonical definitions and edge cases, rather than a separate route for every exported function.
+An `Array value` keeps values in a sequence, addressed by a zero-based index. A `Map key value` associates each distinct key with one value. In a mug shop, an array can hold ordered quantities while a map holds stock by mug color. Use this page to read collection expressions in agent-written code and check what happens when a position or key is absent.
+
+As in [Values and common types](../), `Core` supplies the types, while qualified modules supply operations:
+
+```haskell
+import Core
+import Array qualified
+import Map qualified
+```
+
+Both collections are immutable: operations return a new collection, leaving the original value available. In a pipeline, the collection is usually the final argument. `stock |> Map.get "blue"` means `Map.get "blue" stock`.
+
+## Constructing collections <a id="constructing" />
+
+These example quantities and colors are chosen for the shop. The type annotations tell the compiler how to interpret the literals, including an empty collection with no elements from which to infer its type.
+
+```haskell
+quantities :: Array Int
+quantities = [2, 0, 3]
+
+stock :: Map Text Int
+stock = Map.fromArray [("blue", 3), ("white", 0)]
+```
+
+The brackets construct an `Array` under the starter's `OverloadedLists` extension. Each pair passed to `Map.fromArray` contains a key and its value. Repeated keys keep the last value: `Map.fromArray [("blue", 3), ("blue", 9)] |> Map.get "blue"` gives `Just 9`.
+
+<div class="collection-signatures">
+
+| Operation | Signature | Meaning |
+| --- | --- | --- |
+| `Array.empty` | `Array a` | No elements |
+| `Array.repeat` | `Int -> a -> Array a` | Repeat a value; a nonpositive count gives an empty array |
+| `Array.initialize` | `Int -> (Int -> a) -> Array a` | Generate values from zero-based indices |
+| `Map.empty` | `Map k v` | No key/value entries |
+| `Map.fromArray` | `Ord k => Array (k, v) -> Map k v` | Build entries, replacing earlier duplicate keys |
+
+</div>
+
+Here and below, `a`, `k` and `v` are type parameters. Map key operations require ordered keys (`Ord k`); the source also spells out the implied equality constraint. [Types and records](../../language/types/) explains those constraints.
+
+## Finding a value <a id="finding" />
+
+A missing position or key is represented by `Nothing`. A present value is wrapped in `Just`, including a stored zero. That distinction lets the application decide whether absence means an unknown product or a default quantity.
+
+```haskell
+quantities |> Array.get 0
+-- Just 2
+
+quantities |> Array.get 3
+-- Nothing
+
+stock |> Map.get "white"
+-- Just 0
+
+stock |> Map.get "red"
+-- Nothing
+```
+
+<div class="collection-signatures">
+
+| Operation | Signature | Boundary behavior |
+| --- | --- | --- |
+| `Array.get` | `Int -> Array a -> Maybe a` | Negative or out-of-range index gives `Nothing` |
+| `Array.first`, `Array.last` | `Array a -> Maybe a` | Empty array gives `Nothing` |
+| `Array.find` | `(a -> Bool) -> Array a -> Maybe a` | First match, or `Nothing` |
+| `Map.get` | `Ord k => k -> Map k v -> Maybe v` | Absent key gives `Nothing` |
+| `Map.getOrElse` | `Ord k => k -> v -> Map k v -> v` | Use the supplied default for an absent key |
+| `Map.contains` | `Ord k => k -> Map k v -> Bool` | Test key presence |
+
+</div>
+
+For example, `stock |> Map.getOrElse "red" 0` gives `0`. It does not insert a red entry. Keep `Map.get` when the caller must distinguish missing stock information from a known zero. [Optional values and results](../results/) covers handling `Maybe` explicitly.
+
+## Transforming a collection <a id="transforming" />
+
+Suppose each mug costs 12 whole currency units. Starting with `[2, 0, 3]`, we can keep positive quantities, turn each quantity into a line total, and then combine those totals. Each step consumes the preceding result; the original quantities remain unchanged.
+
+<CollectionTotal />
+
+```haskell
+lineTotals :: Array Int
+lineTotals =
+  quantities
+    |> Array.takeIf (\n -> n > 0)
+    |> Array.map (\n -> n * 12)
+-- [24, 36]
+```
+
+`takeIf` tests each element, preserving the order of those that pass. `map` changes each remaining value without changing the number of elements.
+
+<div class="collection-signatures">
+
+| Operation | Signature | Result |
+| --- | --- | --- |
+| `Array.takeIf` | `(a -> Bool) -> Array a -> Array a` | Keep matching elements |
+| `Array.dropIf` | `(a -> Bool) -> Array a -> Array a` | Remove matching elements |
+| `Array.map` | `(a -> b) -> Array a -> Array b` | Transform every element |
+| `Array.indexedMap` | `(Int -> a -> b) -> Array a -> Array b` | Pass index before element |
+| `Map.mapValues` | `(a -> b) -> Map k a -> Map k b` | Transform values, preserving keys |
+
+</div>
+
+For example, `stock |> Map.mapValues (\n -> n + 1)` contains blue stock `4` and white stock `1`. Filtering or mapping an empty array returns an empty array; mapping an empty map returns an empty map.
+
+## Combining and updating <a id="combining" />
+
+Array combination preserves sequence. `quantities |> Array.append [1]` gives `[2, 0, 3, 1]`. The piped array comes before the argument to `append`.
+
+Map combination must resolve duplicate keys. `Map.merge left right` keeps the value from `left`, so the explicit argument wins in a pipeline:
+
+```haskell
+stock
+  |> Map.merge (Map.fromArray [("blue", 9)])
+  |> Map.entries
+-- [("blue", 9), ("white", 0)]
+```
+
+<div class="collection-signatures">
+
+| Operation | Signature | Effect on the returned collection |
+| --- | --- | --- |
+| `Array.append` | `Array a -> Array a -> Array a` | Piped array, then argument array |
+| `Array.push` | `a -> Array a -> Array a` | Add one element at the end |
+| `Array.set` | `Int -> a -> Array a -> Array a` | Replace an existing position; invalid index leaves it unchanged |
+| `Map.set` | `Ord k => k -> v -> Map k v -> Map k v` | Insert or replace one entry |
+| `Map.remove` | `Ord k => k -> Map k v -> Map k v` | Remove a key; absent key leaves it unchanged |
+| `Map.merge` | `Ord k => Map k v -> Map k v -> Map k v` | First argument wins duplicate keys |
+
+</div>
+
+`stock |> Map.set "blue" 4 |> Map.remove "white" |> Map.entries` gives `[("blue", 4)]`. Neither operation changes `stock` itself. Combining with an empty collection preserves the other collection.
+
+## Reducing to an answer <a id="reducing" />
+
+A reduction combines elements with a starting answer, often called the accumulator. Summing the quantities starts at zero:
+
+```haskell
+quantities |> Array.reduce (+) 0
+-- 5
+
+lineTotals |> Array.reduce (+) 0
+-- 60
+
+Array.empty @Int |> Array.reduce (+) 0
+-- 0
+```
+
+The starting answer is also the result for an empty collection. It should therefore express what an empty input means for this calculation.
+
+<div class="collection-signatures">
+
+| Operation | Signature | Callback order and traversal |
+| --- | --- | --- |
+| `Array.reduce` | `(a -> b -> b) -> b -> Array a -> b` | Element, accumulated answer; fold from the right |
+| `Array.foldl` | `(a -> b -> b) -> b -> Array a -> b` | Element, accumulated answer; fold from the left |
+| `Array.sumIntegers` | `Array Int -> Int` | Integer sum, starting at zero |
+| `Map.reduce` | `b -> (k -> v -> b -> b) -> Map k v -> b` | Starting answer first; callback receives key, value, answer |
+
+</div>
+
+For addition the two array folds agree. With an order-sensitive operation, inspect both the traversal and callback order. For `pair :: Array Int` containing `[2, 3]`, `pair |> Array.reduce (-) 0` gives `-1` (`2 - (3 - 0)`), while `pair |> Array.foldl (-) 0` gives `1` (`3 - (2 - 0)`). The left fold still passes the element before the accumulated answer.
+
+Map reduction has its own argument order:
+
+```haskell
+stock |> Map.reduce 0 (\_ quantity total -> quantity + total)
+-- 3
+```
+
+The underscore ignores the key. An empty map returns the starting `0`. `Map.entries`, `Map.keys` and `Map.values` return arrays ordered by key, rather than insertion order; `Map.reduce` folds from the right over that key order.
+
+The canonical [Array definitions](https://github.com/neohaskell/NeoHaskell/blob/414602b9510a92dfac647bc68d6afadfb594502c/core/core/Array.hs) also cover slicing, zipping and searching. The [Map definitions](https://github.com/neohaskell/NeoHaskell/blob/414602b9510a92dfac647bc68d6afadfb594502c/core/core/Map.hs) provide the complete key/value API.
