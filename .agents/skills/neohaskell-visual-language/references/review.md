@@ -12,11 +12,15 @@ Select lenses by the change. Inspect the full section in its reading context bef
 | Responsive behavior and access | The benefit and essential diagram content remain understandable on phones | Reading and model inspection remain usable with native scrolling and navigation | Desktop and phone in both themes; affected keyboard paths, focus, overflow, touch behavior, accessible names and reduced motion |
 | Consistency and implementation | New compositions fit the accepted page's craft without repeating every layout | Repeated concepts use a stable vocabulary without forcing all figures into one template | Compare affected occurrences, source owners and winning CSS; distinguish shared roles from justified surface differences |
 
+Trace success and failure separately: a failure must visibly stop or leave the successful path, rather than appear as an intermediate step on it. Keep wires clear of labels and connect them to their intended nodes.
+
 Apply the relevant existing teaching-example review to materially changed examples. A technically correct diagram can still need simplification. Every label, connector, control and animated step must help the intended explanation; main prose carries necessary context. Retain accessible names and meaningful domain labels while removing auxiliary text prohibited by `AGENTS.md`.
 
 ## Evidence and judgment
 
 For visual changes, compare equivalent before/after content and state on the repository's single development server. Follow `README.md` for restart and ownership checks. Use current browser tools and maintained checks; record missing coverage as unverified. For a change shared across homepage and docs, include both. Inspect more widths, browsers, languages, or states when affected behavior warrants them. Translation work still needs explicit scope.
+
+For a tall phone figure, verify a complete element crop as well as the normal-width, normal-height context capture. A screenshot can cut off an in-bounds SVG label at the viewport edge even when document overflow checks pass. Use a taller capture viewport at the same width for the complete figure, record it, and retain the normal phone context for reading and navigation.
 
 Geometry, contrast, copy checks and behavior tests answer bounded questions. They do not establish visual coherence, persuasive value, or comprehension. State the visible judgment separately, with the example that supports it. Likewise, a screenshot cannot prove keyboard behavior, an animation's timing, or runtime product capability.
 

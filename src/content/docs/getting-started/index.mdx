@@ -8,7 +8,11 @@ prev: true
 next: true
 ---
 
+import SetupDiagram from '../../../components/learn/SetupDiagram.astro';
+
 An agent needs both a way to approach the work and accurate information about the code it will change. NeoHaskell supplies these separately: shared **skills** guide development tasks, while project guidance describes the APIs for the exact framework revision your application uses.
+
+<SetupDiagram kind="agent" />
 
 Use the project from [Create a project](./create-project/), open at its root directory containing `neo.json`. [Run the application](./run/) covers the first build, and [Find your project files](./project-files/) shows where Counter's behavior lives. You don't need to change Counter to prepare your agent.
 

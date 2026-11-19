@@ -8,6 +8,8 @@ prev: true
 next: true
 ---
 
+import SetupDiagram from '../../../../components/learn/SetupDiagram.astro';
+
 Counter's documentation can send commands to your running application and show the answers it returns. That gives us a way to check the starter's behavior before changing its code. We'll create a counter named `Example counter`, add one to it, and read its value. Then we'll try an amount the application should refuse.
 
 This page uses the unchanged project from [Create a project](../create-project/), with the application still running as described in [Run the application](../run/). Open [http://127.0.0.1:8080/docs](http://127.0.0.1:8080/docs) and leave the application's terminal running throughout the example.
@@ -61,6 +63,8 @@ Click **Send** once. The response again has status `200 OK`, `tag` set to `Accep
 ## The query's answer <a id="the-querys-answer" />
 
 Commands and queries have different jobs, as explained in [Commands and queries](../../learn/). The increment command asks for a change. The Counter query supplies the values the application maintains from accepted changes. Reading it doesn't increment the counter again.
+
+<SetupDiagram kind="response" />
 
 ### All counters
 

@@ -1,0 +1,25 @@
+<div class="cli-result" data-teaching-figure="guide-cli" role="img" aria-label="At stock one, PlaceCliOrder is handled but rejected. Its process exits zero and its JSON tag is Rejected. A script that requires tag Accepted rejects this result. No event is recorded and one mug remains.">
+  <div class="invocation" data-diagram-role="command"><svg viewBox="0 0 48 48" aria-hidden="true"><rect x="4" y="4" width="40" height="40" rx="6"/><path d="M13 15L22 24L13 33M26 33H35"/></svg><code>PlaceCliOrder</code><span>Stock: 1 mug</span></div>
+  <svg class="split" viewBox="0 0 320 48" preserveAspectRatio="none" aria-hidden="true"><path d="M160 0V16H80V45M160 16H240V45M74 39L80 45L86 39M234 39L240 45L246 39"/></svg>
+  <div class="process"><span>Process completed</span><strong>exit 0</strong></div>
+  <div class="domain"><span>Order refused</span><strong>"tag": "Rejected"</strong></div>
+  <svg class="inspect" viewBox="0 0 320 40" preserveAspectRatio="none" aria-hidden="true"><path d="M240 0V16H160V37M154 31L160 37L166 31"/></svg>
+  <div class="gate"><svg viewBox="0 0 28 28" aria-hidden="true"><path d="M3 3L25 25M25 3L3 25"/></svg><code>.tag == "Accepted"</code><strong>false</strong></div>
+  <div class="stock">No event recorded. Still 1 mug.</div>
+</div>
+<style>
+.cli-result{--danger:#ffaaaa;display:grid;grid-template-columns:1fr 1fr;align-items:start;gap:16px 24px;max-width:560px;margin:32px auto;font-size:16px;line-height:1.5;}
+:global([data-theme='light']) .cli-result{--danger:#a51e2c;}
+.invocation{grid-column:1/-1;display:flex;flex-direction:column;align-items:center;gap:8px;color:var(--diagram-ink);}
+.invocation svg{width:48px;height:48px;fill:var(--diagram-surface);stroke:var(--diagram-ink);stroke-width:1.5;}
+.invocation svg path{fill:none;}
+.invocation span{color:var(--sl-color-gray-2);}
+code{font-size:16px;padding:0;border:none;background:none;}
+.split{grid-column:1/-1;display:block;width:100%;height:48px;fill:none;stroke:var(--sl-color-gray-3);stroke-width:1.5;}
+.process,.domain{display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center;min-width:0;}
+strong{font-size:18px;font-weight:500;}.domain strong{font-size:16px;overflow-wrap:anywhere;color:var(--danger);font-family:var(--sl-font-mono);}
+.inspect{grid-column:1/-1;width:100%;height:40px;fill:none;stroke:var(--sl-color-gray-3);stroke-width:1.5;}
+.gate{grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:12px;color:var(--danger);}
+.gate svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.5;}
+.stock{grid-column:1/-1;text-align:center;}
+</style>

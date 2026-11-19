@@ -10,6 +10,8 @@ prev: true
 next: true
 ---
 
+import SetupDiagram from '../../../../components/learn/SetupDiagram.astro';
+
 The project from [Create a project](../create-project/) contains Counter, a small application for creating named counters and changing their values. Its source files describe that behavior, but the application needs to be running before you can use it.
 
 Counter includes a documentation site where you can explore its commands and queries in your browser. We'll start the application and open that site, leaving the Counter code unchanged.
@@ -62,5 +64,7 @@ neo run
 After startup, reload the browser page to open the documentation again. Starting a second copy while the first is still running is different from restarting it: both copies would try to use port 8080. Stop the existing process before running another.
 
 The starter keeps its event history in memory. That means the events live in the running process rather than in durable storage. When the process ends, that history disappears. Counters you create during one run won't be there after a restart, and the query starts with no counters again.
+
+<SetupDiagram kind="process" />
 
 This doesn't change the event-history model explained in [Events and history](../../introduction/history/). An application can rebuild state from retained events, but it can't recover events that were never saved beyond the process. Restarting Counter leaves your source files intact; it's the starter's application data that is lost.

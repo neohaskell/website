@@ -8,6 +8,8 @@ prev: false
 next: true
 ---
 
+import TutorialMechanisms from '@components/learn/TutorialMechanisms.astro';
+
 A small shop has three ceramic mugs to sell. Each order is for one mug. As soon as the shop accepts an order, that mug is committed to the customer and is no longer available to the next shopper. The shop accepts the last mug's order and turns down the next one.
 
 In [Commands and queries](../learn/), customers could ask for different quantities. In this tutorial, every order asks for one mug, so we can follow what changes as the shop sells out. You can work out the behavior on this page before opening a project. When you're ready to build it with an agent, use the project prepared in [Set up your agent](../getting-started/).
@@ -17,6 +19,8 @@ In [Commands and queries](../learn/), customers could ask for different quantiti
 The customer sends a command we'll call `PlaceOrder`. It asks the shop to set aside one ceramic mug. The shop's decision checks how many mugs are available when that command arrives. With three in stock, it accepts the command and records one `OrderPlaced` event. The stock query answers two once it has incorporated that change. The history still contains the fact that the shop accepted an order.
 
 Now imagine ordering the last mug. The shop accepts it and records an `OrderPlaced` event. The next customer sends the same command and gets a sold-out rejection, which adds no event to the history. The stock query answers zero in both cases once it's up to date. That answer alone can't tell you whether the shop accepted the command. For that, check the decision and what it records.
+
+<TutorialMechanisms kind="plan" />
 
 ## Where the three mugs come from <a id="where-the-three-mugs-come-from" />
 

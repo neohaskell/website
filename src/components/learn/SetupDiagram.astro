@@ -1,0 +1,162 @@
+---
+interface Props {
+  kind: 'pin' | 'process' | 'response' | 'source' | 'agent' | 'failure';
+}
+const { kind } = Astro.props;
+const descriptions = {
+  pin: 'The project settings pin one framework revision. Later framework revisions do not move that pin. Neo combines the selected revision with project settings to generate build configuration.',
+  process: 'Counter keeps events inside its running process. Stopping the process loses those events. Starting a new process leaves the source files intact but starts with no counters.',
+  response: 'One accepted increment records CounterIncremented, then updates the query to value one. Reading the query again returns the value without sending another increment.',
+  source: 'IncrementCounter decides whether to accept. An accepted CounterIncremented event reaches Entity.update and the CounterView query. Zero is rejected before any increment event is recorded.',
+  agent: 'Shared workflow skills tell the agent how to work. Project settings select a framework revision whose API guidance tells it which APIs to use. Both inform the same agent task.',
+  failure: 'Setup reaches successive boundaries: the shell finds Neo, Neo finds the project, settings parse, then preparation and startup. A failure at an earlier boundary prevents reaching later boundaries. Correct the named boundary, then retry.',
+};
+---
+
+<div class:list={['setup-diagram', kind]} data-teaching-figure={`setup-${kind}`}>
+  {[false, true].map(narrow => {
+    const w = narrow ? 320 : 640;
+    const cls = narrow ? 'phone' : 'wide';
+    const suffix = `${kind}-${cls}`;
+    return <svg class={cls} viewBox={`0 0 ${w} ${kind === 'pin' ? (narrow ? 400 : 290) : kind === 'process' ? (narrow ? 430 : 300) : kind === 'response' ? (narrow ? 480 : 310) : kind === 'source' ? (narrow ? 560 : 350) : kind === 'agent' ? (narrow ? 445 : 300) : (narrow ? 440 : 280)}`} role="img" aria-label={descriptions[kind]}>
+      <defs>
+        <marker id={`setup-arrow-${suffix}`} markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0 0L6 3L0 6" class="wire" /></marker>
+      </defs>
+
+      {kind === 'pin' && <>
+        <path d={narrow ? 'M38 224H290' : 'M262 97H610'} class="wire" marker-end={`url(#setup-arrow-${suffix})`} />
+        <circle cx={narrow ? 80 : 316} cy={narrow ? 224 : 97} r="7" class="selected" />
+        <circle cx={narrow ? 176 : 438} cy={narrow ? 224 : 97} r="5" class="revision" />
+        <circle cx={narrow ? 268 : 560} cy={narrow ? 224 : 97} r="5" class="revision" />
+        <text x={narrow ? 80 : 316} y={narrow ? 261 : 133} text-anchor="middle">Selected</text>
+        <text x={narrow ? 232 : 500} y={narrow ? 261 : 133} text-anchor="middle">Later revisions</text>
+        <path d={narrow ? 'M35 31H221L237 47V133H35ZM221 31V47H237' : 'M20 37H197L213 53V130H20ZM197 37V53H213'} class="paper" />
+        <text x={narrow ? 55 : 40} y={narrow ? 65 : 72} class="code">neo.json</text>
+        <text x={narrow ? 55 : 40} y={narrow ? 101 : 108} class="code">neo-version</text>
+        <path d={narrow ? 'M237 94H268V178H80V215' : 'M213 97H306'} class="pin-wire" />
+        <text x={narrow ? 258 : 260} y={narrow ? 159 : 71} text-anchor="middle">Pin</text>
+        <path d={narrow ? 'M80 276V309H160V333' : 'M116 145V204H320V221M316 147V204'} class="wire" marker-end={`url(#setup-arrow-${suffix})`} />
+        <path d={narrow ? 'M160 341H284V386H36V341Z' : 'M199 229H441V275H199Z'} class="paper" />
+        <text x={narrow ? 160 : 320} y={narrow ? 370 : 258} text-anchor="middle">Build configuration</text>
+      </>}
+
+      {kind === 'process' && <>
+        <rect x={narrow ? 16 : 20} y="20" width={narrow ? 288 : 264} height="145" rx="8" class="process-boundary" />
+        <text x={narrow ? 36 : 40} y="53">Running Counter</text>
+        <path d={narrow ? 'M36 77H66V115H36ZM47 88H57M47 100H57M76 77H106V115H76ZM87 88H97M87 100H97' : 'M40 77H70V115H40ZM51 88H61M51 100H61M80 77H110V115H80ZM91 88H101M91 100H101'} class="event" />
+        <text x={narrow ? 126 : 130} y="100">Events in memory</text>
+        <text x={narrow ? 126 : 130} y="132">Counter value: 1</text>
+        <path d={narrow ? 'M160 174V193M160 225V244' : 'M296 92H315M351 92H370'} class="danger-wire" />
+        <path d={narrow ? 'M150 201L170 221M170 201L150 221' : 'M323 82L343 102M343 82L323 102'} class="danger-wire" />
+        <text x={narrow ? 186 : 334} y={narrow ? 216 : 143} text-anchor={narrow ? 'start' : 'middle'} class="danger-ink">Stop</text>
+        <rect x={narrow ? 16 : 382} y={narrow ? 254 : 20} width={narrow ? 288 : 238} height="114" rx="8" class="process-boundary" />
+        <text x={narrow ? 36 : 402} y={narrow ? 287 : 53}>New Counter process</text>
+        <text x={narrow ? 36 : 402} y={narrow ? 334 : 100}>No counters</text>
+        <path d={narrow ? 'M16 402H304' : 'M20 243H620'} class="wire" />
+        <text x={w / 2} y={narrow ? 427 : 278} text-anchor="middle">Source files stay on disk</text>
+      </>}
+
+      {kind === 'response' && <>
+        <rect x={narrow ? 24 : 20} y="24" width={narrow ? 272 : 164} height="66" rx="6" class="command" />
+        <text x={narrow ? 160 : 102} y="51" text-anchor="middle">Increment once</text>
+        <text x={narrow ? 160 : 102} y="77" text-anchor="middle" class="code">amount: 1</text>
+        <path d={narrow ? 'M160 99V128' : 'M193 57H225'} class="wire" marker-end={`url(#setup-arrow-${suffix})`} />
+        <path d={narrow ? 'M57 137H246L263 154V207H57ZM246 137V154H263' : 'M237 24H414L431 41V90H237ZM414 24V41H431'} class="event" />
+        <text x={narrow ? 160 : 334} y={narrow ? 180 : 64} text-anchor="middle">CounterIncremented</text>
+        <path d={narrow ? 'M160 216V254' : 'M442 57H480'} class="wire" marker-end={`url(#setup-arrow-${suffix})`} />
+        <text x={narrow ? 175 : 460} y={narrow ? 242 : 127} text-anchor={narrow ? 'start' : 'middle'}>Updates query</text>
+        <rect x={narrow ? 76 : 493} y={narrow ? 267 : 24} width={narrow ? 168 : 126} height="82" rx="6" class="query" />
+        <text x={narrow ? 160 : 556} y={narrow ? 290 : 48} text-anchor="middle">Value</text>
+        <text x={narrow ? 160 : 556} y={narrow ? 334 : 91} text-anchor="middle" class="value">1</text>
+        <path d={narrow ? 'M76 306H28V399H80M240 399H292V306H252' : 'M556 116V228H197M197 246H580V116'} class="query-wire" />
+        <path d={narrow ? 'M74 393L80 399L74 405M258 300L252 306L258 312' : 'M205 222L197 228L205 234M574 124L580 116L586 124'} class="query-wire" />
+        <rect x={narrow ? 88 : 45} y={narrow ? 375 : 203} width={narrow ? 144 : 140} height={narrow ? 48 : 63} rx="4" class="paper" />
+        <text x={narrow ? 160 : 115} y={narrow ? 405 : 241} text-anchor="middle">Read query</text>
+        <text x={narrow ? 160 : 372} y={narrow ? 465 : 286} text-anchor="middle">Read again: still 1</text>
+      </>}
+
+      {kind === 'source' && <>
+        <rect x={narrow ? 36 : 20} y="22" width={narrow ? 248 : 180} height="62" rx="6" class="command" />
+        <text x={narrow ? 160 : 110} y="47" text-anchor="middle" class="code">IncrementCounter</text>
+        <text x={narrow ? 160 : 110} y="72" text-anchor="middle">decide</text>
+        <path d={narrow ? 'M160 94V133' : 'M210 53H259'} class="wire" marker-end={`url(#setup-arrow-${suffix})`} />
+        <text x={narrow ? 179 : 236} y={narrow ? 119 : 28} text-anchor={narrow ? 'start' : 'middle'}>Positive</text>
+        <path d={narrow ? 'M52 145H252L268 161V201H52ZM252 145V161H268' : 'M271 22H457L473 38V84H271ZM457 22V38H473'} class="event" />
+        <text x={narrow ? 160 : 372} y={narrow ? 181 : 59} text-anchor="middle">CounterIncremented</text>
+        <path d={narrow ? 'M160 212V249' : 'M372 94V152'} class="wire" marker-end={`url(#setup-arrow-${suffix})`} />
+        <path d={narrow ? 'M74 261H246V329H74Z' : 'M286 164H458V232H286Z'} class="paper" />
+        <text x={narrow ? 160 : 372} y={narrow ? 289 : 192} text-anchor="middle" class="code">Entity.hs</text>
+        <text x={narrow ? 160 : 372} y={narrow ? 315 : 218} text-anchor="middle">update: + amount</text>
+        <path d={narrow ? 'M160 340V371' : 'M468 198H496'} class="wire" marker-end={`url(#setup-arrow-${suffix})`} />
+        <rect x={narrow ? 68 : 508} y={narrow ? 383 : 164} width={narrow ? 184 : 120} height="68" rx="6" class="query" />
+        <text x={narrow ? 160 : 568} y={narrow ? 411 : 192} text-anchor="middle">CounterView</text>
+        <text x={narrow ? 160 : 568} y={narrow ? 437 : 218} text-anchor="middle">Query answer</text>
+        <path d={narrow ? 'M36 53H16V494H84M116 494H278' : 'M110 94V283H201M233 283H452'} class="danger-wire" />
+        <path d={narrow ? 'M90 484L110 504M110 484L90 504' : 'M207 273L227 293M227 273L207 293'} class="danger-wire" />
+        <text x={narrow ? 68 : 135} y={narrow ? 478 : 191} text-anchor={narrow ? 'middle' : 'start'} class="danger-ink">Zero</text>
+        <text x={narrow ? 186 : 348} y={narrow ? 531 : 318} text-anchor="middle" class="danger-ink">Rejected: no event</text>
+      </>}
+
+      {kind === 'agent' && <>
+        <path d={narrow ? 'M24 21H260L276 37V94H24ZM260 21V37H276' : 'M20 25H243L259 41V102H20ZM243 25V41H259'} class="paper" />
+        <text x={narrow ? 44 : 40} y="56">Shared skills</text>
+        <text x={narrow ? 44 : 40} y="82">How to approach the work</text>
+        <path d={narrow ? 'M24 145H260L276 161V218H24ZM260 145V161H276' : 'M381 25H604L620 41V102H381ZM604 25V41H620'} class="paper" />
+        <text x={narrow ? 44 : 401} y={narrow ? 178 : 56}>Project API guidance</text>
+        <text x={narrow ? 44 : 401} y={narrow ? 204 : 82}>Which APIs are available</text>
+        <path d={narrow ? 'M284 58H306V291H160M150 228V291H160M160 291V315' : 'M139 112V173H320M500 112V173H320M320 173V202'} class="wire" marker-end={`url(#setup-arrow-${suffix})`} />
+        <path d={narrow ? 'M126 324H194V377H126ZM137 337H183M137 349H183M137 361H164' : 'M286 211H354V264H286ZM297 224H343M297 236H343M297 248H324'} class="paper" />
+        <text x={w / 2} y={narrow ? 412 : 295} text-anchor="middle">One bounded agent task</text>
+      </>}
+
+      {kind === 'failure' && <>
+        {(narrow ? [
+          {x: 32, y: 34, label: 'Shell finds Neo', clue: 'neo: command not found'},
+          {x: 32, y: 144, label: 'Project root', clue: 'No neo.json found'},
+          {x: 32, y: 254, label: 'Settings parse', clue: 'Failed to parse neo.json'},
+          {x: 32, y: 364, label: 'Build and start', clue: 'Tool or download error'},
+        ] : [
+          {x: 32, y: 34, label: 'Shell finds Neo', clue: 'neo: command not found'},
+          {x: 352, y: 34, label: 'Project root', clue: 'No neo.json found'},
+          {x: 352, y: 204, label: 'Settings parse', clue: 'Failed to parse neo.json'},
+          {x: 32, y: 204, label: 'Build and start', clue: 'Tool or download error'},
+        ]).map(({x, y, label, clue}, i) => <g>
+          <circle cx={x} cy={y} r="12" class="revision" />
+          <text x={x + 25} y={narrow ? y + 6 : y - 14}>{label}</text>
+          <path d={narrow
+            ? `M${x} ${y + 42}H${x + 16}M${x + 22} ${y + 36}L${x + 34} ${y + 48}M${x + 34} ${y + 36}L${x + 22} ${y + 48}`
+            : `M${x} ${y + 14}V${y + 30}M${x - 6} ${y + 34}L${x + 6} ${y + 46}M${x + 6} ${y + 34}L${x - 6} ${y + 46}`} class="danger-wire" />
+          <text x={x + (narrow ? 46 : 25)} y={y + (narrow ? 48 : 46)} class="danger-ink">{clue}</text>
+          {narrow && i < 3 && <path d={`M${x} ${y + 14}V${y + 94}`} class="wire" marker-end={`url(#setup-arrow-${suffix})`} />}
+          {narrow && i === 3 && <path d={`M${x} ${y + 14}V${y + 42}`} class="wire" />}
+        </g>)}
+        {!narrow && ['M48 34H336', 'M368 34H628V204H368', 'M336 204H48'].map(d => <path d={d} class="wire" marker-end={`url(#setup-arrow-${suffix})`} />)}
+      </>}
+    </svg>;
+  })}
+</div>
+
+<style>
+  .setup-diagram { --danger: #ffaaaa; color: var(--sl-color-text); margin: 32px 0; container-type: inline-size; }
+  :global([data-theme='light']) .setup-diagram { --danger: #a51e2c; }
+  svg { display: block; width: 100%; max-width: 640px; height: auto; margin: 0 auto; overflow: visible; }
+  svg.phone { display: none; }
+  text { fill: currentColor; font-family: var(--sl-font); font-size: 17px; }
+  .code { font-family: var(--sl-font-mono); }
+  .value { font-size: 32px; }
+  .wire, .paper, .revision, .process-boundary { fill: none; stroke: currentColor; stroke-width: 1.5; }
+  .revision { fill: var(--sl-color-bg); }
+  .process-boundary { stroke-dasharray: 5 4; }
+  .selected { fill: var(--sl-color-text); }
+  .pin-wire { fill: none; stroke: currentColor; stroke-width: 2.5; }
+  .command { fill: var(--diagram-command-surface); stroke: var(--diagram-command-line); stroke-width: 1.5; }
+  .event { fill: var(--diagram-event-surface); stroke: var(--diagram-event-line); stroke-width: 1.5; }
+  .query { fill: var(--diagram-query-surface); stroke: var(--diagram-query-line); stroke-width: 1.5; }
+  .query-wire { fill: none; stroke: var(--diagram-query-ink); stroke-width: 1.5; }
+  .danger-wire { fill: none; stroke: var(--danger); stroke-width: 2; }
+  svg .danger-ink { fill: var(--danger); }
+  @container (max-width: 639px) {
+    svg.wide { display: none; }
+    svg.phone { display: block; max-width: 360px; }
+  }
+</style>

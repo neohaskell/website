@@ -8,6 +8,8 @@ prev: true
 next: true
 ---
 
+import GuideAgentAgreement from '../../../../components/learn/GuideAgentAgreement.astro';
+
 An agent can change the mug shop's code, but deciding which orders the shop should accept remains your job. A useful task gives the agent that decision, the source it should work from, and the evidence you need to review the result. The conversation then has something more precise to return to than "it works."
 
 This guide uses the shop from [Add a feature safely](../../tutorial/change-safely/). Each online order buys one mug. Opening a shop records three mugs; two orders succeed, leaving one for customers buying in person. The next online order is rejected. If you arrived here directly, that page supplies the decision and tests used below. Install the project guidance through [Set up your agent](../../getting-started/) before asking an agent to change NeoHaskell APIs.
@@ -52,6 +54,8 @@ The native IDE helps inspect that scope. Run `neo ide`, open **Ungrouped**, and 
 ## When a successful build is the wrong answer
 
 Suppose the new PlaceOnlineOrder has not been deployed or locked yet. The agent reports that compilation succeeded, but its decision still accepts an order whenever stock is greater than zero. That expression is valid code. At stock one, however, it accepts the very order we agreed to reject. A compiler checks whether the program fits its types; the reserve agreement gives us the expected behavior.
+
+<GuideAgentAgreement />
 
 A correction should name the mismatch and preserve the agreement:
 

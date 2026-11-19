@@ -8,11 +8,15 @@ prev: true
 next: true
 ---
 
+import TutorialMechanisms from '@components/learn/TutorialMechanisms.astro';
+
 The shop can accept an order as long as it has a mug left. With one mug available, it accepts the order and commits the last mug. With zero, the same request gets a sold-out reply. We'll put that rule in a command and check the shop's recorded history after each attempt.
 
 Use the project from [Create the shop feature](../first-feature/). It already has an internal `OpenShop` command that records three mugs in `ShopOpened`, and the shop's state subtracts one mug for each `OrderPlaced`. [Plan the mug shop](../) describes the cases we're building against.
 
 The shop in this tutorial has not been deployed yet. Once a command, event or query is deployed, keep its implementation unchanged and add a new slice for different behavior, as [Add a feature safely](../change-safely/) demonstrates.
+
+<TutorialMechanisms kind="decision" />
 
 ## Which shop receives the order?
 

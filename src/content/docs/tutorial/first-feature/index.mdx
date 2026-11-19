@@ -8,6 +8,8 @@ prev: true
 next: true
 ---
 
+import TutorialMechanisms from '@components/learn/TutorialMechanisms.astro';
+
 The mug shop starts with three ceramic mugs. In [Plan the mug shop](../), we agreed that opening the shop records how many mugs came into stock and each accepted order removes one. We'll give those two facts a place in the code, then check how the shop's stock changes when we apply them in order.
 
 Use the working Counter project from [Set up your agent](../../getting-started/). We'll add the shop beside Counter so we can compare our changes with a feature we already know.
@@ -38,6 +40,8 @@ Read this as a declaration that `CreateCounter` can produce the event defined in
 ## The shop's first event
 
 The shop needs an equivalent starting point. We'll use an internal setup command named `OpenShop` that records `ShopOpened` for a new shop. Each shop has an identifier so events for that shop can be kept together. The opening event carries the identifier and the opening count. That count belongs in the recorded history because replay needs to recover the same starting stock.
+
+<TutorialMechanisms kind="replay" />
 
 If the Counter app is still running, stop it with Ctrl+C in its terminal. The test suite starts its own copy to check Counter, and the IDE can stay open. Give your agent the shop plan and this task from the project root.
 

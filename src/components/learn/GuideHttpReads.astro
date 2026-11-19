@@ -1,0 +1,32 @@
+<div class="http-reads" data-teaching-figure="guide-http" role="img" aria-label="Send PlaceOnlineOrder once. Acceptance records OrderPlaced. AvailableStock updates asynchronously. Retry the GET stock read while waiting, not the POST command.">
+  <div class="http-flow">
+  <div class="operation" data-diagram-role="command">
+    <svg viewBox="0 0 64 64" aria-hidden="true"><rect x="10" y="10" width="44" height="44" rx="6"/><path d="M22 32H42M32 22V42"/></svg>
+    <strong>PlaceOnlineOrder</strong><span>POST once</span>
+  </div>
+  <div class="connection"><span>Records</span><svg viewBox="0 0 56 16" aria-hidden="true"><path d="M0 8H52M45 1L52 8L45 15"/></svg></div>
+  <div class="operation" data-diagram-role="event">
+    <svg viewBox="0 0 64 64" aria-hidden="true"><path d="M14 6H39L52 19V58H14ZM39 6V19H52M23 29H43M23 39H43M23 49H35"/></svg>
+    <strong>OrderPlaced</strong><span>Retained fact</span>
+  </div>
+  <div class="connection"><span>Updates later</span><svg viewBox="0 0 56 16" aria-hidden="true"><path d="M0 8H52M45 1L52 8L45 15"/></svg></div>
+  <div class="operation answer" data-diagram-role="query">
+    <svg viewBox="0 0 88 80" aria-hidden="true"><circle cx="44" cy="40" r="29"/><path class="retry" d="M77 55A37 37 0 1 1 79 27M68 26L79 27L82 16"/><text x="44" y="47" text-anchor="middle">2</text></svg>
+    <strong>AvailableStock</strong><span>GET: retry this read</span>
+  </div>
+  </div>
+</div>
+<style>
+.http-reads{container-type:inline-size;margin:32px 0;}
+.http-flow{display:grid;grid-template-columns:minmax(0,1fr) 56px minmax(0,1fr) 72px minmax(0,1fr);align-items:center;gap:8px;font-size:16px;line-height:1.5;}
+.operation{display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center;min-width:0;color:var(--diagram-ink);}
+.operation strong{font-size:16px;font-weight:500;overflow-wrap:anywhere;}
+.operation span{color:var(--sl-color-gray-2);}
+.operation svg{width:64px;height:64px;fill:var(--diagram-surface);stroke:var(--diagram-line);stroke-width:1.5;}
+.operation svg path{fill:none;stroke:var(--diagram-ink);}
+.answer svg{width:88px;height:80px;}
+.answer svg text{fill:var(--diagram-ink);stroke:none;font:24px var(--sl-font);}
+.connection{display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center;color:var(--sl-color-gray-2);}
+.connection svg{width:100%;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;}
+@container(max-width:560px){.http-flow{grid-template-columns:1fr;gap:16px;}.connection{gap:4px;}.connection svg{width:40px;height:32px;transform:rotate(90deg);}.operation strong{overflow-wrap:normal;}}
+</style>

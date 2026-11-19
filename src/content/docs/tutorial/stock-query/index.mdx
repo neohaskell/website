@@ -8,6 +8,8 @@ prev: true
 next: true
 ---
 
+import TutorialMechanisms from '@components/learn/TutorialMechanisms.astro';
+
 A shopper needs to know how many mugs are available. The shop's history can explain how that number came about, but the shopper shouldn't have to count its events. We'll give the application a query that returns the shop's identifier and its current available stock.
 
 Use the project from [Accept or reject an order](../decide-orders/). Its internal `OpenShop` command records three mugs in `ShopOpened`. Each accepted one-mug order records `OrderPlaced`, and the shop's state subtracts one. At zero, `PlaceOrder` replies `Sold out` without recording an event. [Plan the mug shop](../) describes the behavior we're building.
@@ -15,6 +17,8 @@ Use the project from [Accept or reject an order](../decide-orders/). Its interna
 ## History and the current answer
 
 After opening the shop and accepting one order, we have two recorded facts and two mugs available. The query keeps a separate row for the answer. A row is one shop's query data, identified by that shop's UUID.
+
+<TutorialMechanisms kind="query" />
 
 | Recorded history | AvailableStock answer |
 | --- | --- |

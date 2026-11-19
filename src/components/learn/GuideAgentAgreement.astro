@@ -1,0 +1,40 @@
+<div class="agent-agreement" data-teaching-figure="guide-ai-workflow" role="img" aria-label="Two possible undeployed PlaceOnlineOrder decisions compile. With stock one, greater than zero accepts an event and breaks the reserve agreement. Greater than one rejects and records no event, meeting the agreement.">
+  <div class="agreement">Agreed at stock 1: reject, keep 1 mug</div>
+  {[false, true].map(correct => <section>
+    <div class="candidate"><span class="build"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 10L8 15L17 5"/></svg>Compiles</span><code>PlaceOnlineOrder</code></div>
+    <svg class="comparison" viewBox="0 0 300 190" aria-hidden="true">
+      <circle cx="30" cy="58" r="22" class="stock"/>
+      <text x="30" y="64" text-anchor="middle">1</text>
+      <path d="M52 58H91M84 51L91 58L84 65" class="wire"/>
+      <path d="M143 12L193 58L143 104L93 58Z" class="decision"/>
+      <text x="143" y="64" text-anchor="middle" class="condition">{correct ? '> 1' : '> 0'}</text>
+      <path d="M195 58H235M228 51L235 58L228 65" class="wire"/>
+      {correct ? <g class="stop"><path d="M260 36L278 58L260 80L242 58ZM252 58H269"/></g> : <g class="event"><path d="M251 30H275L287 42V85H251ZM275 30V42H287M259 53H279M259 64H279M259 75H271"/></g>}
+      <text x="30" y="137" text-anchor="middle">Stock</text>
+      <text x="143" y="137" text-anchor="middle">Condition</text>
+      <text x="260" y="137" text-anchor="middle">{correct ? 'Rejected' : 'Accepted'}</text>
+      <text x="150" y="178" text-anchor="middle" class={correct ? 'outcome' : 'danger-text'}>{correct ? 'No event, 1 mug remains' : 'OrderPlaced, 0 mugs remain'}</text>
+    </svg>
+    <div class:list={['verdict', { mismatch: !correct }]}><svg viewBox="0 0 20 20" aria-hidden="true"><path d={correct ? 'M3 10L8 15L17 5' : 'M4 4L16 16M16 4L4 16'}/></svg>{correct ? 'Meets the agreement' : 'Breaks the agreement'}</div>
+  </section>)}
+</div>
+<style>
+.agent-agreement{--danger:#ffaaaa;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:24px;margin:32px 0;font-size:16px;line-height:1.5;}
+:global([data-theme='light']) .agent-agreement{--danger:#a51e2c;}
+.agreement{grid-column:1/-1;font-size:18px;text-align:center;}
+section{margin:0;min-width:0;}
+.candidate{display:flex;flex-direction:column;align-items:center;gap:8px;}
+.candidate code{font-size:16px;background:none;border:none;padding:0;color:var(--diagram-command-ink);}
+.build,.verdict{display:flex;align-items:center;justify-content:center;gap:8px;}
+.build svg,.verdict svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.5;}
+.build{color:var(--sl-color-gray-2);}
+.comparison{display:block;width:100%;max-width:332px;margin:8px auto;overflow:visible;}
+.comparison text{font:18px var(--sl-font);fill:currentColor;}
+.comparison .condition{font-family:var(--sl-font-mono);}
+.stock,.decision{fill:var(--sl-color-bg);stroke:var(--sl-color-gray-3);stroke-width:1.5;}
+.wire{fill:none;stroke:var(--sl-color-gray-3);stroke-width:1.5;}
+.event{fill:var(--diagram-event-surface);stroke:var(--diagram-event-ink);stroke-width:1.5;}
+.stop{fill:none;stroke:var(--diagram-command-ink);stroke-width:1.5;}
+.comparison .danger-text,.mismatch{color:var(--danger);fill:var(--danger);}
+@media(max-width:760px){.agent-agreement{grid-template-columns:1fr;gap:24px;}}
+</style>

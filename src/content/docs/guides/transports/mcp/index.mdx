@@ -8,11 +8,15 @@ prev: true
 next: true
 ---
 
+import GuideMcpPaths from '../../../../../components/learn/GuideMcpPaths.astro';
+
 An AI agent can request an order and read available stock through the Model Context Protocol, or MCP. The agent is a caller of the mug shop: `PlaceMcpOrder` still decides whether to accept the order, and `AvailableStock` still supplies the stock answer. Changing the interface doesn't move those decisions into the agent.
 
 This guide uses the project from [Expose an HTTP API](../), with the reserve policy from [Add a feature safely](../../../tutorial/change-safely/). The shop opens with three mugs, each accepted order consumes one, and online orders leave one for in-person sales. If you're arriving directly, [Place an order over HTTP](../../../tutorial/http-orders/) explains the command declarations and shop setup used here.
 
 MCP calls a change-making operation a **tool** and readable information a **resource**. NeoHaskell exposes registered commands as tools and registered queries as resources. Here we'll add the local, standard-input/output transport and inspect a conversation with it.
+
+<GuideMcpPaths />
 
 ## The same shop behind another interface
 

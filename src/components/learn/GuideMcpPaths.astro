@@ -1,0 +1,26 @@
+<div class="mcp-paths" data-teaching-figure="guide-mcp" role="img" aria-label="An MCP tools/call request invokes PlaceMcpOrder. Acceptance records OrderPlaced, which asynchronously updates AvailableStock. A separate resources/read request returns the stock collection. Reading does not place another order.">
+  <div class="endpoint tool"><code>tools/call</code></div>
+  <svg class="across forward" viewBox="0 0 32 16" aria-hidden="true"><path d="M0 8H29M22 1L29 8L22 15"/></svg>
+  <div class="node command" data-diagram-role="command"><svg viewBox="0 0 56 56" aria-hidden="true"><rect x="8" y="8" width="40" height="40" rx="6"/><path d="M18 28H38M28 18V38"/></svg><strong>PlaceMcpOrder</strong></div>
+  <div class="down records"><span>Records</span><svg viewBox="0 0 16 32" aria-hidden="true"><path d="M8 0V29M1 22L8 29L15 22"/></svg></div>
+  <div class="node event" data-diagram-role="event"><svg viewBox="0 0 56 56" aria-hidden="true"><path d="M13 4H34L46 16V52H13ZM34 4V16H46M21 25H38M21 34H38M21 43H32"/></svg><strong>OrderPlaced</strong></div>
+  <div class="down updates"><span>Updates later</span><svg viewBox="0 0 16 32" aria-hidden="true"><path d="M8 0V29M1 22L8 29L15 22"/></svg></div>
+  <div class="endpoint resource"><code>resources/read</code><span>Stock collection</span></div>
+  <svg class="across back" viewBox="0 0 32 16" aria-hidden="true"><path d="M32 8H3M10 1L3 8L10 15"/></svg>
+  <div class="node query" data-diagram-role="query"><svg viewBox="0 0 56 56" aria-hidden="true"><circle cx="28" cy="28" r="23"/><path d="M18 22H38M18 29H38M18 36H31"/></svg><strong>AvailableStock</strong></div>
+</div>
+<style>
+.mcp-paths{display:grid;grid-template-columns:minmax(0,1fr) 32px minmax(0,1fr);grid-template-rows:auto auto auto auto auto;align-items:center;gap:16px 8px;max-width:560px;margin:32px auto;font-size:16px;line-height:1.5;}
+.node{display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center;min-width:0;color:var(--diagram-ink);}
+.node strong{font-size:16px;font-weight:500;overflow-wrap:anywhere;}
+.node svg{width:56px;height:56px;fill:var(--diagram-surface);stroke:var(--diagram-ink);stroke-width:1.5;}
+.node svg path{fill:none;}
+.endpoint{display:flex;flex-direction:column;align-items:center;gap:8px;min-width:0;text-align:center;}
+.endpoint code{font-size:16px;overflow-wrap:anywhere;background:none;border:none;padding:0;}
+.endpoint span,.down{color:var(--sl-color-gray-2);}
+.tool{grid-column:1;grid-row:1;}.forward{grid-column:2;grid-row:1;}.command{grid-column:3;grid-row:1;}.records{grid-column:3;grid-row:2;}.event{grid-column:3;grid-row:3;}.updates{grid-column:3;grid-row:4;}.resource{grid-column:1;grid-row:5;}.back{grid-column:2;grid-row:5;}.query{grid-column:3;grid-row:5;}
+.down{display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center;}
+.down svg{width:16px;height:32px;}
+.across{width:32px;height:16px;}
+.across,.down svg{fill:none;stroke:var(--sl-color-gray-3);stroke-width:1.5;}
+</style>

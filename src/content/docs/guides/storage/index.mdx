@@ -14,6 +14,12 @@ An accepted order should still count after the application stops. The starter's 
 
 This guide uses the mug shop from [Add a feature safely](../../tutorial/change-safely/): it opens with three mugs, accepts orders while more than one remains, and reserves the final mug for in-person sales. We'll use the browser interface from [Expose an HTTP API](../transports/) to observe the same shop on both sides of a restart. If you completed [Run commands from a terminal](../transports/cli/), return to the preserved Web application composition for this guide. Keep the CLI command modules and their local event history untouched. Register `counterFlow`, `shopFlow`, and `onlineShopFlow` with Web, preserving the deployed domain files; include `StarterConfig` and the Web CORS configuration. The separate CLI composition is not a reason to rewrite any command's transports.
 
+`ShopOpened` and `OrderPlaced` are the recorded facts. `AvailableStock` maintains an answer derived from those facts. Keeping one does not mean that the other uses the same storage backend.
+
+<StorageRecovery />
+
+In the local configuration below, the events remain on disk while the query rows live in memory. Restarting loses those rows, but the query subscriber replays the retained events to rebuild them. It calculates two mugs from the opening three and one accepted order. Replay doesn't use **place-online-order** again or append another `OrderPlaced` event.
+
 ## A directory that outlives the process
 
 If the active `App.hs` is the CLI variant, preserve it and restore the Web configuration:
@@ -56,12 +62,6 @@ Now use **place-online-order** again. It should be accepted, leaving one mug. A 
 If the shop is missing after restart, check the selected store, `persistent`, and the directory from which the process was launched before opening anything new. If a query is briefly empty, allow it to catch up before concluding that the history is missing.
 
 ## History and the stock answer
-
-`ShopOpened` and `OrderPlaced` are the recorded facts. `AvailableStock` maintains an answer derived from those facts. Keeping one does not mean that the other uses the same storage backend.
-
-<StorageRecovery />
-
-In this configuration, the events remain on disk while the query rows live in memory. Restarting loses those rows, but the query subscriber replays the retained events to rebuild them. It calculates two mugs from the opening three and one accepted order. Replay doesn't use **place-online-order** again or append another `OrderPlaced` event.
 
 The same distinction is visible in the native IDE. With `event-model.json` saved, run `neo inspect sync` and open `neo ide`. Select `AvailableStock` in the model and inspect its connections from `ShopOpened` and `OrderPlaced`. Those are the inputs that rebuild the answer. The diagram still describes the same shop behavior after a storage change; it doesn't prove that your disk or database is retained. The restart exercise checks that part.
 

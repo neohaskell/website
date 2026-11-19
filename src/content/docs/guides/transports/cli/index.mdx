@@ -8,6 +8,8 @@ prev: true
 next: true
 ---
 
+import GuideCliResult from '../../../../../components/learn/GuideCliResult.astro';
+
 A terminal command can place an order through the same decision used by HTTP and MCP. The application CLI turns command fields into flags, invokes the decision, and prints its response. This is your application's interface. The `neo` development tool still creates, builds and tests the project; `neo` itself has no `shop place-cli-order` command.
 
 This guide uses the mug shop from [Expose MCP tools and resources](../mcp/). It opens with three mugs, accepts one-mug orders while more than one remains, and reserves the last mug for in-person sales. For the underlying behavior, see [Add a feature safely](../../../tutorial/change-safely/). We'll run a separate local CLI configuration so each invocation performs one operation and exits.
@@ -117,5 +119,7 @@ reply=$(LOG_LEVEL=Error nix develop --command cabal run -v0 all -- shop place-cl
 ```
 
 For the shop now at one mug, `jq` prints `false` and returns a nonzero status. A malformed JSON response also fails this check. This keeps the process result separate from the business result instead of assuming every completed invocation placed an order.
+
+<GuideCliResult />
 
 The application CLI uses a trusted local operator context. It bypasses the command authorization gate, while still running the domain decision that protects the last mug. Give access to this executable and its event directory only to operators who should have that authority. A terminal command is not an authenticated remote API, and this CLI transport doesn't expose query reads merely because the application defines `AvailableStock`.

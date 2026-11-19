@@ -8,6 +8,8 @@ prev: true
 next: true
 ---
 
+import GuideHttpReads from '../../../../components/learn/GuideHttpReads.astro';
+
 An HTTP API gives another program a way to request changes and read answers from the mug shop. The Web transport turns registered commands and queries into routes, and generates an OpenAPI contract describing those routes. We can inspect that contract and try requests in the running application's browser documentation.
 
 This guide uses the shop from [Add a feature safely](../../tutorial/change-safely/): it opens with three mugs, each order buys one, and online orders must leave one for in-person sales. If you're arriving directly, [Place an order over HTTP](../../tutorial/http-orders/) explains the existing command declarations and shop setup. Keep that project open; we won't create a second implementation of its decisions.
@@ -71,6 +73,8 @@ For **place-online-order**, send the same body once. It also returns an accepted
 ```
 
 Acceptance records the event before the query necessarily catches up. Read again if you still see three, or initially receive 404 after opening. An automated client should retry reads with a bounded wait rather than resend the command: another accepted order would buy another mug.
+
+<GuideHttpReads />
 
 Send **place-online-order** once more and wait for stock `1`. A third order returns status `400 Bad Request`:
 

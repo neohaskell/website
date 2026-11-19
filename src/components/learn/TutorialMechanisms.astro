@@ -1,0 +1,140 @@
+---
+interface Props {
+  kind: 'plan' | 'replay' | 'decision' | 'query' | 'http' | 'tests';
+}
+const { kind } = Astro.props;
+---
+
+<div data-teaching-figure={`tutorial-${kind}`} class:list={['tutorial-mechanism', { comparison: kind === 'plan' || kind === 'tests' }]}>
+  {kind === 'plan' && [false, true].map(soldOut => <section>
+    <h3>{soldOut ? 'After selling out' : 'Buying the last mug'}</h3>
+    <svg viewBox="0 0 320 310" role="img" aria-label={soldOut ? 'With zero mugs, PlaceOrder is rejected. No event is recorded and the stock answer remains zero.' : 'With one mug, PlaceOrder is accepted. OrderPlaced is recorded and the stock answer becomes zero.'}>
+      <text x="160" y="25" text-anchor="middle">{soldOut ? '0 mugs available' : '1 mug available'}</text>
+      <path d="M160 39V64" class="wire"/><path d="M155 58L160 64L165 58" class="wire"/>
+      <rect x="60" y="73" width="200" height="44" rx="6" class="command"/>
+      <text x="160" y="101" text-anchor="middle" class="command-ink code">PlaceOrder</text>
+      <path d="M160 117V144" class="wire"/>
+      <text x="160" y="168" text-anchor="middle" class={soldOut ? 'danger-ink' : ''}>{soldOut ? 'Rejected: Sold out' : 'Accepted'}</text>
+      {soldOut ? <>
+        <path d="M160 181V191M160 213V227M150 192L170 212M170 192L150 212" class="danger-stroke"/>
+        <text x="160" y="250" text-anchor="middle">No event recorded</text>
+      </> : <>
+        <path d="M160 181V199" class="wire"/><path d="M155 193L160 199L165 193" class="wire"/>
+        <path d="M66 207H238L254 223V257H66ZM238 207V223H254" class="event"/>
+        <text x="160" y="238" text-anchor="middle" class="event-ink code">OrderPlaced</text>
+        <path d="M160 257V273M155 267L160 273L165 267" class="wire"/>
+      </>}
+      <text x="160" y="297" text-anchor="middle" class="query-ink">Stock answer: 0</text>
+    </svg>
+  </section>)}
+
+  {kind === 'replay' && <svg class="single" viewBox="0 0 320 480" role="img" aria-label="Replay starts at stock zero. ShopOpened sets stock to three. Each of three retained OrderPlaced events subtracts one, producing two, one, then zero. Replay applies events without placing new orders.">
+    <text x="28" y="24">Recorded events</text><text x="271" y="24" text-anchor="middle">Stock</text>
+    <circle cx="271" cy="62" r="22" class="state"/><text x="271" y="68" text-anchor="middle">0</text>
+    {[{name:'ShopOpened', count:3, note:'openingStock = 3'}, {name:'OrderPlaced', count:2, note:'subtract 1'}, {name:'OrderPlaced', count:1, note:'subtract 1'}, {name:'OrderPlaced', count:0, note:'subtract 1'}].map((step, i) => <>
+      <path d={`M271 ${85 + i * 96}V${133 + i * 96}`} class="wire"/><path d={`M266 ${127 + i * 96}L271 ${133 + i * 96}L276 ${127 + i * 96}`} class="wire"/>
+      <path d={`M16 ${96 + i * 96}H194L208 ${110 + i * 96}V${142 + i * 96}H16ZM194 ${96 + i * 96}V${110 + i * 96}H208`} class="event"/>
+      <text x="30" y={126 + i * 96} class="event-ink code">{step.name}</text>
+      <path d={`M208 ${119 + i * 96}H271`} class="wire"/>
+      <text x="28" y={165 + i * 96}>{step.note}</text>
+      <circle cx="271" cy={158 + i * 96} r="22" class="state"/><text x="271" y={164 + i * 96} text-anchor="middle">{step.count}</text>
+    </>)}
+  </svg>}
+
+  {kind === 'decision' && <svg class="single" viewBox="0 0 320 490" role="img" aria-label="PlaceOrder uses the selected shop's current state. No shop rejects as Shop not found. An existing shop above zero accepts one OrderPlaced. At zero it rejects as Sold out. Only acceptance proposes an event.">
+    <rect x="68" y="8" width="184" height="44" rx="6" class="command"/><text x="160" y="36" text-anchor="middle" class="code command-ink">PlaceOrder</text>
+    <path d="M160 52V78" class="wire"/><path d="M155 72L160 78L165 72" class="wire"/>
+    <text x="160" y="104" text-anchor="middle">Current shop state</text>
+    <path d="M160 116V134H20V417M20 170H54M20 288H54M20 417H54" class="wire"/>
+    <text x="68" y="153">No shop</text><text x="68" y="180" class="danger-ink">Reject: Shop not found</text>
+    <path d="M60 197L72 209M72 197L60 209" class="danger-stroke"/><text x="84" y="210">No event</text>
+    <text x="68" y="263">Stock above 0</text>
+    <path d="M60 280H274L290 296V330H60ZM274 280V296H290" class="event"/>
+    <text x="76" y="310" class="code event-ink">OrderPlaced</text><text x="68" y="356">Accept one event</text>
+    <text x="68" y="402">Stock at 0</text><text x="68" y="429" class="danger-ink">Reject: Sold out</text>
+    <path d="M60 447L72 459M72 447L60 459" class="danger-stroke"/><text x="84" y="460">No event</text>
+  </svg>}
+
+  {kind === 'query' && <svg class="single" viewBox="0 0 320 438" role="img" aria-label="The retained ShopOpened and OrderPlaced events produce ShopEntity stock two. The query copies that two into the same shop's AvailableStock row, replacing its old three. It does not subtract stock a second time.">
+    <path d="M26 12H272L288 28V65H26ZM272 12V28H288" class="event"/>
+    <text x="42" y="45" class="code event-ink">ShopOpened: 3 mugs</text>
+    <path d="M26 81H272L288 97V134H26ZM272 81V97H288" class="event"/>
+    <text x="42" y="114" class="code event-ink">OrderPlaced: 1 mug</text>
+    <path d="M160 134V174" class="wire"/><path d="M155 168L160 174L165 168" class="wire"/>
+    <text x="177" y="160">Apply events</text>
+    <rect x="62" y="184" width="196" height="70" rx="4" class="state"/>
+    <text x="160" y="212" text-anchor="middle" class="code">ShopEntity</text><text x="160" y="240" text-anchor="middle">2 mugs</text>
+    <path d="M160 254V312" class="wire"/><path d="M155 306L160 312L165 306" class="wire"/>
+    <text x="177" y="286">Copy 2</text>
+    <rect x="26" y="322" width="262" height="104" rx="6" class="query"/>
+    <text x="160" y="352" text-anchor="middle" class="code query-ink">AvailableStock</text>
+    <text x="160" y="381" text-anchor="middle" class="query-ink">Same shop's row</text>
+    <text x="83" y="410" class="query-ink">3</text><path d="M79 399L97 412M112 404H177M171 399L177 404L171 409" class="query-wire"/><text x="196" y="410" class="query-ink">2 mugs</text>
+  </svg>}
+
+  {kind === 'http' && <svg class="single" viewBox="0 0 320 450" role="img" aria-label="After opening with three mugs, the browser sends PlaceOrder once. The service records OrderPlaced and returns Accepted. The stock query refreshes asynchronously to two. The browser repeats stock reads if needed, without sending another order.">
+    <text x="38" y="26">Browser</text><text x="252" y="26" text-anchor="middle">Shop</text>
+    <path d="M64 42V426M252 42V426" class="lifeline"/>
+    <text x="160" y="65" text-anchor="middle" class="command-ink code">POST place-order</text>
+    <path d="M64 80H252M245 75L252 80L245 85" class="command-wire"/>
+    <path d="M252 94V110H285V137H252" class="event-wire"/><text x="236" y="125" text-anchor="end" class="event-ink code">OrderPlaced</text>
+    <path d="M252 163H64M71 158L64 163L71 168" class="wire"/>
+    <text x="160" y="190" text-anchor="middle">Accepted</text>
+    <path d="M242 219H262M247 214L242 219L247 224M257 214L262 219L257 224" class="query-wire"/>
+    <text x="232" y="223" text-anchor="end" class="query-ink">Query refreshes later</text>
+    <text x="160" y="276" text-anchor="middle" class="query-ink">GET available-stock</text>
+    <path d="M64 291H252M245 286L252 291L245 296" class="query-wire"/>
+    <path d="M64 300H38V328H64M57 323L64 328L57 333" class="query-wire"/><text x="80" y="328">Read again if stale</text>
+    <path d="M252 370H64M71 365L64 370L71 375" class="query-wire"/>
+    <text x="160" y="400" text-anchor="middle" class="query-ink">2 mugs available</text>
+  </svg>}
+
+  {kind === 'tests' && <>
+    <section>
+      <h3>Decision check</h3>
+      <svg viewBox="0 0 320 300" role="img" aria-label="With one mug, the deliberately faulty decision condition greater than one rejects the last order. The decision test expects acceptance and fails.">
+        <text x="160" y="24" text-anchor="middle">1 mug available</text>
+        <path d="M160 40V69" class="wire"/>
+        <rect x="38" y="78" width="244" height="58" rx="6" class="command"/><text x="160" y="114" text-anchor="middle" class="code command-ink">stock &gt; 1</text>
+        <path d="M160 136V158M150 163L170 183M170 163L150 183M160 188V212" class="danger-stroke"/>
+        <text x="160" y="241" text-anchor="middle" class="danger-ink">Rejected: Sold out</text><text x="160" y="280" text-anchor="middle" class="danger-ink">FAIL: expected acceptance</text>
+      </svg>
+    </section>
+    <section>
+      <h3>Replay check</h3>
+      <svg viewBox="0 0 320 300" role="img" aria-label="The same deliberate decision fault does not change replay. A supplied OrderPlaced event still updates one mug to zero, so this replay test passes without checking the decision.">
+        <text x="160" y="24" text-anchor="middle">1 mug available</text>
+        <path d="M160 40V69" class="wire"/>
+        <path d="M38 78H266L282 94V136H38ZM266 78V94H282" class="event"/><text x="160" y="114" text-anchor="middle" class="code event-ink">OrderPlaced</text>
+        <path d="M160 136V207M155 201L160 207L165 201" class="wire"/>
+        <text x="180" y="179" class="code">update</text>
+        <text x="160" y="241" text-anchor="middle">0 mugs available</text><text x="160" y="280" text-anchor="middle">PASS: calculation unchanged</text>
+      </svg>
+    </section>
+  </>}
+</div>
+
+<style>
+  .tutorial-mechanism { --danger: #ffaaaa; margin: 32px 0; color: var(--sl-color-text); }
+  :global([data-theme='light']) .tutorial-mechanism { --danger: #a51e2c; }
+  .comparison { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
+  section { min-width: 0; margin: 0; }
+  h3 { margin: 0 0 16px; font-size: 18px; font-weight: 500; line-height: 1.5; }
+  svg { display: block; width: 100%; max-width: 320px; height: auto; margin: 0 auto; overflow: visible; }
+  svg text { fill: currentColor; font-family: var(--sl-font); font-size: 18px; }
+  svg .code { font-family: var(--sl-font-mono); }
+  .wire, .state { fill: none; stroke: currentColor; stroke-width: 1.5; }
+  .lifeline { fill: none; stroke: currentColor; stroke-width: 1; stroke-dasharray: 4 5; opacity: .4; }
+  .command { fill: var(--diagram-command-surface); stroke: var(--diagram-command-line); stroke-width: 1.5; }
+  .event { fill: var(--diagram-event-surface); stroke: var(--diagram-event-line); stroke-width: 1.5; }
+  .query { fill: var(--diagram-query-surface); stroke: var(--diagram-query-line); stroke-width: 1.5; }
+  .command-wire { fill: none; stroke: var(--diagram-command-ink); stroke-width: 1.5; }
+  .event-wire { fill: none; stroke: var(--diagram-event-ink); stroke-width: 1.5; }
+  .query-wire { fill: none; stroke: var(--diagram-query-ink); stroke-width: 1.5; }
+  svg .command-ink { fill: var(--diagram-command-ink); }
+  svg .event-ink { fill: var(--diagram-event-ink); }
+  svg .query-ink { fill: var(--diagram-query-ink); }
+  svg .danger-ink { fill: var(--danger); }
+  .danger-stroke { fill: none; stroke: var(--danger); stroke-width: 2; }
+  @media (max-width: 760px) { .comparison { grid-template-columns: 1fr; gap: 32px; } }
+</style>

@@ -8,7 +8,11 @@ prev: false
 next: false
 ---
 
+import SetupDiagram from '../../../../components/learn/SetupDiagram.astro';
+
 Neo creates, builds, and runs NeoHaskell projects. When setup stops, the message helps you find the step that failed. If the shell can't find `neo`, the tool never started. If the message names a line in `neo.json`, Neo reached your project settings.
+
+<SetupDiagram kind="failure" />
 
 ## When a tool is missing
 

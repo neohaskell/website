@@ -10,6 +10,8 @@ prev: true
 next: true
 ---
 
+import SetupDiagram from '../../../../components/learn/SetupDiagram.astro';
+
 Neo is the command-line tool for working with NeoHaskell projects. It creates the initial files, builds your code, and runs the application. We'll start by using it to create a project called `my-neo-app`.
 
 A new project already contains a small application called Counter. It lets you create a named counter, add or subtract an amount, and read its current value. Having an application in place gives us something to run and examine before changing any code.
@@ -64,6 +66,8 @@ The `neo.json` file holds the project's settings. Near the beginning are its nam
 We've left out the other fields here so we can look at these two first. `name` is the project name you supplied to Neo. `version` belongs to your application; it is not the version of NeoHaskell.
 
 The file also has a field named `neo-version`. Its value is a long string of letters and numbers identifying an exact revision of the NeoHaskell framework code. This is called a **pin**. New changes to NeoHaskell do not change the code your project uses, because it still points to that revision. We can leave the pin as it is while working with the starter.
+
+<SetupDiagram kind="pin" />
 
 Neo uses these settings to generate the build configuration. Changes to project settings belong in `neo.json` rather than in the generated files.
 
