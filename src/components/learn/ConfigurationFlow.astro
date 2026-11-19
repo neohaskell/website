@@ -1,0 +1,8 @@
+<div class="configuration-flow" role="img" aria-label="Process environment PORT=8090 is chosen ahead of dotenv PORT=8085 and default 8080. The chosen value becomes config.httpPort=8090 and is passed to a startup factory.">
+  <div class="chosen"><div class="source"><span>Process environment</span><code>PORT=8090</code><strong>chosen</strong></div><div class="arrow"></div><code class="value">config.httpPort = 8090</code><div class="arrow"></div><span class="factory">Startup factory</span></div>
+  <div class="fallback"><span>.env</span><code>PORT=8085</code></div>
+  <div class="fallback"><span>Default</span><code>8080</code></div>
+</div>
+<style>
+.configuration-flow{font-size:16px;line-height:1.5;margin:2rem 0}.configuration-flow>*{margin:0}.chosen{display:grid;grid-template-columns:1fr 24px 1.2fr 24px 1fr;align-items:center;padding:16px;border:1px solid var(--sl-color-text-accent)}.source{display:flex;flex-wrap:wrap;gap:8px}.source span{flex-basis:100%}.configuration-flow code{font-size:16px}.source strong{font-weight:500;color:var(--sl-color-text-accent)}.arrow{height:1px;background:var(--sl-color-gray-3);position:relative;margin:0 4px}.arrow:after{content:'';position:absolute;right:0;top:-3px;width:7px;height:7px;border-top:1px solid var(--sl-color-gray-3);border-right:1px solid var(--sl-color-gray-3);transform:rotate(45deg)}.value{overflow-wrap:anywhere}.fallback{display:flex;gap:16px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--sl-color-gray-5);margin:0}.fallback span{width:64px}.chosen>*{margin:0}@media(max-width:600px){.chosen{grid-template-columns:1fr;gap:12px}.arrow{height:24px;width:1px;margin:0 12px}.arrow:after{right:-3px;top:auto;bottom:0;transform:rotate(135deg)}.factory{padding-left:0}}
+</style>

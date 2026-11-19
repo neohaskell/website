@@ -1,17 +1,93 @@
 ---
-title: "Runtime configuration"
-description: "Page plan. Which value wins when defaults, environment, and arguments disagree?"
-tableOfContents: false
-pagefind: false
-prev: false
-next: false
-head:
-  - tag: meta
-    attrs:
-      name: robots
-      content: noindex
+title: Runtime configuration
+description: Define typed startup settings, trace which source wins, and connect loaded values to application factories.
 ---
 
-## Page plan <a id="page-plan" />
+import ConfigurationFlow from '@components/learn/ConfigurationFlow.astro';
 
-This page will define `Config` fields, required documentation, defaults, required values, environment names, command flags, nested records, and secret redaction. A single precedence table will show command line, process environment, dotenv, then default, with a small hypothetical port example. It will explain startup loading, configuration factories, registration order, and separate store choices, linking provider-specific settings to task guides and keeping `neo.json` build configuration on its own page.
+The mug shop needs a listening port and a shipping-provider key. These are startup settings, not order data. The `Config` DSL declares their types and where the application can read them. Application composition then passes loaded settings to the components that use them.
+
+This reference assumes the records and type arguments explained in [Types and records](/reference/language/types/). Build inputs such as source directories and dependencies belong to [Project configuration](./project/); `neo.json` does not supply the runtime record described here.
+
+## Fields and their sources <a id="fields" />
+
+A configuration declaration generates a record and its parser. Each ordinary field needs documentation and exactly one of `defaultsTo` or `required`. This shop configuration uses a default port but requires the key:
+
+```haskell
+import Config qualified
+
+Config.defineConfig "ShopConfig"
+  [ Config.field @Int "httpPort"
+      |> Config.doc "HTTP server port"
+      |> Config.defaultsTo (8080 :: Int)
+      |> Config.envVar "PORT"
+      |> Config.cliLong "port"
+      |> Config.cliShort 'p'
+  , Config.field @Text "shippingKey"
+      |> Config.doc "Shipping provider key"
+      |> Config.required
+      |> Config.secret
+  ]
+```
+
+`httpPort` and `shippingKey` are record fields chosen for this example. `PORT` is the declared environment name; `--port` and `-p` are declared option names. At the current revision, those declarations do not enable argument parsing, as explained below. Without `envVar`, the generator converts the field name to an environment name, so `shippingKey` reads `SHIPPING_KEY`. The key field declares no option names here.
+
+`field @Text` reads raw text. Other ordinary field types use a `Read`-based reader. `Config.enum @LogLevel` expresses an enum field using the same builder; the enum needs a suitable reader. A parsed `Int` is not automatically a valid listening port. Check application-specific ranges before opening resources.
+
+## Which value wins <a id="precedence" />
+
+`Application.run` first loads an optional `.env` file from the process's current directory. Existing process environment variables win over that file. It then loads the registered configuration, falling back to each field's default when its environment value is absent.
+
+<ConfigurationFlow />
+
+| Priority | Source | Port in the figure |
+| --- | --- | --- |
+| 1 | Existing process environment | `8090` |
+| 2 | Current-directory `.env` | `8085` |
+| 3 | Field default | `8080` |
+
+For the example declaration, loading configuration returns port `8080` with only `SHIPPING_KEY` set, `8090` when `PORT=8090` is supplied, and a configuration error when `--port 8091` is also supplied. A missing key or an invalid integer returns a configuration error instead of a usable record. An invalid higher-priority value is an error, not a request to fall back to the default.
+
+`Config.load @ShopConfig` returns `Task Text ShopConfig`. It reads process arguments and environment directly; it does not load `.env` itself. Use this distinction when testing a parser outside `Application.run`. `Config.loadWithVersion` currently uses the same parsing path; its version and description parameters do not add a separate help interface.
+
+### Declared flags and current parsing <a id="flags" />
+
+The generator emits long and short option names, but does not enable option reading in the underlying parser. The example's `--port 8091` is therefore rejected as `Unrecognised args`, rather than overriding `PORT`. Use `PORT` for this setting at this revision. Do not infer working command-line precedence from the declaration or starter comments.
+
+## Nested records and secrets <a id="nested" />
+
+`Config.nested @DatabaseConfig "database"` embeds another generated configuration parser. Give the nested field `Config.doc` and use `Config.envPrefix` to prefix its child environment names. The current generator passes this to `subSettings`, which adds an underscore itself: `"DB_"` produces `DB__HOST` for a child declared with `Config.envVar "HOST"`. Use `Config.envPrefix "DB"` for `DB_HOST`. The underlying nested parser prefixes child option names too, although option reading remains unavailable through the current generator. Child fields keep their own defaults and requirements.
+
+### Redacted output <a id="secrets" />
+
+`Config.secret` changes the generated `Show` and `Json.ToJSON` instances. Displaying the example record produces:
+
+```text
+ShopConfig {httpPort = 8080, shippingKey = "<REDACTED>"}
+```
+
+The record still contains the real key for the provider client to use. This modifier is not encryption and does not make arbitrary logging safe. In particular, the generated parser does not use the secret marker to sanitize all parser diagnostics. Keep secret values out of command lines and public error messages, and do not treat redacted JSON as a round-trip backup of the original configuration.
+
+## Loading values into startup factories <a id="startup" />
+
+`Application.withConfig @ShopConfig` registers one loader for the application. Calling `withConfig` twice panics. At startup, the application loads that record before evaluating configured factories and before creating the event store. Factories that consume configuration need a matching registered configuration type; constant factories can use `@()` and ignore their input.
+
+The generated starter already registers `StarterConfig`. Extend that record and its focused composition rather than registering a second shop configuration. Its active fields are `httpPort` (`PORT`, `--port`, `-p`, default `8080`) and `uploadDir` (`UPLOAD_DIR`, default `./uploads`). Merely declaring either field does not wire it into a server or enable file uploads. Inspect the consuming settings in `App.hs` as well as the record.
+
+An event-store factory receives the loaded configuration through `Application.withEventStore`. By contrast, `Application.withQueryObjectStore` takes a concrete store configuration. Do not assume every setting accepts the same factory shape. [Keep events across restarts](/guides/storage/) explains the separate event and query stores. `Config.get @ShopConfig` reads the globally installed configuration; use it after application initialization, not as a replacement for startup ordering. `Config.testWithConfig` supplies an implicit configuration for code written against the generated `HasShopConfig` constraint; it does not install that global value.
+
+## Integration selection and argument ownership <a id="integrations" />
+
+Application startup loads the configuration before it parses integration selection. The selection parser reads the same process argument list; it does not remove its options before the configuration parser runs. This matters when reviewing a launch command with an agent: an option accepted by one parser can still be refused by another.
+
+| Argument spelling | Owner and meaning |
+| --- | --- |
+| `--integrations=real` | Integration selection, also the default when omitted |
+| `--integrations=fake` | Registered adapters select their explicit `runFake` implementation |
+| `--integrations=hybrid` | Registered adapters named by repeated `--fake=Name` options select fakes |
+| `--fake=ShippingRequest` | A hybrid selection name, using letters, digits or underscores |
+| `--port 8091` | Declared by `cliLong "port"`, currently refused by the configuration parser |
+
+These are application arguments, distinct from the development options owned by [Neo commands](/reference/cli/). Selection recognizes the equals form shown here, uses the last `--integrations=` occurrence, and has no environment-variable activation gate. It does not itself establish that a fake name corresponds to a registered adapter.
+
+The selection flags are not a supported universal isolation switch for the starter. Its configuration parser runs first, and the supplied `ToAction` HTTP client, inbound workers and resource lifecycle hooks are separate execution paths. Do not infer that provider calls, incoming commands or resource acquisition have been disabled from the adapter selection alone. [Integration contracts](/reference/framework/integrations/#selection) explains this boundary. Use a controlled local provider when testing integration behavior rather than assuming global fake or hybrid execution is available.
