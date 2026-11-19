@@ -1,17 +1,90 @@
 ---
-title: "Create the shop feature"
-description: "Page plan. Where do the shop state and events belong?"
-tableOfContents: false
-pagefind: false
+title: Create the shop feature
+description: Add the mug shop's opening event and stock updates beside the generated Counter feature.
+tableOfContents:
+  minHeadingLevel: 2
+  maxHeadingLevel: 2
 prev: true
 next: true
-head:
-  - tag: meta
-    attrs:
-      name: robots
-      content: noindex
 ---
 
-## Page plan <a id="page-plan" />
+The mug shop starts with three ceramic mugs. In [Plan the mug shop](../), we agreed that opening the shop records how many mugs came into stock and each accepted order removes one. We'll give those two facts a place in the code, then check how the shop's stock changes when we apply them in order.
 
-This page will continue from the working project produced by setup, inspect the generated `Counter` files, and give an agent the bounded task of introducing the shop's state and events. An annotated file tree will explain `Entity`, `Event`, `Core`, and `Feature` without teaching every import. Readers will establish opening stock explicitly and inspect how an accepted order changes it. The proposed shop identifiers will be verified before any runnable source is published.
+Use the working Counter project from [Set up your agent](../../getting-started/). We'll add the shop beside Counter so we can compare our changes with a feature we already know.
+
+## Where a feature lives
+
+Four files under `src/Starter/Counter/` show where to look for the state, the events that change it, and the Event Model that connects them to commands.
+
+```text wrap
+src/Starter/Counter/
+  Entity.hs   State
+  Event.hs    Event types
+  Core.hs     Shared import
+  Feature.hs  Event Model
+```
+
+The `update` function in `Entity.hs` applies an event to the current state of one counter. The cases it can handle come from `CounterEvent` in `Event.hs`. To see what data a particular event carries, look under `Events/`. A command can import the entity and its set of events together through `Core.hs`.
+
+Open the Counter diagram from [Find your project files](../../getting-started/project-files/#the-model-in-the-graphical-ide). If you stopped the IDE, start it again with `neo ide`. In **Counter flow**, find **Create a counter** and select the `CreateCounter` node to highlight its arrow to `CounterCreated`. The same connection is declared in the **Create a counter** slice in `Feature.hs`.
+
+```haskell wrap
+command @CreateCounter do
+  produces @CounterCreated.Event
+```
+
+Read this as a declaration that `CreateCounter` can produce the event defined in `Events/CounterCreated.hs`. The declaration connects the command and event in the model. The command's decision determines whether the event is produced when the command runs.
+
+## The shop's first event
+
+The shop needs an equivalent starting point. We'll use an internal setup command named `OpenShop` that records `ShopOpened` for a new shop. Each shop has an identifier so events for that shop can be kept together. The opening event carries the identifier and the opening count. That count belongs in the recorded history because replay needs to recover the same starting stock.
+
+If the Counter app is still running, stop it with Ctrl+C in its terminal. The test suite starts its own copy to check Counter, and the IDE can stay open. Give your agent the shop plan and this task from the project root.
+
+```text wrap
+Read the project's active NeoHaskell guidance. Use Counter as the pattern for a new feature under src/Shop/. Keep Counter working.
+
+Give ShopEntity a shopId and availableMugs starting at zero. Group ShopOpened and OrderPlaced in ShopEvent, with their data under Events/. Re-export Entity and Event from Core.hs.
+
+Add internal OpenShop to record ShopOpened with the new entityId and openingStock = 3. Wire the command in Feature.hs and include shopFlow in App.hs.
+
+Apply openingStock on ShopOpened and subtract one on OrderPlaced. Defer PlaceOrder, the stock query, and HTTP exposure.
+
+Run neo test and show two passing checks:
+- OpenShop records ShopOpened with three mugs in a fresh store.
+- Replay applies supplied events and gives 0, 3, 2, 1, 0.
+Show the opening event data and the two update cases.
+```
+
+With the Counter diagram saved as `event-model.json`, run `neo inspect sync` from the project root to refresh it from the edited source. Reload the IDE and open **Ungrouped**. Use **Fit View** to locate `OpenShop`, then select its command node to highlight the arrow to `ShopOpened`.
+
+Use **Zoom In** to read `openingStock` on the `ShopOpened` node. To see the value that gets recorded, look at the event data created in `src/Shop/Commands/OpenShop.hs`.
+
+```haskell wrap
+ShopOpened.Event {
+  entityId = cmd.entityId,
+  openingStock = 3
+}
+```
+
+Review the opening test with your agent. It should run `OpenShop` for a new shop in an empty event store and read back the recorded `ShopOpened` event to check that it contains three mugs. Running the test is what invokes the setup command in this lesson.
+
+## Stock after an accepted order
+
+In `src/Shop/Entity.hs`, the `update` function describes what each event does to the shop's state.
+
+```haskell wrap
+ShopOpened e ->
+  ShopEntity {
+    shopId = e.entityId,
+    availableMugs = e.openingStock
+  }
+OrderPlaced _ ->
+  shop {
+    availableMugs = shop.availableMugs - 1
+  }
+```
+
+In the first case, `e` holds the opening event's data. The new state takes its identifier and stock from those recorded values. In the second case, `shop` is the current state. The braces keep its identifier and replace the available count with one less. The underscore tells us the calculation uses no fields from the order event. Every accepted order in this tutorial uses one mug.
+
+The replay test starts from zero, applies a supplied `ShopOpened` event, and then applies three `OrderPlaced` events for the same shop. Check that the test asserts the counts 0, 3, 2, 1, and 0 in order. Those order events represent orders already accepted. When a new order arrives, the decision will use the current count to determine whether it can record another `OrderPlaced`.
