@@ -1,6 +1,6 @@
 ---
 title: Find your project files
-description: Follow Counter's commands, events, state updates, queries, and tests through the generated project, and distinguish application source from regenerated build files.
+description: Explore Counter in the graphical IDE, then follow its model, decisions, events, state updates, queries, and tests through the source.
 tableOfContents:
   minHeadingLevel: 2
   maxHeadingLevel: 2
@@ -8,13 +8,13 @@ prev: true
 next: true
 ---
 
-The Counter starter separates the code that decides whether a change is allowed from the code that applies an accepted event and supplies a query answer. Those jobs have separate files. Knowing where each one lives helps you inspect a change without reading the whole application.
+The Counter starter gives each part of its behavior a place in the source. We can find the condition that rejected a zero increment, the event an accepted increment produces, and the calculation behind the query's answer.
 
-This page uses the unchanged project from [Create a project](../create-project/). In [Check your first response](../first-response/), we created a counter, incremented it, and saw a zero increment rejected. We'll follow that behavior through its source files. You can inspect them without running the application or editing any code.
+This page uses the unchanged project from [Create a project](../create-project/) and the behavior we tried in [Check your first response](../first-response/). The excerpts below are for reading beside your own files, not replacements to paste into them.
 
 ## The application and its feature <a id="the-application-and-its-feature" />
 
-Open your project directory in your editor. The paths below are relative to the project root, the directory containing `neo.json`. This is a selection of the starter's files, not a complete listing:
+Open your project directory in your editor. Paths on this page start at the project root, the directory containing `neo.json`. Here is a selection of its files, focused on the increment:
 
 ```text
 neo.json
@@ -39,57 +39,137 @@ tests/
     counter-flow.hurl
 ```
 
-These are the starter's actual names. If you chose a different project name, the `Starter/Counter/` paths still have these names. The `.hs` files contain NeoHaskell source; their filenames identify the part of the application they define.
+These are actual starter paths, even if you chose a different project name. In `src/App.hs`, `appEventModel` assembles the application. Among its settings are the HTTP transport and the features to include:
 
-Start with `src/App.hs`. Its `appEventModel` definition assembles the application's Event Model. It selects the configuration, event store, and HTTP transport, then includes `counterFlow` under `EventModel.features`. This is where a feature becomes part of the running application, rather than just a collection of files.
+```haskell wrap
+EventModel.withTransport WebTransport.server
+EventModel.features do
+  counterFlow
+```
 
-The `counterFlow` definition lives in `src/Starter/Counter/Feature.hs`. Open that file and find the feature named `Counter flow`, its chapter `Manage counters`, and the slices within it. These are the same groupings explained in [Model the whole process](../../introduction/event-modeling/).
+The `counterFlow` definition is in `src/Starter/Counter/Feature.hs`. It groups the command and query slices under the feature `Counter flow` and chapter `Manage counters`. Within that chapter, the increment slice declares:
 
-The `Increment a counter` slice connects `IncrementCounter` to the event it produces, `CounterIncremented.Event`. The `Show counter values` slice declares `CounterView` and the events that supply its data. The feature file tells us which parts belong together; the implementation of each part lives in the files it imports.
+```haskell wrap
+slice "Increment a counter" do
+  entity @CounterEntity do
+    command @IncrementCounter do
+      produces @CounterIncremented.Event
+```
 
-## An increment through the source <a id="an-increment-through-the-source" />
+This says which command belongs to the slice and which event it can produce. It doesn't contain the condition for accepting that command. That implementation lives in `Commands/IncrementCounter.hs`.
 
-Suppose you want to understand why an increment of zero was rejected. The command's name points to `src/Starter/Counter/Commands/IncrementCounter.hs`. Near the top, the `IncrementCounter` definition has the two fields we sent from the browser: `entityId` and `amount`. Those names are required by the command, not names chosen for the example.
+## The model in the graphical IDE <a id="the-model-in-the-graphical-ide" />
 
-In the same file, `getEntityId` identifies the counter whose state the application needs. The `decide` function then handles a missing counter, rejects an amount of zero or less with `Amount must be positive`, and accepts a positive amount by producing a `CounterIncremented` event. A change to which amounts are allowed belongs in this decision, not in the query that displays the result.
+Neo's graphical IDE displays those relationships on a canvas. It opens a diagram file named `event-model.json` in the project root. The unchanged starter doesn't include that file, so use the <a href={`${import.meta.env.BASE_URL}examples/counter-event-model.json`} download="event-model.json">Counter diagram</a> supplied for this lesson. Save it in your project root with the exact filename `event-model.json`. This adds a diagram of the existing starter; it doesn't change the application code.
 
-The event's data is defined in `src/Starter/Counter/Events/CounterIncremented.hs`. It carries the counter's identifier and the amount added. Nearby, `Event.hs` groups the created, incremented, and decremented event variants into `CounterEvent`. This separates the data for one kind of fact from the set of facts that can happen to a counter.
+From that directory, run:
 
-Now open `src/Starter/Counter/Entity.hs`. `CounterEntity` holds one counter's identifier, label, and current value. An **entity** is the state a command acts on; here, it is one counter rather than the whole list of counters. The `update` function calculates that state from events. Its increment case reads:
+```sh
+neo ide
+```
+
+Leave the terminal running and open [http://127.0.0.1:2323](http://127.0.0.1:2323) in a desktop browser. This is the IDE, separate from the running application's documentation at port `8080`. Counter itself doesn't need to be running to inspect the diagram.
+
+Select **Counter flow** in the feature list. Under **Manage counters**, select **Increment a counter** to locate its slice. Use **Zoom In**, **Zoom Out**, and **Fit View** at the lower left to adjust the canvas. In the increment column, follow `IncrementCounter` down to `CounterIncremented`, then follow that event's connection to `CounterView`.
+
+<picture>
+  <source media="(max-width: 40rem)" srcSet={`${import.meta.env.BASE_URL}images/docs/counter-ide-increment-dark.png`} />
+  <img src={`${import.meta.env.BASE_URL}images/docs/counter-ide-dark.png`} alt="The increment command and its accepted event in Counter's graphical IDE diagram" width="1440" height="840" />
+</picture>
+
+The names on the canvas identify the source definitions to inspect. The diagram shows connections and fields; to understand why zero is rejected, we still need the command's decision. Keep the diagram open beside the source, or stop its server with Ctrl+C when you're finished.
+
+## The command and its accepted event <a id="an-increment-through-the-source" />
+
+In `src/Starter/Counter/Commands/IncrementCounter.hs`, the command carries the two fields we sent from the browser:
+
+```haskell wrap
+data IncrementCounter = IncrementCounter {
+  entityId :: Uuid,
+  amount :: Int
+}
+```
+
+`entityId` selects the counter and `amount` says how much to add. These field names are required by the command, not freely chosen example names. In the same file, `getEntityId` identifies the state to load, and `decide` evaluates the command against it. After checking that the counter exists, the decision reaches this condition:
+
+```haskell wrap
+if cmd.amount <= 0
+  then Decider.reject "Amount must be positive"
+```
+
+`cmd` is the command being evaluated. The condition rejects zero and negative amounts with the message we saw in the browser. This excerpt ends before the `else` branch, which accepts a positive amount and produces a `CounterIncremented` event. This is where to inspect a proposed change to which amounts are allowed.
+
+The event's data is defined in `src/Starter/Counter/Events/CounterIncremented.hs`:
+
+```haskell
+data Event = Event {
+  entityId :: Uuid,
+  amount :: Int
+}
+```
+
+It retains which counter changed and by how much. The nearby `Event.hs` groups this event with `CounterCreated` and `CounterDecremented` as the possible variants of `CounterEvent`. The command carries an intention; the event carries the accepted fact.
+
+## State updates and query answers <a id="state-updates-and-query-answers" />
+
+`src/Starter/Counter/Entity.hs` defines `CounterEntity`, the state of one counter. An **entity** is the state a command acts on. Here, that means one counter's identifier, label, and value, rather than the whole list of counters.
+
+Its `update` function applies events to that state. The increment case is:
 
 ```haskell wrap
 CounterIncremented e ->
   entity {value = entity.value + e.amount}
 ```
 
-This is an excerpt to read, not a replacement for the whole function. `e` is the increment event's data, and `entity` is the state before applying it. The expression keeps the counter's other fields and adds the event's amount to its value. The decision determines whether an increment may happen; `update` describes what the accepted increment means for the counter's state.
+`e` contains the event's data. The expression keeps the entity's other fields and adds the event's amount to its value. Rejection never reaches this increment case because it records no increment event. To review how an accepted fact changes state, inspect `update` rather than the acceptance condition.
 
-Finally, `src/Starter/Counter/Queries/CounterView.hs` defines the answer exposed by the Counter query. Its `combine` function copies the entity's `counterId`, `label`, and `value` into a query row. These are the fields returned inside `items` by the list route and directly by the route for one identifier. Reading the query doesn't run the increment decision again.
+`src/Starter/Counter/Queries/CounterView.hs` defines the query row. Its `combine` function takes the entity's state and supplies the fields the browser reads:
 
-If a proposed change concerns a displayed field, inspect the query definition. If it concerns how an accepted event changes the value, inspect `Entity.hs`. If it concerns accepting or rejecting the command, inspect `decide`. The feature file connects these parts, but it doesn't replace their implementations.
+```haskell wrap
+combine entity _maybeExisting =
+  Update
+    CounterView {
+      counterId = entity.counterId,
+      label = entity.label,
+      value = entity.value
+    }
+```
+
+These are the fields returned inside `items` by the list route and directly by the route for one identifier. The query maintains an answer from the entity's state; reading it doesn't run the increment decision again. A proposed change to the displayed fields belongs here.
 
 ## The behavior described by tests <a id="the-behavior-described-by-tests" />
 
-The starter also contains examples of expected behavior under `tests/`. Their locations tell us what kind of question each test addresses.
+`tests/Decider/Counter/IncrementCounterSpec.hs` checks the decision directly. Its zero-amount case constructs an increment with `amount = 0`, runs `decide`, and inspects the result:
 
-`tests/Decider/Counter/IncrementCounterSpec.hs` calls the increment decision directly. It describes rejection for a missing counter, rejection for a zero amount, and acceptance for a positive amount. When reviewing a change to the decision, compare the changed condition with these cases. A condition that rejects zero and negative amounts is broader than a test that tries only zero.
+```haskell wrap
+case result of
+  RejectCommand msg ->
+    msg |> shouldBe "Amount must be positive"
+  AcceptCommand _ _ ->
+    fail "expected a rejection for a non-positive amount"
+```
 
-`tests/Property/CounterReplaySpec.hs` checks a different relationship. It applies a creation event followed by generated positive increments, then checks that the final value equals their total. This exercises the entity's state calculation across many example sequences, rather than sending commands through HTTP.
+The test passes only when that command is rejected with the expected reason. The same file checks a missing counter and an accepted positive amount. Notice that the condition in `decide` covers both zero and negative amounts, while this particular test tries zero.
 
-`tests/scenarios/counter-flow.hurl` describes a sequence through the HTTP interface. It creates a counter, increments it twice, decrements it once, and checks that the query returns `1`. It also checks that creating a counter with an empty label is rejected. This covers several commands together, whereas the decision test checks one command's conditions directly. You don't need to learn the scenario file's syntax to use its sequence when reviewing a change.
+Other tests follow different parts of the flow:
 
-These checks answer different questions about the implementation. They don't decide whether a proposed behavior is what your application needs. That still requires comparing the code and expected results with the behavior you intended.
+| File under `tests/` | What it checks |
+| --- | --- |
+| `Property/CounterReplaySpec.hs` | Applying a creation event and generated positive increments leaves a value equal to their total. |
+| `scenarios/counter-flow.hurl` | Through HTTP, create a counter, increment twice, decrement once, read value `1`, and reject creation with an empty label. |
+
+The replay test checks the entity's calculation; the HTTP scenario checks several commands and a query together. Neither decides whether a proposed behavior is what your application needs. Compare the cases with your intended behavior, not only with the code an agent produced.
 
 ## Application source and regenerated files <a id="application-source-and-regenerated-files" />
 
-Neo created both the application source and the files needed to build it. They have different owners after creation. You and your agent maintain the behavior in `src/` and the test cases in `tests/`; Neo regenerates the build configuration.
+Neo created both the application source and the files needed to build it. After creation, you and your agent maintain the behavior in `src/` and the test cases in `tests/`. Project settings belong in `neo.json`, as described in [Create a project](../create-project/).
 
-As described in [Create a project](../create-project/), project settings belong in `neo.json`. Neo uses those settings, the framework revision they select, and the source files it discovers to generate `flake.nix`, `cabal.project`, and the project's `.cabal` file. In our example project, that last file is `my-neo-app.cabal`; its name follows the project name, so yours can differ.
+Neo uses those settings, the selected framework revision, and the source files it discovers to regenerate `flake.nix`, `cabal.project`, and the project's `.cabal` file. In our example, that last file is `my-neo-app.cabal`; its name follows the project name. Hand-written changes in these build files can be replaced during regeneration. Maintain project settings and dependency choices in `neo.json`, covered by [neo.json and dependencies](../../reference/configuration/project/).
 
-Those files describe how the project is built. A hand-written change there can be replaced the next time Neo generates them. For a project setting or dependency change, inspect `neo.json` rather than treating the generated build files as the place to maintain that choice. The [neo.json and dependencies](../../reference/configuration/project/) reference covers those settings.
+The IDE's `event-model.json` has a different purpose. It stores the diagram, including its grouping and layout. Changing a diagram label is not an implementation of a new command decision. Review the source condition and its test when the intended behavior changes.
 
-For a first source inspection with your agent, you can ask:
+For a read-only inspection with your agent, you can ask:
 
-> Without changing any files, trace a zero increment through this Counter starter. Show me the condition in IncrementCounter.decide that rejects it, the update case that would apply an accepted increment, and the test that checks zero is rejected. Use the actual file paths and explain why rejection leaves the value unchanged. Leave neo.json and the generated build files untouched.
+> Without changing any files, trace a zero increment through this Counter starter. Show me the rejection condition in Commands/IncrementCounter.hs, the accepted-event update in Entity.hs, and the test that checks zero is rejected. Explain how those pieces account for the unchanged query value.
 
-Open the files named in the answer and compare them with the explanation. The rejection condition and its test belong together, while the entity update shows the change that rejection prevents.
+Compare the answer with the small excerpts in your own files. The rejection condition and its test belong together; the entity update shows the change that rejection prevents.

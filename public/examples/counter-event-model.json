@@ -1,0 +1,259 @@
+{
+  "chapters": [
+    {
+      "id": "chapter-heal-4639cc27d12d12ef",
+      "name": "Manage counters",
+      "order": 0,
+      "submodelId": "1795014791473-2-d8dk29"
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge-heal-b5b60e6f3046d6ea",
+      "sourceHandle": "bottom",
+      "sourceId": "node-heal-command-c344367fdc391f63",
+      "targetHandle": "top",
+      "targetId": "node-heal-event-9ec5b85855379c20",
+      "type": "commandProducesEvent"
+    },
+    {
+      "id": "edge-heal-f69dc4b9bc207313",
+      "sourceHandle": "bottom",
+      "sourceId": "node-heal-command-a627eddb926607c5",
+      "targetHandle": "top",
+      "targetId": "node-heal-event-7a4290e3205ae75f",
+      "type": "commandProducesEvent"
+    },
+    {
+      "id": "edge-heal-e106dab68f3e66fb",
+      "sourceHandle": "bottom",
+      "sourceId": "node-heal-command-e68ea94412e4cd64",
+      "targetHandle": "top",
+      "targetId": "node-heal-event-09f21f8bc2387060",
+      "type": "commandProducesEvent"
+    },
+    {
+      "id": "edge-heal-e173b8a96f182c96",
+      "sourceHandle": "right",
+      "sourceId": "node-heal-event-9ec5b85855379c20",
+      "targetHandle": "left",
+      "targetId": "node-heal-query-e5ac27a70b36438e",
+      "type": "eventFeedsQuery"
+    },
+    {
+      "id": "edge-heal-97619bbb8577628e",
+      "sourceHandle": "right",
+      "sourceId": "node-heal-event-09f21f8bc2387060",
+      "targetHandle": "left",
+      "targetId": "node-heal-query-e5ac27a70b36438e",
+      "type": "eventFeedsQuery"
+    },
+    {
+      "id": "edge-heal-91a282b0c8fb5e95",
+      "sourceHandle": "right",
+      "sourceId": "node-heal-event-7a4290e3205ae75f",
+      "targetHandle": "left",
+      "targetId": "node-heal-query-e5ac27a70b36438e",
+      "type": "eventFeedsQuery"
+    }
+  ],
+  "entities": [
+    {
+      "id": "entity-heal-48f30763e5b453e1",
+      "name": "CounterEntity",
+      "order": 0
+    }
+  ],
+  "id": "1795014791406-1-0g4os4",
+  "layout": {
+    "nodePositions": {
+      "node-heal-command-a627eddb926607c5": {
+        "x": 620,
+        "y": 156
+      },
+      "node-heal-command-c344367fdc391f63": {
+        "x": 40,
+        "y": 156
+      },
+      "node-heal-command-e68ea94412e4cd64": {
+        "x": 240,
+        "y": 156
+      },
+      "node-heal-event-09f21f8bc2387060": {
+        "x": 240,
+        "y": 392
+      },
+      "node-heal-event-7a4290e3205ae75f": {
+        "x": 620,
+        "y": 392
+      },
+      "node-heal-event-9ec5b85855379c20": {
+        "x": 40,
+        "y": 392
+      },
+      "node-heal-query-e5ac27a70b36438e": {
+        "x": 820,
+        "y": 156
+      }
+    },
+    "viewport": {
+      "x": 0,
+      "y": 0,
+      "zoom": 1
+    }
+  },
+  "name": "Counter",
+  "nodes": [
+    {
+      "entityId": "entity-heal-48f30763e5b453e1",
+      "fields": [
+        {
+          "name": "label",
+          "type": "Text"
+        }
+      ],
+      "id": "node-heal-command-c344367fdc391f63",
+      "name": "CreateCounter",
+      "sliceId": "slice-heal-2e58c957763f5dc6",
+      "type": "command"
+    },
+    {
+      "entityId": "entity-heal-48f30763e5b453e1",
+      "fields": [
+        {
+          "name": "entityId",
+          "type": "Uuid"
+        },
+        {
+          "name": "label",
+          "type": "Text"
+        }
+      ],
+      "id": "node-heal-event-9ec5b85855379c20",
+      "name": "CounterCreated",
+      "sliceId": "slice-heal-2e58c957763f5dc6",
+      "type": "event"
+    },
+    {
+      "entityId": "entity-heal-48f30763e5b453e1",
+      "fields": [
+        {
+          "name": "entityId",
+          "type": "Uuid"
+        },
+        {
+          "name": "amount",
+          "type": "Int"
+        }
+      ],
+      "id": "node-heal-command-a627eddb926607c5",
+      "name": "DecrementCounter",
+      "sliceId": "slice-heal-7aa7a6ca3a036bbf",
+      "type": "command"
+    },
+    {
+      "entityId": "entity-heal-48f30763e5b453e1",
+      "fields": [
+        {
+          "name": "entityId",
+          "type": "Uuid"
+        },
+        {
+          "name": "amount",
+          "type": "Int"
+        }
+      ],
+      "id": "node-heal-event-7a4290e3205ae75f",
+      "name": "CounterDecremented",
+      "sliceId": "slice-heal-7aa7a6ca3a036bbf",
+      "type": "event"
+    },
+    {
+      "entityId": "entity-heal-48f30763e5b453e1",
+      "fields": [
+        {
+          "name": "entityId",
+          "type": "Uuid"
+        },
+        {
+          "name": "amount",
+          "type": "Int"
+        }
+      ],
+      "id": "node-heal-command-e68ea94412e4cd64",
+      "name": "IncrementCounter",
+      "sliceId": "slice-heal-d1b1e138fda6a392",
+      "type": "command"
+    },
+    {
+      "entityId": "entity-heal-48f30763e5b453e1",
+      "fields": [
+        {
+          "name": "entityId",
+          "type": "Uuid"
+        },
+        {
+          "name": "amount",
+          "type": "Int"
+        }
+      ],
+      "id": "node-heal-event-09f21f8bc2387060",
+      "name": "CounterIncremented",
+      "sliceId": "slice-heal-d1b1e138fda6a392",
+      "type": "event"
+    },
+    {
+      "fields": [
+        {
+          "name": "counterId",
+          "type": "Uuid"
+        },
+        {
+          "name": "label",
+          "type": "Text"
+        },
+        {
+          "name": "value",
+          "type": "Int"
+        }
+      ],
+      "id": "node-heal-query-e5ac27a70b36438e",
+      "name": "CounterView",
+      "sliceId": "slice-heal-f457b8068aaef4a2",
+      "type": "query"
+    }
+  ],
+  "slices": [
+    {
+      "chapterId": "chapter-heal-4639cc27d12d12ef",
+      "id": "slice-heal-2e58c957763f5dc6",
+      "name": "Create a counter",
+      "order": 0
+    },
+    {
+      "chapterId": "chapter-heal-4639cc27d12d12ef",
+      "id": "slice-heal-7aa7a6ca3a036bbf",
+      "name": "Decrement a counter",
+      "order": 2
+    },
+    {
+      "chapterId": "chapter-heal-4639cc27d12d12ef",
+      "id": "slice-heal-d1b1e138fda6a392",
+      "name": "Increment a counter",
+      "order": 1
+    },
+    {
+      "chapterId": "chapter-heal-4639cc27d12d12ef",
+      "id": "slice-heal-f457b8068aaef4a2",
+      "name": "Show counter values",
+      "order": 3
+    }
+  ],
+  "submodels": [
+    {
+      "id": "1795014791473-2-d8dk29",
+      "name": "Counter flow",
+      "order": 0
+    }
+  ]
+}
