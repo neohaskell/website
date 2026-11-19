@@ -1,17 +1,113 @@
 ---
 title: "Tasks and effects"
-description: "Page plan. How do I sequence work that can fail?"
-tableOfContents: false
-pagefind: false
-prev: false
-next: false
-head:
-  - tag: meta
-    attrs:
-      name: robots
-      content: noindex
+description: "Describe work that can fail, sequence its effects, and observe worker completion without confusing it with business completion."
 ---
 
-## Page plan <a id="page-plan" />
+import TaskFlow from '@components/learn/TaskFlow.astro';
 
-This page will document `Task error value`, successful construction, typed failure, chaining, `do` notation, recovery, and conversion to `Result`. One short sequence will show which step runs and what happens after failure; a signature table will separate constructing a task from executing it at the program boundary. Cleanup and cancellation will be linked advanced entries, with `Decision` explicitly cross-linked as the separate contract for business acceptance and rejection.
+A mug-shop calculation can return a [Result](../results/) immediately. Reading a file or contacting a provider requires work to happen before there is an answer. `Task error value` describes that work: it can succeed with a `value` or fail with a typed `error`. Constructing a task does not execute its effects.
+
+This page builds on [Syntax and expressions](../../language/) and [Maybe and Result](../results/). It uses a small quote calculation to expose sequencing before introducing background workers. The quote does not place an order or reserve stock.
+
+## A description of work <a id="construction" />
+
+`import Core` brings `Task`, `Text`, `Int`, and the result constructors into scope. Import the helpers separately:
+
+```haskell
+import Core
+import Task qualified
+import AsyncTask qualified
+```
+
+`Task.yield 24` constructs a successful task. `Task.throw "Stock unavailable"` constructs a failing task. Neither expression starts a worker. `Task.fromIO` wraps an existing `IO` action without automatically translating its exceptions into your typed error.
+
+At a standalone program boundary, `Task.runResult` executes a task and returns `IO (Result error value)`. Executing the same task twice runs its effects twice. In application handlers, return the task where the API expects it and let the application execute it; adding a second execution boundary can repeat effects.
+
+## Sequencing and typed failure <a id="sequencing" />
+
+A `do` block connects work in order. In this example, `available` is an input rather than a live stock lookup. It lets us inspect both paths without involving a provider.
+
+```haskell
+quote :: Bool -> Task Text Int
+quote available = do
+  count <- Task.yield 2
+  if available then do
+    let total = count * 12
+    Task.yield total
+  else
+    Task.throw "Stock unavailable"
+```
+
+Executing `quote True` with `Task.runResult` produces `Ok 24`. Executing `quote False` produces `Err "Stock unavailable"`. The `<-` binding obtains a successful value from a task. A typed failure skips the later statements of that sequence and propagates to its caller.
+
+The flow below adds a caller that would send a quote after obtaining the price. A failed quote prevents that later step from starting. It does not undo effects that already happened before the failure.
+
+<TaskFlow />
+
+`Task.andThen` expresses the same dependency in a pipeline: its callback receives a successful value and returns the next task. `Task.map` changes a successful value with a pure function. For example, executing `quote True |> Task.map (+ 1)` produces `Ok 25`; mapping over the failed quote retains its error.
+
+<dl class="task-signatures">
+  <dt>Task.yield</dt><dd><code>a -&gt; Task e a</code></dd>
+  <dt>Task.throw</dt><dd><code>e -&gt; Task e a</code></dd>
+  <dt>Task.map</dt><dd><code>(a -&gt; b) -&gt; Task e a -&gt; Task e b</code></dd>
+  <dt>Task.andThen</dt><dd><code>(a -&gt; Task e b) -&gt; Task e a -&gt; Task e b</code></dd>
+  <dt>Task.mapError</dt><dd><code>(e -&gt; f) -&gt; Task e a -&gt; Task f a</code></dd>
+</dl>
+
+The callback comes first and the task comes last, matching `|>`. The short signature names `e`, `a`, and `b` stand for error and value types. `mapError` changes the typed error while preserving failure: executing `quote False |> Task.mapError (\_ -> "Unavailable" :: Text)` produces `Err "Unavailable"`.
+
+## Recovery and results <a id="recovery" />
+
+A caller can recover by supplying another task. Here zero means a deliberately chosen fallback quote, not a successful stock check:
+
+```haskell
+fallbackQuote :: Bool -> Task Text Int
+fallbackQuote available =
+  quote available |> Task.recover (\_ -> Task.yield 0)
+
+observedQuote :: Bool -> Task Text (Result Text Int)
+observedQuote available = quote available |> Task.asResult
+```
+
+Executing `fallbackQuote False` produces `Ok 0`. `recover` runs its callback only for a typed failure; a successful quote stays unchanged. In a real shop, silently replacing an unavailable quote with zero could be misleading, so inspect that policy when reviewing code from your AI agent.
+
+Executing `observedQuote False` instead produces `Ok (Err "Stock unavailable")`. The outer task succeeded in obtaining an answer; the inner `Result` retains the failed quote. A following `case` can inspect that result and choose further work. `Task.asResult` has signature `Task e a -> Task f (Result e a)`; `Task.recover` has signature `(e -> Task f a) -> Task e a -> Task f a`.
+
+### Runtime exceptions <a id="exceptions" />
+
+Typed errors are one failure channel. Underlying `IO` can also throw runtime exceptions. `recover`, `mapError`, `asResult`, and `runResult` do not turn those exceptions into typed errors. `Task.fromFailableIO` catches a selected exception type. `Task.asResultSafe` converts typed failures and synchronous exceptions to `Result Text value`, but rethrows asynchronous exceptions used for cancellation. Choose the boundary deliberately rather than assuming every failure reaches an `Err` branch.
+
+The [Task source](https://github.com/neohaskell/NeoHaskell/blob/414602b9510a92dfac647bc68d6afadfb594502c/core/core/Task.hs) provides these adapters and the execution boundaries `run`, `runMain`, `runNoErrors`, and `runOrPanic`. `runNoErrors` requires `Task Never value`; that excludes a typed error, not arbitrary runtime exceptions. `runOrPanic` panics on a typed error, so it is not a recovery policy.
+
+## Background work and waiting <a id="async-task" />
+
+`AsyncTask.run` starts a task in a child worker when the enclosing task executes. Its answer is an `AsyncTask error value` handle, not the child's final value. `waitFor` joins that child and returns its successful value or propagates its typed error.
+
+```haskell
+workerQuote :: Task Text Int
+workerQuote = do
+  worker <- AsyncTask.run (quote True)
+  AsyncTask.waitFor worker
+```
+
+Executing `workerQuote` produces `Ok 24`. The same pattern with `quote False` propagates the failed quote. The available waiting operations preserve different information:
+
+<dl class="task-signatures">
+  <dt>AsyncTask.waitFor</dt><dd><code>Show e =&gt; AsyncTask e a -&gt; Task e a</code><p>Joins the worker. Propagates typed failure and rethrows a worker exception.</p></dd>
+  <dt>AsyncTask.waitCatch</dt><dd><code>Show e =&gt; AsyncTask e a -&gt; Task f (Result Text a)</code><p>Joins without rethrowing the child's exception. Both typed failures and child exceptions become diagnostic text, losing the original error type.</p></dd>
+  <dt>AsyncTask.waitOutcome</dt><dd><code>AsyncTask e a -&gt; Task f (AsyncTask.Outcome e a)</code><p>Joins and distinguishes <code>Completed a</code>, <code>Failed e</code>, <code>Interrupted</code> for asynchronous exceptions, and <code>Crashed Text</code> for other exceptions.</p></dd>
+</dl>
+
+These operations wait for the child to exit; they do not make the waiting caller immune to cancellation. The [AsyncTask source](https://github.com/neohaskell/NeoHaskell/blob/414602b9510a92dfac647bc68d6afadfb594502c/core/concurrency/AsyncTask.hs) also provides scoped ownership through `process`, racing through `race`, and concurrent composition through `runConcurrently`.
+
+### Cancellation and cleanup <a id="cancellation" />
+
+`AsyncTask.cancel :: AsyncTask e a -> Task Text Unit` sends cancellation and waits for the worker to terminate. Cleanup can delay that return. `requestThreadTermination :: AsyncTask e a -> Task f Unit` instead sends `ThreadKilled` and returns after delivery, without joining; use a waiting operation to observe eventual exit. Neither operation proves that the application released resources correctly or reversed an external effect.
+
+`Task.finally cleanup work` installs cleanup around work, including typed failure and runtime exceptions. The cleanup argument comes first. A typed cleanup error is discarded, while a runtime exception in cleanup can replace the original outcome. Resource acquisition, cancellation-safe handoff, and interrupted cleanup need their own ownership design. [Manage integration resources](../../../guides/integrations/resources/) explains those boundaries in application workers.
+
+## Worker completion and application outcomes <a id="completion" />
+
+A worker finishing proves only that its task ended with the outcome you observed. Command acceptance, event persistence, provider success, acceptance by a receiving command, and a query catching up are separate observations. A callback returning `Unit` does not become a typed business result merely because you waited for it.
+
+A [Decision](../../../concepts/pure-decisions/) expresses business acceptance or rejection. It has its own interpreter contract; it is not a synonym for an arbitrary effectful `Task`. Keep the decision about whether an order may proceed separate from the work that contacts a shipping provider.
