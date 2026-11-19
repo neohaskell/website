@@ -1,0 +1,22 @@
+<div class="reusable-integration" role="img" aria-label="The application maps OrderPlaced to a booking request. A reusable shipping module sends HTTP and decodes a booking response without importing MyShop. The application maps the result to RecordShipmentBooking, whose own decision determines acceptance.">
+  <div class="node" data-diagram-role="event">Recorded OrderPlaced</div>
+  <div class="connector">Application maps event to request<svg viewBox="0 0 20 28" aria-hidden="true"><path d="M10 0V24M4 18L10 24L16 18" /></svg></div>
+  <section>
+    <h3>Reusable Shipping module</h3>
+    <div class="node">Shipping.Request</div>
+    <div class="connector"><svg viewBox="0 0 20 28" aria-hidden="true"><path d="M10 0V24M4 18L10 24L16 18" /></svg></div>
+    <div class="node" data-diagram-role="integration">HTTP call and response decoding</div>
+    <div class="connector"><svg viewBox="0 0 20 28" aria-hidden="true"><path d="M10 0V24M4 18L10 24L16 18" /></svg></div>
+    <div class="node">Booking response or failure</div>
+  </section>
+  <div class="connector">Application maps result to command<svg viewBox="0 0 20 28" aria-hidden="true"><path d="M10 0V24M4 18L10 24L16 18" /></svg></div>
+  <div class="node" data-diagram-role="command">RecordShipmentBooking</div>
+</div>
+<style>
+.reusable-integration{margin:32px 0;font-size:16px;line-height:1.5;}
+section{border:1px dashed var(--sl-color-gray-3);border-radius:8px;padding:16px;}
+section h3{font-size:16px;font-weight:500;margin:0 0 16px;}
+.node{padding:12px;border:1px solid var(--diagram-line);border-radius:8px;background:var(--diagram-surface);color:var(--diagram-ink);text-align:center;overflow-wrap:anywhere;}
+.connector{display:flex;flex-direction:column;align-items:center;text-align:center;padding:8px;gap:4px;}
+.connector svg{width:20px;height:28px;fill:none;stroke:var(--sl-color-gray-2);stroke-width:1.5;}
+</style>

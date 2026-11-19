@@ -1,0 +1,113 @@
+---
+title: Create a reusable integration
+description: Separate a shipping provider's protocol from the application's events, commands and business decisions.
+tableOfContents:
+  minHeadingLevel: 2
+  maxHeadingLevel: 2
+---
+
+import ReusableIntegration from '@components/learn/ReusableIntegration.astro';
+
+A shipping provider accepts a booking request and returns a booking result. It does not need to know how the mug shop records an order, which entity owns a shipment, or when a shipment decision should refuse a change. Those choices belong to the application.
+
+In [Workflows across entities](/concepts/event-driven-workflows/), an accepted mug order leads to work on a separate shipment entity. Here we extract the provider-facing part into a module another application can reuse. This is an advanced guide for an existing application: you should be able to recognize command, event and Feature declarations. The examples introduce the integration-specific contracts locally.
+
+<ReusableIntegration />
+
+The reusable module owns the provider protocol. The application owns both mappings: from its event to the provider's input, and from the provider's result to a new command. A successful booking still has to pass the receiving command's decision before the application records a shipment fact.
+
+## A contract outside the shop
+
+Place generic code in `src/Shipping/Booking.hs`, outside `src/MyShop`. It can import NeoHaskell modules and provider utilities, but it should not import the shop's entities, events or commands. Otherwise the next application would have to depend on the mug shop to book a shipment.
+
+Use the [complete Shipping.Booking module](/examples/shipping-booking.hs) as the starting file, importing it as `Shipping.Booking qualified as Shipping` from the application. Its HTTP configuration uses no authentication so it can run against a controlled local provider; configure the authentication required by your deployed provider.
+
+The following excerpts describe a small wrapper around the supplied `Integration.Http` integration. They show the contracts and mapping points rather than a complete application. `Request` and `Booking` are types we define in `Shipping.Booking`:
+
+```haskell
+data Request = Request {
+  reference :: Text,
+  quantity :: Int
+} deriving (Generic)
+
+instance Json.ToJSON Request
+
+data Booking = Booking {
+  status :: Text
+} deriving (Generic)
+
+instance Json.FromJSON Booking
+```
+
+The reference identifies this provider operation; the quantity says how many items it contains. Neither field carries a shop event or entity type. In a real provider contract, add the destination and other required fields here rather than passing the whole domain event through as JSON.
+
+`Generic` supports the generic codec instances used here. `Json.ToJSON` supplies encoding for the request, while `Json.FromJSON` supplies decoding for the response. These are separate responsibilities. A `Schema.ToSchema` instance supplies a structural description; it does not by itself decode a response, validate every provider rule or generate realistic test responses.
+
+## The HTTP wrapper and its result
+
+The wrapper takes a provider URL, a request and a function supplied by its caller:
+
+```haskell
+request ::
+  Text ->
+  Request ->
+  (Result Text Booking -> command) ->
+  Http.Request command
+```
+
+The callback accepts either an error message or a decoded booking and returns a command. The type variable `command` lets each application choose that command without the shipping module importing it. Keep the URL in configuration; a loopback URL is suitable for a controlled local provider, while a deployed provider needs its actual endpoint and authentication.
+
+Inside the wrapper, construct `Http.Request` with `method = Http.POST`, `body = Http.json input`, the configured URL, and explicit authentication, timeout and retry settings. Its response callback must check the HTTP status before decoding the body. The supplied callback name `onSuccess` means a response arrived; a 503 response still needs to become a failed booking result. Decode an accepted response with `Json.decode @Booking response.body`. An invalid response body becomes an error result instead of a fabricated booking.
+
+The two callback fields then converge on the application's function:
+
+```haskell
+onSuccess = \response -> toCommand (decodeBooking response),
+onError = Just (\_ ->
+  toCommand (Err "Shipping provider could not be reached"))
+```
+
+Here `decodeBooking` is our status-checking decoder, not a framework function. Keep provider diagnostics separate from messages intended for callers, and avoid returning credentials or raw sensitive response bodies. Choose retry behavior deliberately and send a stable provider idempotency key when its protocol supports one. Retrying an HTTP call and retrying application dispatch are different operations; neither establishes exactly-once delivery.
+
+## The mappings stay in MyShop
+
+The shop's event handler constructs `Shipping.Request` from the accepted order and supplies the result mapping. In this adapted excerpt, `event` is the new order's payload, `request` is the provider input, and the callback preserves the shipment identity chosen by the application:
+
+```haskell
+Shipping.request providerUrl request \result ->
+  case result of
+    Ok booking -> RecordShipmentBooking {
+      entityId = event.shipmentId,
+      status = booking.status
+    }
+    Err _ -> RecordShipmentBooking {
+      entityId = event.shipmentId,
+      status = "provider-failed"
+    }
+```
+
+These illustrative command fields belong to the shop. The provider result does not decide what the shop is allowed to record. For example, the shipment decision can refuse an unknown status even after the provider has completed a booking. That refusal does not undo the provider's action or the originating order event.
+
+Wrap the configured request with `Integration.outbound` and collect its action with `Integration.batch` in the application's outbound handler. Register that handler in its Feature. The receiving command must permit `InternalTransport`, and its handler must be registered, for integration dispatch to reach it. If the existing deployed receiver does not permit that transport, add a new command identity and slice rather than editing the frozen declaration. Preserve deployed events and queries too, as explained in [Add a feature safely](/tutorial/change-safely/).
+
+## Tasks inside an adapter
+
+A reusable integration author also needs to understand the work beneath configuration records. `Task error value` describes work that can fail with `error` or finish with `value`. Constructing a Task does not execute its HTTP call. In a `do` block, `<-` obtains a successful value for the next step; a failure prevents later steps unless the code handles it. The runtime executes integration actions. [Tasks and effects](/reference/core/tasks/) covers this contract separately from a business decision's acceptance or refusal.
+
+The supplied HTTP wrapper uses `Integration.ToAction` to turn its configuration into an action. A lower-level typed request adapter has a different contract in [`Service.Integration.Adapter`](https://github.com/neohaskell/NeoHaskell/blob/414602b9510a92dfac647bc68d6afadfb594502c/core/service/Service/Integration/Adapter.hs): an `Integration request` instance associates the request with `Response request` and implements both `runReal` and `runFake`. Each operation returns a Task with the adapter's `IntegrationError` type. This adapter error type is distinct from the error type exposed by the `Integration` facade.
+
+Implement a deterministic fake explicitly when testing such an adapter. For example, a chosen request can return a fixed booking response, another can return a typed failure. A schema is not an implementation of `runFake`. Direct tests of an adapter's fake also do not establish that a running application routes every supplied provider through that fake.
+
+## Incoming work has the same ownership boundary
+
+For an inbound integration, reusable code owns reading and decoding the external input. The application maps a decoded notification to its command. Keep that mapping outside the protocol reader, just as the outbound wrapper keeps the shop's result mapping outside HTTP handling.
+
+The typed inbound API represents allowed outputs as a list of command and entity pairs. For example, an application worker returning `Integration.TypedInbound '[ '(RecordShipmentBooking, ShipmentEntity)]` declares the command it may emit and its target entity. `Integration.TypedInboundConfig` gives the worker an emission function restricted to that set. The command must have its name and JSON encoding instances, and its entity must match the declared pair. These checks constrain outputs; they do not prove the receiving command will accept each notification.
+
+`Integration.asInbound` converts a typed worker to the legacy `Inbound` registration value. The supplied `Timer.every` already returns legacy `Inbound`; it is not a constructor for a typed worker. A provider author should expose the typed worker directly when using the model-backed typed declaration, rather than promising that a legacy worker can be converted back. Keep resource acquisition, cancellation and release under explicit ownership, as covered by [Manage integration resources](../resources/).
+
+## Tests another application can use
+
+Test the reusable module without importing `MyShop`: request encoding, accepted response decoding, non-success status, malformed response and transport failure. Then test the application mappings separately, including a result the receiving decision refuses. A controlled local HTTP service lets the real supplied client exercise these cases without credentials or external effects. Check the resulting shipment state as well as order acceptance; they are separate outcomes.
+
+Keep reusable code and its tests together when contributing it to the [NeoHaskell monorepo](https://github.com/neohaskell/NeoHaskell). Include the protocol contract, authentication expectations and exercised failure cases so another application can configure it without adopting the shop's domain. Neo packages is a future distribution direction; today's contribution path is the monorepo.

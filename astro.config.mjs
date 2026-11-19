@@ -45,7 +45,7 @@ export default defineConfig({
         group('docs.guides.integrations', ['guides/integrations', 'guides/integrations/inbound-workers', 'guides/integrations/oauth-connections']),
         group('docs.guides.operations', ['guides/deployment', 'guides/deployment/readiness-and-failures']),
       ]),
-      group('docs.concepts', ['concepts/event-modeling', 'concepts/command-outcomes', 'concepts/entities-and-streams', 'concepts/history-and-state', 'concepts/query-projections', 'concepts/pure-decisions', 'concepts/event-driven-workflows', 'concepts/identity-and-permissions']),
+      group('docs.concepts', ['concepts/event-modeling', 'concepts/command-outcomes', 'concepts/entities-and-streams', 'concepts/history-and-state', 'concepts/query-projections', 'concepts/pure-decisions', 'concepts/event-driven-workflows', 'concepts/identity-and-permissions', 'guides/integrations/create-reusable', 'guides/integrations/resources']),
       group('docs.reference', [
         group('docs.reference.language', ['reference/language', 'reference/language/types']),
         group('docs.reference.core', ['reference/core', 'reference/core/containers', 'reference/core/results', 'reference/core/tasks', 'reference/core/json']),
