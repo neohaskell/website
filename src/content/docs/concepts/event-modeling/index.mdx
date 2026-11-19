@@ -1,17 +1,79 @@
 ---
 title: "Features, chapters, and slices"
-description: "Page plan. How does an application story become a model that stays connected to its implementation?"
-tableOfContents: false
-pagefind: false
-prev: false
-next: false
-head:
-  - tag: meta
-    attrs:
-      name: robots
-      content: noindex
+description: "Read an Event Model as a story grouped into focused behavior, and distinguish that organization from an entity's state boundary."
+prev: true
+next: true
 ---
 
-## Page plan <a id="page-plan" />
+import FeatureSlices from '@components/learn/FeatureSlices.astro';
 
-This page will explain how an `Event` Model groups application behavior into features, chapters, and slices, and why each slice has a focused responsibility. An annotated `Counter` feature tree will connect a command slice and a query slice to their declared events. It will contrast organizing a story with enforcing an entity boundary, then link to the tutorial for implementation and framework reference for the DSL.
+A customer sees one process: place an order, then see how many mugs remain. The implementation has two different responsibilities. A command decides whether to accept the order. A query maintains the stock answer after accepted events arrive.
+
+An **Event Model** keeps those responsibilities connected without merging them. A **feature** groups related chapters; a **chapter** groups slices that belong to a recognizable part of the story; a **slice** declares one primary behavior. The distinction introduced in [Model the whole process](/introduction/event-modeling/) becomes concrete when you read the declarations in a project.
+
+## A story with separate responsibilities
+
+The supplied Counter starter provides a small example. Its `Counter flow` feature contains a `Manage counters` chapter. Within that chapter, `Create a counter` accepts a request to create a counter, while `Show counter values` maintains the answer people can read. The event connects their work:
+
+<FeatureSlices />
+
+The outer lines show grouping. The directed connections show declared event flow. `CreateCounter` can produce `CounterCreated`, and `CounterView` subscribes to that event. The query slice also subscribes to increment and decrement events, omitted from this focused picture. Those subscriptions keep its answer current as the counter changes.
+
+**A chapter puts related work together; it does not make the slices one operation.** Accepting the command and maintaining the query remain separate work. A query can catch up after the command has completed, as explained in [Query available stock](/tutorial/stock-query/).
+
+## Reading the declaration tree
+
+Open `src/Starter/Counter/Feature.hs` in a generated project. The beginning of `counterFlow` declares the grouping and the first command slice:
+
+```haskell
+counterFlow :: FeatureAction
+counterFlow = feature "Counter flow" do
+  chapter "Manage counters" do
+    slice "Create a counter" do
+      entity @CounterEntity do
+        command @CreateCounter do
+          produces @CounterCreated.Event
+```
+
+This is a reading excerpt, not a replacement for the file. The names in quotation marks label the story. The names after `@` identify the implementation types. `entity @CounterEntity` connects this command slice to the entity whose state the command acts on. `produces` declares an event payload associated with that command.
+
+The declaration does not contain the acceptance policy. That lives in the command's decision. Nor does listing an event mean every request records it: the decision can reject a request. To follow the behavior, move from the command declaration to its decision and the events it returns.
+
+Further down the same chapter, after the increment and decrement command slices, the query has its own slice:
+
+```haskell
+    slice "Show counter values" do
+      query @CounterView do
+        readsFrom @CounterEntity do
+          onEvent @CounterCreated.Event
+          onEvent @CounterIncremented.Event
+          onEvent @CounterDecremented.Event
+```
+
+`readsFrom` identifies the entity that supplies events. Each `onEvent` selects an event payload the query consumes. The query's `combine` implementation determines how those inputs change its maintained answer. Declaring only `CounterCreated` here would leave increment and decrement events outside this subscription, even though the query appears beside those commands in the chapter.
+
+This is why the model's connections matter more than proximity on a drawing. Slices do not exchange data merely because they share a chapter or sit next to each other. The event subscriptions establish the connection.
+
+## One primary behavior per slice
+
+A slice has exactly one primary declaration: a command attached to an entity, a query, an outbound integration, or an inbound integration. It can also carry rules that describe examples of that behavior. A command and a query therefore need separate slices even when they serve the same screen.
+
+In the mug shop, a chapter for placing an order can group a command slice that accepts the order and a query slice that maintains available stock. Sending a shipment request would be integration work with its own slice. The user journey can span all of them; each slice still has a focused responsibility that a developer can inspect and test.
+
+NeoHaskell validates this structure when building the Event Model. An empty chapter has no slice to register, and a slice with zero or several primary declarations cannot identify one behavior. Give each slice a name that describes its job, rather than using a broad label such as "Checkout" for every responsibility.
+
+## Grouping is different from an entity boundary
+
+A feature answers, "Which parts of the story belong together?" An entity answers, "Which state and history does this command act on?" The command's `EntityOf` contract establishes that relationship; a feature name does not establish it.
+
+In Counter, creation, increment and decrement all act on `CounterEntity`. They are separate slices operating on the same kind of state. Their shared chapter does not create that state boundary. Conversely, placing order and shipment work in one feature would not merge their separate entities or histories, or make their decisions a single transaction.
+
+This distinction matters in the mug shop. An order can be accepted before a shipment is booked. Grouping those steps into a story helps the developer follow the process, while separate entity decisions still protect the rules for each step. [Entities and streams](/concepts/entities-and-streams/) develops the state boundary in more detail.
+
+## Following the model into the application
+
+The application composes exported feature actions through `features` in its Event Model. NeoHaskell walks their chapters and slices to register command services, queries and integrations. Chapter order organizes that declaration; it is not a scheduler that runs each slice in turn.
+
+When reviewing an agent's change, trace one responsibility from its slice to its implementation. For a command, check the entity, decision and produced events. For a query, check both its event subscriptions and its `combine` logic. Then check the connection between them, rather than treating a complete-looking tree as proof of correct behavior.
+
+[Find your project files](/getting-started/project-files/) shows how to explore the starter in the native IDE. Its model helps locate discovered commands, events and queries; the source declaration remains the place to check the exact feature and chapter grouping. [Create the shop feature](/tutorial/first-feature/) builds the corresponding structure for the mug shop, and [Event models and features](/reference/framework/) provides the declaration reference.

@@ -1,0 +1,37 @@
+<section class="feature-slices" aria-label="Counter feature grouping and event connection">
+  <div class="feature-name">Feature: Counter flow</div>
+  <div class="chapter">
+    <div class="chapter-name">Chapter: Manage counters</div>
+    <div class="flow">
+      <div class="slice">
+        <div>Slice: Create a counter</div>
+        <div class="node" data-diagram-role="command">CreateCounter</div>
+        <div class="connection produces"><span>produces</span><i aria-hidden="true"></i></div>
+        <div class="node event" data-diagram-role="event">CounterCreated</div>
+      </div>
+      <div class="connection"><span>onEvent</span><i aria-hidden="true"></i></div>
+      <div class="slice">
+        <div>Slice: Show counter values</div>
+        <div class="node" data-diagram-role="query">CounterView</div>
+      </div>
+    </div>
+  </div>
+</section>
+<style>
+.feature-slices{font-size:1rem;line-height:1.5;margin-block:2rem;border-inline-start:2px solid var(--sl-color-gray-3);padding-inline-start:1rem}
+.feature-slices div,.feature-slices span,.feature-slices i{margin:0}
+.feature-name,.chapter-name{font-weight:600}
+.feature-slices .chapter{margin-top:1rem;padding-inline-start:1rem;border-inline-start:2px solid var(--sl-color-gray-4)}
+.feature-slices .flow{display:flex;flex-direction:column;align-items:stretch;margin-top:1.5rem}
+.slice{display:flex;flex-direction:column;gap:.5rem}
+.node{padding:.75rem 1rem;border:1px solid var(--diagram-line);background:var(--diagram-surface);color:var(--diagram-ink);border-radius:.25rem;overflow-wrap:anywhere}
+.connection{display:flex;align-items:center;gap:.75rem;padding:.5rem 1rem;min-height:3.5rem}
+.connection i{order:-1;display:block;width:1px;height:2.5rem;background:var(--sl-color-gray-3);position:relative}
+.connection i:after{content:'';position:absolute;bottom:0;left:-3px;width:7px;height:7px;border-right:1px solid var(--sl-color-gray-3);border-bottom:1px solid var(--sl-color-gray-3);transform:rotate(45deg)}
+.event{align-self:stretch}
+@media(min-width:75rem){.flow{display:grid!important;grid-template-columns:minmax(0,1fr) 5rem minmax(0,1fr);align-items:end!important}.connection{flex-direction:column;gap:.25rem;padding:0 .25rem .9rem;min-height:0}.connection i{order:1;width:100%;height:1px}.connection i:after{bottom:-3px;left:auto;right:0;transform:rotate(-45deg)}.event{align-self:stretch}}
+</style>
+
+<style>
+.feature-slices .produces{flex-direction:row;padding:.5rem 1rem;min-height:3.5rem}.feature-slices .produces i{order:-1;width:1px;height:2.5rem}.feature-slices .produces i:after{bottom:0;left:-3px;right:auto;transform:rotate(45deg)}
+</style>
