@@ -1,17 +1,158 @@
 ---
-title: "Types and records"
-description: "Page plan. How do I read or define the shapes in a feature?"
-tableOfContents: false
-pagefind: false
-prev: false
-next: false
-head:
-  - tag: meta
-    attrs:
-      name: robots
-      content: noindex
+title: Types and records
+description: Read records, constructors, alternatives and type relationships in NeoHaskell application source.
+prev:
+  label: Syntax and expressions
+  link: /reference/language/
+next: true
 ---
 
-## Page plan <a id="page-plan" />
+import TypeShapes from '@components/learn/TypeShapes.astro';
 
-This page will cover type parameters, records, constructors, sum types, type aliases, class constraints, associated types, visible type application, and deriving notation as they appear in application code. A compact annotated command record and event sum will connect source spelling to possible values. It will distinguish handwritten definitions from derive helpers, with links to framework contracts instead of teaching metaprogramming or reproducing a Haskell language manual.
+A type describes which values a piece of code can work with. In the mug shop, a command carries a product and quantity, while an event describes one of the facts the shop can record. Reading those shapes helps you check whether an AI agent's change expresses the intended business behavior.
+
+[Syntax and expressions](../) explains function calls, field access and `case` expressions. This page builds on those forms with small, handwritten declarations. The examples use `import Core` and the generated project's [language settings](../#language-extensions); they illustrate type syntax rather than a complete command implementation. Names, quantities and messages are chosen for this example.
+
+## Records and constructors <a id="records" />
+
+A record groups fields with different jobs. Here is a possible input shape for ordering mugs:
+
+```haskell
+data PlaceOrder = PlaceOrder {
+  product :: Text,
+  quantity :: Int
+} deriving (Generic, Show, Eq)
+
+order :: PlaceOrder
+order = PlaceOrder {
+  product = "ceramic mug",
+  quantity = 2
+}
+```
+
+In the declaration, the first `PlaceOrder` names the **type**. The second names its **constructor**, the operation that builds a value of that type. They happen to share a spelling, but occupy different roles. `product :: Text` declares a field's type; `product = "ceramic mug"` supplies its value. Reading `order.quantity` returns `2`.
+
+Every `PlaceOrder` value has both fields. The compiler checks their types, but an `Int` field alone does not express a positive-quantity policy. A quantity of zero has the right type too. Business acceptance belongs in the command's decision, as explained in [Accept or reject an order](../../../tutorial/decide-orders/).
+
+The `deriving` clause requests supporting behavior for the type. We will return to it after looking at the values the declaration permits.
+
+## Alternatives and their payloads <a id="sum-types" />
+
+Some shapes describe a choice. The shop can record an order being placed or cancelled:
+
+```haskell
+data OrderEvent
+  = OrderPlaced PlaceOrder
+  | OrderCancelled Text
+  deriving (Generic, Show, Eq)
+```
+
+`OrderEvent` is a **sum type**: each value uses one of its constructors. `OrderPlaced` carries a `PlaceOrder` value; `OrderCancelled` carries text explaining the cancellation. The vertical bar separates alternatives. It does not combine their fields into one record.
+
+<TypeShapes />
+
+The record requires its fields together. The sum chooses a constructor and carries that constructor's payload. For example, `OrderPlaced order` has type `OrderEvent`, as does `OrderCancelled "Customer changed plans"`. Neither expression records anything by itself; it constructs an ordinary value. This compact example reuses the command-shaped record as a payload to make the syntax visible. An application can define separate event payload records, as the mug-shop tutorial does.
+
+A `case` expression follows those same alternatives:
+
+```haskell
+eventLabel :: OrderEvent -> Text
+eventLabel event = case event of
+  OrderPlaced placed -> placed.product
+  OrderCancelled reason -> reason
+```
+
+`eventLabel (OrderPlaced order)` returns `"ceramic mug"`. The cancellation value above returns `"Customer changed plans"`. Each pattern names the payload only within its branch. When reviewing a new constructor, inspect the places that handle the sum to make sure they account for the new possibility.
+
+## Type parameters <a id="type-parameters" />
+
+A shape can leave one of its types open. A box holds a value without prescribing what that value is:
+
+```haskell
+data Box value = Box { content :: value }
+  deriving (Generic, Show, Eq)
+
+boxedOrder :: Box PlaceOrder
+boxedOrder = Box { content = order }
+```
+
+The lowercase `value` is a **type parameter**. `Box PlaceOrder` fills it with `PlaceOrder`, so `boxedOrder.content.quantity` is `2`. `Box Text` would hold text instead. Type application uses spaces just as function application does, but `Box PlaceOrder` appears in a type position, after `::`.
+
+The same reading applies to library types: `Maybe Int` holds either `Nothing` or `Just` an integer. `Task Text Int` describes a task whose error is text and whose successful result is an integer. A type parameter names a type; it is not a runtime input like the quantity `2`.
+
+## Aliases and distinct types <a id="type-aliases" />
+
+An alias gives an existing type another name:
+
+```haskell
+type Quantity = Int
+
+requested :: Quantity
+requested = 2
+```
+
+`requested` is an integer. `Quantity` can make a signature easier to read, but it remains interchangeable with `Int` and adds no quantity validation. When a separate type identity is needed, `newtype` wraps one value:
+
+```haskell
+newtype MugCount = MugCount Int
+  deriving (Show, Eq)
+```
+
+`MugCount 2` has type `MugCount`; it must be unpacked to obtain its integer. A wrapper separates types, but the exposed constructor still allows `MugCount 0`. To reject zero, the code that constructs a `MugCount` must check the integer before wrapping it.
+
+## Constraints on operations <a id="class-constraints" />
+
+A function that compares values needs a way to test equality. Its signature can state that requirement:
+
+```haskell
+same :: Eq value => value -> value -> Bool
+same left right = left == right
+```
+
+Read `Eq value =>` as "the type chosen for `value` must support equality." `Eq` is a **type class**, a named contract for operations. An **instance** supplies that contract for a particular type. Both arguments have the same type because the signature uses the same parameter twice. `same (2 :: Int) 2` returns `True`.
+
+A constraint makes required operations available; it does not select business policy. `Eq PlaceOrder` compares the record's fields because we requested its derived instance. `same order order` returns `True`, but that says nothing about whether the shop should accept the order.
+
+## Type relationships <a id="associated-types" />
+
+A class can associate another type with each instance. For this small example, a value exposes a quantity whose result type depends on the input type:
+
+```haskell
+class HasQuantity value where
+  type QuantityOf value
+  getQuantity :: value -> QuantityOf value
+
+instance HasQuantity PlaceOrder where
+  type QuantityOf PlaceOrder = Int
+  getQuantity order = order.quantity
+```
+
+`QuantityOf` is an **associated type** declared within the class. The instance sets `QuantityOf PlaceOrder` to `Int` and implements its operation. Consequently, `getQuantity order` returns the integer `2`. The `type` line describes a compile-time relationship; it does not read a record field.
+
+Application code also uses standalone type families, whose equations appear outside a class instance:
+
+```haskell
+type instance EntityOf PlaceOrder = ShopEntity
+```
+
+This framework-style excerpt assumes `ShopEntity` is defined and `EntityOf` is imported. It tells the framework which entity type belongs to the command. The exact equation is part of the API contract, rather than a new field on every command value. [Commands and decisions](../../framework/commands/) and [Entities and events](../../framework/entities/) describe those relationships in their application context. The associated-type example above is a small language example, not a framework class you need to implement.
+
+## Explicit type arguments <a id="visible-type-application" />
+
+Usually the compiler infers a function's type arguments from its values. With **visible type application**, `@` supplies one explicitly:
+
+```haskell
+same @Int 2 2
+```
+
+The result is `True`. `@Int` chooses the type; the two `2` arguments supply values. In application declarations, a form such as `command @PlaceOrder` similarly chooses a command type. It does not construct or submit an order. The operation's signature determines which type arguments are available and their order, so follow the imported declaration when a type argument is unclear.
+
+## Deriving and generated declarations <a id="deriving" />
+
+The record and event definitions request `Generic`, `Show` and `Eq`. `Generic` provides a structural representation other libraries can use. `Show` provides a developer-oriented representation for inspection. `Eq` provides equality, including comparisons of the fields and payloads in these examples. These instances require suitable support from the contained types. A `deriving` clause does not itself define a wire format, an endpoint or a decision.
+
+You may also see an explicit strategy such as `deriving stock (Generic, Show)`. The word `stock` selects the compiler's built-in derivation. Other strategies, such as `newtype`, have different rules; keep the strategy with the declaration when reviewing an excerpt.
+
+NeoHaskell's application helpers do more specialized work. In a generated command module, a declaration such as `command ''PlaceOrder` invokes a source-generation helper after the handwritten record, decision and required type relationships. The double quote supplies the type's name to that helper; it is different from the `@PlaceOrder` type argument in an Event Model declaration. The helper's import identifies which `command` is in use. [Commands and decisions](../../framework/commands/) owns the required wiring.
+
+When reviewing generated application code, separate three questions: which values does the handwritten type permit, which relationships does the application declare, and which supporting instances does a helper generate? None of those declarations substitutes for checking the business decision and its rules.

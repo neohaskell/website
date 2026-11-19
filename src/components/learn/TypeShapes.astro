@@ -1,0 +1,24 @@
+<div class="type-shapes" role="img" aria-label="An OrderEvent is either OrderPlaced carrying a PlaceOrder record with product and quantity together, or OrderCancelled carrying a text reason.">
+  <div class="root"><code>OrderEvent</code><span>one alternative</span></div>
+  <div class="branches">
+    <div class="branch"><div class="constructor" data-diagram-role="event"><code>OrderPlaced</code></div><div class="payload"><code>PlaceOrder</code><div class="fields"><span><code>product</code> "ceramic mug"</span><span><code>quantity</code> 2</span></div></div></div>
+    <div class="branch"><div class="constructor" data-diagram-role="event"><code>OrderCancelled</code></div><div class="payload"><code>Text</code><span>"Customer changed plans"</span></div></div>
+  </div>
+</div>
+<style>
+.type-shapes { margin:2rem 0; font-size:1rem; }
+.type-shapes code { font-size:1rem; white-space:normal; overflow-wrap:anywhere; }
+.root { display:flex; gap:1rem; align-items:baseline; }
+.root > code { font-size:1.125rem; }
+.root > span { color:var(--sl-color-gray-2); }
+.branches { margin:1rem 0 0 1rem; }
+.branch { border-left:1px solid var(--sl-color-gray-3); padding:0 0 1.5rem 1.5rem; position:relative; }
+.branch:last-child { padding-bottom:0; border-left:0; }
+.branch::before { content:''; position:absolute; left:0; top:0; width:1.5rem; height:1.5rem; border-bottom:1px solid var(--sl-color-gray-3); }
+.branch:last-child::before { border-left:1px solid var(--sl-color-gray-3); }
+.constructor { display:inline-block; border:1px solid var(--diagram-line); background:var(--diagram-surface); color:var(--diagram-ink); border-radius:4px; padding:0.5rem 1rem; }
+.payload { border-left:1px solid var(--sl-color-gray-3); margin-left:1rem; padding:1rem 0 0 1rem; }
+.payload > span { display:block; margin-top:0.5rem; }
+.fields { display:flex; flex-direction:column; gap:0.5rem; margin-top:0.5rem; padding-left:1rem; border-left:3px solid var(--sl-color-gray-4); }
+@media(max-width:650px) { .root { flex-direction:column; gap:0.25rem; } .branches { margin-left:0.25rem; } .branch { padding-left:1rem; } .branch::before { width:1rem; } }
+</style>
