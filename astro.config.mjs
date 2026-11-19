@@ -49,7 +49,7 @@ export default defineConfig({
       group('docs.reference', [
         group('docs.reference.language', ['reference/language', 'reference/language/types']),
         group('docs.reference.core', ['reference/core', 'reference/core/containers', 'reference/core/results', 'reference/core/tasks', 'reference/core/json']),
-        group('docs.reference.framework', ['reference/framework', 'reference/framework/commands', 'reference/framework/entities', 'reference/framework/queries', 'reference/framework/transports']),
+        group('docs.reference.framework', ['reference/framework', 'reference/framework/commands', 'reference/framework/entities', 'reference/framework/queries', 'reference/framework/transports', 'reference/framework/integrations']),
         group('docs.reference.tooling', ['reference/cli', 'reference/cli/model-tools', 'reference/cli/agent-commands', 'reference/configuration', 'reference/configuration/project']),
         group('docs.reference.help', ['reference/errors', 'reference/errors/runtime', 'resources', 'docs']),
       ]),

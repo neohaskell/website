@@ -1,0 +1,29 @@
+<div class="integration-contract" role="img" aria-label="An order event leads through an application input mapping to a shipping call. The provider result passes through the application's command mapping to a separate shipment decision. The decision can accept or reject even after the provider booking.">
+  <div class="node" data-diagram-role="event">Recorded OrderPlaced</div>
+  <div class="arrow">Application maps input<span aria-hidden="true">↓</span></div>
+  <div class="node" data-diagram-role="integration">Shipping request and provider call</div>
+  <div class="arrow">Provider result<span aria-hidden="true">↓</span></div>
+  <div class="node" data-diagram-role="command">Application maps to RecordShipmentBooking</div>
+  <div class="arrow"><span aria-hidden="true">↓</span></div>
+  <div class="decision">Shipment decision</div>
+  <div class="branches">
+    <div class="branch"><div class="rail" aria-hidden="true"></div><div class="node" data-diagram-role="event">Accepted: shipment event</div></div>
+    <div class="branch"><div class="rail" aria-hidden="true"></div><div class="refusal">Rejected: no shipment event</div></div>
+  </div>
+</div>
+<style>
+.integration-contract{margin:32px 0;font-size:16px;line-height:1.5;}
+.integration-contract *{margin:0;box-sizing:border-box;}
+.node,.decision,.refusal{padding:12px 16px;border:1px solid var(--diagram-line,var(--sl-color-gray-3));background:var(--diagram-surface);color:var(--diagram-ink);border-radius:8px;text-align:center;}
+.decision{background:var(--sl-color-gray-6);color:var(--sl-color-text);border-color:var(--sl-color-gray-3);}
+.arrow{display:flex;flex-direction:column;align-items:center;padding:8px;text-align:center;}
+.arrow span{font-size:24px;line-height:28px;}
+.branches{margin-left:24px;padding-top:0;}
+.branch{display:flex;align-items:stretch;}
+.rail{width:24px;flex-shrink:0;border-left:1px solid var(--sl-color-gray-3);position:relative;}
+.rail:after{content:'';position:absolute;top:24px;left:0;width:24px;border-top:1px solid var(--sl-color-gray-3);}
+.branch:last-child .rail{border-left:0;}
+.branch:last-child .rail:before{content:'';position:absolute;top:0;left:0;height:24px;border-left:1px solid var(--sl-color-gray-3);}
+.branch>.node,.branch>.refusal{flex:1;margin-top:8px;}
+.refusal{border-color:var(--sl-color-red);background:var(--sl-color-red-low);color:var(--sl-color-red-high);}
+</style>

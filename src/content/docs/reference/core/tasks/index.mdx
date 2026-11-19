@@ -108,6 +108,6 @@ These operations wait for the child to exit; they do not make the waiting caller
 
 ## Worker completion and application outcomes <a id="completion" />
 
-A worker finishing proves only that its task ended with the outcome you observed. Command acceptance, event persistence, provider success, acceptance by a receiving command, and a query catching up are separate observations. A callback returning `Unit` does not become a typed business result merely because you waited for it.
+A worker finishing proves only that its task ended with the outcome you observed. Command acceptance, event persistence, provider success, acceptance by a receiving command, and a query catching up are separate observations. A callback returning `Unit` does not become a typed business result merely because you waited for it. [Integration contracts](../../framework/integrations/) identifies the action, adapter and inbound callback boundaries.
 
 A [Decision](../../../concepts/pure-decisions/) expresses business acceptance or rejection. It has its own interpreter contract; it is not a synonym for an arbitrary effectful `Task`. Keep the decision about whether an order may proceed separate from the work that contacts a shipping provider.

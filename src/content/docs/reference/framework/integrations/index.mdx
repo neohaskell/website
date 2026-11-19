@@ -1,0 +1,127 @@
+---
+title: Integration contracts
+description: Read outbound actions, registered adapters and typed inbound workers as separate contracts with explicit ownership and completion boundaries.
+---
+
+import IntegrationContract from '@components/learn/IntegrationContract.astro';
+
+An accepted mug order can trigger a shipping request. The provider may book the shipment, but the shop still needs a receiving command to record that result. An integration connects these steps without moving the shipping call into the order's decision.
+
+This reference builds on [Event models and features](../) and [Tasks and effects](../../core/tasks/). For a complete provider wrapper, use [Create a reusable integration](/guides/integrations/create-reusable/). The contracts here help you inspect which work an agent has configured, who owns its mappings, and what a completed worker actually proves.
+
+## From a recorded event to another decision <a id="outbound" />
+
+The application maps its recorded order event to a provider request. A reusable shipping module owns the protocol and decoding; it lives outside `src/MyShop` and imports no shop commands or entities. The application supplies the mapping from a booking result to its receiving shipment command.
+
+<IntegrationContract />
+
+A returned provider response is not automatically a successful booking. A successful booking is not automatically an accepted shipment command. The receiver applies its own decision, and the shipment query catches up separately. Refusing that command does not undo the original order or the provider's action.
+
+## Actions configured with ToAction <a id="actions" />
+
+The `Integration` facade exposes the configuration-to-action route used by the supplied `Integration.Http` module:
+
+```haskell
+class ToAction config where
+  toAction :: config -> Action
+
+outbound :: ToAction config => config -> Action
+batch :: Array Action -> Outbound
+```
+
+`outbound` converts one configuration value. `batch` collects those actions into the `Outbound` value returned by an application handler. `Integration.none` returns no actions for an event. These functions describe work; the dispatcher executes it after the event reaches the handler.
+
+An integration author can construct an action directly through this boundary:
+
+```haskell
+action ::
+  (ActionContext -> Task IntegrationError (Maybe CommandPayload)) ->
+  Action
+```
+
+`ActionContext` supplies runtime services, including registered outbound dispatch. An action can return no receiving command or one encoded command payload. `Integration.emitCommand command` constructs a successful task returning that payload; `Integration.noCommand` returns none. Neither helper is proof that the receiving decision accepted the command.
+
+`Integration.makeCommandPayload` is the pure encoding helper. It requires `Json.ToJSON command` and a known `NameOf command`. Dispatch also requires a registered receiver that permits `InternalTransport`. When an existing deployed command lacks that permission, introduce a new command identity rather than changing its frozen declaration. [Add a feature safely](/tutorial/change-safely/) explains that transition.
+
+The HTTP configuration's `onSuccess` callback means a response arrived. The application or wrapper must check status and decode the body before constructing a success command. Keep HTTP retries, dispatcher retries and receiving-command refusal separate when inspecting the result mapping.
+
+## Registered request adapters <a id="adapters" />
+
+[`Service.Integration.Adapter`](https://github.com/neohaskell/NeoHaskell/blob/414602b9510a92dfac647bc68d6afadfb594502c/core/service/Service/Integration/Adapter.hs) defines another route. Import it qualified so its `Integration` class is distinct from the facade module:
+
+```haskell
+import Service.Integration.Adapter qualified as Adapter
+```
+
+An `Adapter.Integration request` instance chooses `Adapter.Response request` and implements these methods:
+
+```haskell
+runReal :: request -> Task IntegrationError (Response request)
+runFake :: request -> Task IntegrationError (Response request)
+```
+
+Here `IntegrationError` belongs to `Service.Integration.IntegrationError`, not the facade. The adapter class imposes no JSON codec or schema superclass. Each implementation owns whatever encoding, decoding and validation its protocol needs. [JSON and schemas](../../core/json/) distinguishes those responsibilities from structural metadata and from handwritten test fixtures.
+
+Register the request type in application composition:
+
+```haskell
+Application.new
+  |> Application.withIntegration @ShippingRequest
+```
+
+`ShippingRequest` stands for your adapter's request type. Registration requires the adapter instance, runtime type information for the request and response, and `TypeName.Inspectable request`. It builds a dispatch registry entry at application startup. It does not register an event handler, map an order to that request, or arrange a receiving command.
+
+`Service.Integration.ShimEmit.emit` takes that registry followed by the request and returns `Task IntegrationError (Response request)`. A missing registration returns `PermanentFailure`; it does not silently call the real provider. The action context makes the application's registry available to an action implementation.
+
+### Selection belongs to the registered route <a id="selection" />
+
+The adapter dispatcher can bind `runReal` or `runFake` from a `Selection`. Application startup owns parsing the integration selection and constructing those closures. This does not make every `ToAction` implementation use the registry. In particular, the supplied HTTP configuration has its own action implementation; registering an adapter does not replace that client's calls.
+
+Implement a fake explicitly and test its chosen responses and failures directly. A schema does not implement `runFake`, and a successful direct fake test does not prove that a running application selected it. For provider behavior, a controlled local service can exercise the real HTTP client without external credentials. [Create a reusable integration](/guides/integrations/create-reusable/) covers that testing boundary.
+
+## Typed incoming commands <a id="inbound" />
+
+An inbound worker reads external input and introduces commands. Its reusable part owns reading and decoding; the application owns notification-to-command mapping. A worker that may submit only a shipment-booking command declares the command and target entity together:
+
+```haskell
+Integration.TypedInbound
+  '[ '(RecordShipmentBooking, ShipmentEntity)]
+```
+
+`RecordShipmentBooking` and `ShipmentEntity` are application types. The output list is not a list of provider responses. `Integration.TypedInboundConfig outputs` has a `run` function receiving a polymorphic emission callback. For each emitted command, that callback requires `AllowedOutput command outputs`, `Json.ToJSON command`, and `KnownSymbol (NameOf command)`. The allowed-output constraint checks the command's target entity against the declared pair.
+
+`Integration.typedInbound` packages the configuration, requiring `KnownInboundOutputs outputs`. The worker returns `Task IntegrationError Unit`. The emission callback also returns a task with `Unit`; it does not return the receiver's event history, query row or typed business answer.
+
+`Integration.asInbound :: TypedInbound outputs -> Inbound` adapts a typed worker to legacy application registration. The supplied `Timer.every` already returns legacy `Inbound`. This conversion does not establish an inverse conversion from that timer to a typed model-backed worker. Keep typed worker declarations and legacy values distinct when reviewing generated setup.
+
+## Stateless and resource-owning forms <a id="lifecycle" />
+
+A stateless outbound handler returns actions for an event without lifecycle-managed retained client state between events. For an expensive reusable connection, `Integration.Lifecycle.OutboundConfig state` supplies separate acquisition, processing and release hooks:
+
+```haskell
+initialize :: StreamId -> Task Text state
+processEvent ::
+  state -> Event Json.Value ->
+  Task Text (Array Integration.CommandPayload)
+cleanup :: state -> Task Text Unit
+```
+
+These are configuration field signatures. The dispatcher retains state per entity-stream worker, processes that worker's events sequentially, and cleans up an idle worker. A later event initializes a new lifetime. The raw event is not automatically a typed payload or reconstructed entity state.
+
+`Application.withOutboundLifecycle @() @MugOrderEntity (\_ -> config)` registers a configuration factory. It is separate from the typed event-handler route. Inbound workers instead own acquisition and release inside their `run`; they have no corresponding three-hook record. [Manage integration resources](/guides/integrations/resources/) explains partial acquisition, cancellation-safe handoff and cleanup.
+
+## Failure, retry and completion <a id="errors" />
+
+The registered adapter error alternatives are `TransportFailure Text`, `AuthenticationFailure`, `PermanentFailure Text`, `TransientFailure Text`, and `ValidationFailure Text`. Keep their text safe for public diagnostics. The facade has a different error type; identical module concepts do not make the error constructors interchangeable.
+
+An error value does not itself schedule a retry. Adapter implementations and their callers own their retry policy. Dispatcher processing can retry synchronous processing exceptions, while a returned typed task error is a separate path. A provider operation therefore needs a stable operation identity and an explicit duplicate-handling policy; no universal exactly-once guarantee follows from dispatch.
+
+For inbound workers, a returned integration error makes the application restart that worker with backoff. Normal completion ends the worker. This contract does not promise restart after every arbitrary runtime exception. Release attempt-owned resources before the next attempt acquires replacements.
+
+### Startup, shutdown and waiting <a id="await" />
+
+Application startup assembles registrations and starts outbound dispatch. It validates declared typed inbound outputs before launching inbound workers. At shutdown, inbound tasks are cancelled and joined with `AsyncTask.waitCatch`. Joining waits for their work and cleanup to exit; slow cleanup delays that join.
+
+Outbound dispatcher shutdown initiates worker stopping. Its return alone is not a release acknowledgement for every worker. Forced cancellation and process termination can have different cleanup outcomes. Persist pending business work in application state rather than treating an in-memory client lifetime as the shipment record.
+
+`AsyncTask.waitFor`, `waitCatch` and `waitOutcome` observe worker termination with different error information, as detailed in [Tasks and effects](../../core/tasks/#async-task). A successful inbound emission means the receiving handler reported acceptance. It does not wait for downstream outbound effects or query convergence. Worker termination alone does not establish provider success or business completion. Inspect each outcome at the boundary that owns it.
