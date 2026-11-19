@@ -1,0 +1,33 @@
+---
+import '../../styles/diagram-colors.css';
+const steps = [
+  ['CounterCreated', 'Example counter', '0'],
+  ['CounterIncremented', 'amount = 5', '5'],
+  ['CounterDecremented', 'amount = 2', '3'],
+  ['CounterIncremented', 'amount = 1', '4'],
+];
+---
+<figure class="history-state" aria-label="One counter's recorded events applied in order. Creation gives zero, increment five gives five, decrement two gives three, increment one gives four.">
+  <div class="head"><span>Recorded event</span><span></span><span>Value after update</span></div>
+  {steps.map(([name, detail, value], i) => <div class="step">
+    <div class="event" data-diagram-role="event"><span>{name}</span><span>{detail}</span></div>
+    <div class="across" aria-hidden="true"></div>
+    <div class:list={['state', { final: i === steps.length - 1 }]}>{value}</div>
+    {i < steps.length - 1 && <div class="down" aria-hidden="true"></div>}
+  </div>)}
+</figure>
+<style>
+.history-state {margin:32px 0;font-size:1rem;line-height:1.5;}
+.history-state .head,.history-state .step {display:grid;grid-template-columns:minmax(0,1fr) 40px minmax(96px,.55fr);align-items:center;margin:0;}
+.history-state .head {margin-bottom:12px;}
+.history-state .head span:last-child {text-align:center;}
+.history-state .event {margin:0;padding:12px;border:1px solid var(--diagram-line);background:var(--diagram-surface);color:var(--diagram-ink);border-radius:4px;min-width:0;}
+.history-state .event span {display:block;overflow-wrap:anywhere;}
+.history-state .state {padding:12px;text-align:center;border:1px solid var(--sl-color-gray-4);border-radius:4px;font-size:1.5rem;margin:0;}
+.history-state .final {border:2px solid var(--sl-color-gray-2);font-weight:600;}
+.history-state .across {height:2px;background:var(--sl-color-gray-3);position:relative;margin:0;}
+.history-state .across::after {content:'';position:absolute;right:0;top:-4px;border:5px solid transparent;border-right:0;border-left:7px solid var(--sl-color-gray-3);}
+.history-state .down {grid-column:3;height:28px;width:2px;background:var(--sl-color-gray-3);position:relative;justify-self:center;margin:0;}
+.history-state .down::after {content:'';position:absolute;bottom:0;left:-4px;border:5px solid transparent;border-bottom:0;border-top:7px solid var(--sl-color-gray-3);}
+@media(max-width:520px){.history-state .head,.history-state .step{grid-template-columns:minmax(0,1fr) 24px 96px;}.history-state .event{padding:12px 8px;}}
+</style>

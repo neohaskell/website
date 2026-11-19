@@ -1,17 +1,75 @@
 ---
 title: "History and current state"
-description: "Page plan. Why retain events when the application already has current state?"
-tableOfContents: false
-pagefind: false
-prev: false
-next: false
-head:
-  - tag: meta
-    attrs:
-      name: robots
-      content: noindex
+description: "Trace recorded events through an entity's update function, and distinguish rebuilding state from making a new decision."
+prev: true
+next: true
 ---
 
-## Page plan <a id="page-plan" />
+import HistoryState from '@components/learn/HistoryState.astro';
 
-This page will distinguish the facts recorded in an event stream from the entity state obtained by applying them in order. An aligned `Counter` ledger and state table will show how the same history reconstructs the same entity through its update function. It will explain that replay derives state from recorded facts rather than rerunning original commands, and hand query rebuilding to its own page and persistence setup to the storage guide.
+A counter showing four tells us its current value. It cannot tell us whether someone added four once, or added five, removed two and then added one. Both histories can produce the same number, but they describe different activity.
+
+[Events and history](/introduction/history/) introduces the reason to retain those facts. [Entities and event streams](/concepts/entities-and-streams/) identifies the history belonging to one entity. Here we follow that history through the function that calculates its state, using the `Counter` from the starter introduced in [Create a project](/getting-started/create-project/).
+
+## Each fact supplies the next state
+
+The starter's `CounterEntity` holds an identity, a label and a value. Its `initialState` has an empty label and a value of zero. That is the starting value for reconstruction; an actual counter is established by its recorded `CounterCreated` event.
+
+Consider one counter labeled `Example counter`. The label is chosen for this example. All the events below belong to the same counter identity. Each row applies one more recorded event to the state produced by the preceding row.
+
+<HistoryState />
+
+After `CounterCreated`, the entity has its identity and label, and its value is zero. The next event adds five. The decrement then subtracts two from five, and the final increment adds one to three. The resulting entity still has the same identity and label, with a value of four.
+
+The left side retains all four facts. The right side shows successive results of applying them; it is not a second history that the application must record. In particular, the current value of four does not replace the earlier increment and decrement events.
+
+## The update function interprets one event
+
+In `src/Starter/Counter/Entity.hs`, the starter defines `update` to take one event and the current entity, then return the next entity. This excerpt shows the function, with record formatting adjusted for reading:
+
+```haskell
+update ::
+  CounterEvent ->
+  CounterEntity ->
+  CounterEntity
+update event entity =
+  case event of
+    CounterCreated e ->
+      CounterEntity {
+        counterId = e.entityId,
+        label = e.label,
+        value = 0
+      }
+    CounterIncremented e ->
+      entity {
+        value =
+          entity.value + e.amount
+      }
+    CounterDecremented e ->
+      entity {
+        value =
+          entity.value - e.amount
+      }
+```
+
+`case` selects the branch matching the recorded event. In the creation branch, `e` supplies the identity and label. The other branches use the event's `amount` to calculate a new value, while preserving the entity's other fields.
+
+The framework repeats this calculation in stream order, passing each result into the next call. This is often called a **fold**: start with one state and accumulate the effect of each event. Given the same initial state, ordered events and update function, reconstruction produces the same final entity. A saved snapshot can supply an already-calculated state and its position, so reconstruction only needs the events after that position.
+
+The function is pure. It returns a value without sending a request or writing another event. Its job is to interpret a fact already recorded, rather than decide whether that fact should be allowed now.
+
+## Replay preserves an accepted fact
+
+The distinction matters when a policy changes. In the mug shop, an older accepted `OrderPlaced` still subtracts its mug during reconstruction, even if today's online ordering policy would reject a new request at that stock level. The event says the order happened. Replay does not submit the original `PlaceOrder` again or ask today's decision to approve it.
+
+A new command follows the other path: load the reconstructed entity, evaluate the request against the command's policy, and record any accepted events. Rebuilding the entity only performs the calculation needed to supply that state. It does not take payment, send a shipment request or repeat the customer's purchase.
+
+This is also why changing an update function can change the meaning of existing history. Reproducing a result depends on the interpretation as well as the retained events. The deployment rule explained in [Model the whole process](/introduction/event-modeling/#freeze-the-contract-when-it-is-deployed) preserves deployed definitions and implementations. A changed policy needs its own behavior identity; replay is not permission to rewrite a deployed definition in place.
+
+## History and answers have different jobs
+
+The entity state supplies the information a command needs for its next decision. A query can derive a different answer from the same facts, such as available stock for a customer or accepted orders for staff. Neither answer can recover details that the events never recorded.
+
+For example, a total of four cannot reveal who requested an increment unless that information was retained in the events. Event design therefore determines which questions the application can answer later; keeping every event does not recover facts that were omitted at the time.
+
+Retaining the history across a process restart is the storage task covered in [Keep events across restarts](/guides/storage/). Maintaining and rebuilding stored query answers is covered separately in [Persist and rebuild queries](/guides/storage/query-rebuilds/). The calculation here is the entity's reconstruction: ordered recorded facts, interpreted by its update function, produce the state used by the next decision.
