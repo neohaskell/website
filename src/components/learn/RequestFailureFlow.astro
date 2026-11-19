@@ -1,0 +1,21 @@
+<figure class="request-failure-flow" aria-label="A submitted order can be denied by authorization, rejected by its business decision, or fail during execution.">
+  <div class="stage command" data-diagram-role="command">Submit an order</div>
+  <span class="wire" aria-hidden="true"></span>
+  <div class="branches">
+    <div class="outcome failure">Unauthorized<br /><span>Caller lacks permission</span></div>
+    <div class="outcome failure">Rejected<br /><span>Order already recorded</span></div>
+    <div class="outcome failure">Failed<br /><span>Execution did not complete</span></div>
+  </div>
+</figure>
+<style>
+.request-failure-flow { margin: 2rem 0; font-size: 1rem; display:flex; flex-direction:column; align-items:center; }
+.stage, .outcome { border:1px solid var(--sl-color-gray-3); border-radius:.5rem; padding:.75rem 1rem; text-align:center; }
+.command { border-color:var(--diagram-command-line); background:var(--diagram-command-surface); color:var(--diagram-command-ink); }
+.wire { height:1.5rem; width:1px; background:var(--sl-color-gray-3); }
+.branches { display:flex; flex-direction:column; align-self:stretch; margin:0 0 0 1rem; padding:1rem 0 0 1.5rem; position:relative; gap:1rem; }
+.branches::after { content:''; position:absolute; top:0; left:0; right:calc(50% + .5rem); border-top:1px solid var(--sl-color-gray-3); }
+.branches::before { content:''; position:absolute; top:0; bottom:2.5rem; left:0; border-left:1px solid var(--sl-color-gray-3); }
+.outcome { position:relative; border:2px dashed var(--sl-color-red); }
+.outcome::before { content:''; position:absolute; left:-1.5rem; top:50%; width:1.5rem; border-top:1px solid var(--sl-color-gray-3); }
+.outcome span { color:var(--sl-color-gray-2); }
+</style>

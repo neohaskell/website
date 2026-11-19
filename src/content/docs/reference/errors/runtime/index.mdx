@@ -1,17 +1,68 @@
 ---
-title: "Startup and request errors"
-description: "Page plan. Was the failure configuration, access, a business rejection, or infrastructure?"
-tableOfContents: false
-pagefind: false
-prev: false
-next: false
-head:
-  - tag: meta
-    attrs:
-      name: robots
-      content: noindex
+title: Startup and request errors
+description: Distinguish configuration and listener failures from authorization denial, business rejection and command execution failure.
 ---
 
-## Page plan <a id="page-plan" />
+import RequestFailureFlow from '@components/learn/RequestFailureFlow.astro';
 
-This page will separate startup configuration failures, invalid bind settings, occupied listeners, command rejection, authorization denial, and execution failure. A compact symptom table will connect each category to the responsible configuration or public response type and one recovery check. It will show why a rejected command is a valid business outcome, not automatically a server defect, and route store or provider failures to their maintained task guidance.
+An application that cannot start needs a different correction from a running shop that refuses an order. Startup diagnostics describe the process and its resources. A command response describes what happened to one proposed change. Finding that boundary first keeps a valid business refusal from becoming an unnecessary server repair.
+
+This reference assumes [Runtime configuration](/reference/configuration/) and [Transport contracts](/reference/framework/transports/). If `neo build` itself fails, use [Setup and build errors](../). The examples below use the continuing mug shop: an order can be refused because it is already recorded, even when the application is operating correctly.
+
+## Where the failure occurs <a id="failure-boundary" />
+
+Configuration must load before the application's configured resources and transports can start. A Web listener must then bind to its host and port before it can accept HTTP requests. Once it is listening, decoding and authorization can stop a command before its business decision runs. A decision can also refuse the proposed change.
+
+<RequestFailureFlow />
+
+For an application that is listening, the branches in the figure describe different checks, not a sequence of failures to work through. A rejection means the proposed change was refused with a reason. A failed execution means the command could not complete normally. Neither should be inferred from an HTTP status alone.
+
+| Symptom | Responsible boundary | First recovery check |
+| --- | --- | --- |
+| Missing setting, invalid value or `Unrecognised args` at startup | Registered `Config` parser | Check the effective environment and required fields in the registered record. |
+| `Application.withHost` or `Application.withPort` diagnostic | Web bind validation | Supply a bare host and a port in `1..65535`. |
+| `WebTransport could not bind` | Operating-system listener | Check which process owns that address and port. |
+| HTTP 401 or 403 | Authentication or command authorization | Check the caller's identity and permission for this command. |
+| `Rejected` with `reason` | Public `CommandResponse.Rejected` | Compare the reason with the existing order and intended change. |
+| `Failed` with `error` | Public `CommandResponse.Failed` | Check submitted fields and the execution diagnostic. |
+
+## Configuration and listening addresses <a id="startup" />
+
+The registered configuration parser can refuse a missing required value, an invalid typed value or an argument it doesn't recognize. `Application.run` loads the current directory's optional `.env` before that parser; existing process environment values take precedence. Correct the selected source rather than adding a default that hides the missing deployment setting. [Runtime configuration](/reference/configuration/#precedence) explains this order and the current restriction on declared command-line flags.
+
+A successfully parsed integer still needs to be a valid listening port. Web rejects port `0`, negative values and values above `65535`. It also rejects empty hosts, whitespace, URL or path syntax, hosts carrying a port, and malformed brackets. For a local listener, use a bare host such as `127.0.0.1`, with the port supplied separately through `Application.withPort`. A syntactically acceptable address can still fail when the operating system tries to use it.
+
+An occupied listener produces a diagnostic beginning `WebTransport could not bind`, naming the attempted host and port. Identify the owning process before stopping it. If it is an older instance of this application, stop that instance and rerun the same application. If another service needs the address, choose a different application port and use that port in your client too. An address not owned by the machine can produce the same bind-error prefix, so inspect the rest of the diagnostic rather than assuming every bind failure is a port collision.
+
+The recovery check is a request to the intended application on the intended address. A startup message alone doesn't show that the listener is answering. Also inspect the consuming composition in `App.hs`: declaring `httpPort` or setting `PORT` only changes a loaded value until that value is passed to the Web configuration.
+
+## Rejection and failed execution <a id="outcomes" />
+
+`Service.Response.CommandResponse` has four alternatives: `Accepted { entityId }`, `Rejected { reason }`, `Failed { error }` and `Unauthorized { authError }`. These are public response constructors; internal execution results use different names. [Commands and decisions](/reference/framework/commands/) explains the decision and persistence path behind them.
+
+For the mug shop's existing-order refusal, the Web response body is:
+
+```json
+{
+  "reason": "Already recorded",
+  "tag": "Rejected"
+}
+```
+
+`Already recorded` is this example's business reason, not a universal error code. The decision has refused another order for that entity. Inspect the existing order and the caller's intent before changing the command or retrying it. Entity creation and update guards can also reject a command when the entity already exists or is missing. A rejection can be the expected result of an acceptance test, such as trying to place the same order twice.
+
+Web returns HTTP 400 for both `Rejected` and `Failed`. Invalid command JSON also fails before the decision and is reported as a failed command response. A 400 therefore does not establish that the business decision ran. Compare the response tag and message with the submitted fields, then reproduce the smallest failing command. For `Failed`, inspect the application's diagnostic for that execution before deciding whether to correct input, restore a resource or repair application code.
+
+The application CLI prints serialized command responses but can exit with status zero for a business rejection. MCP reports refusals with `isError: true` inside tool-result content. Check the interface's outcome body rather than treating process exit or protocol success as command acceptance. [Transport contracts](/reference/framework/transports/#web-routes) gives the complete mapping.
+
+## Identity and permission failures <a id="authorization" />
+
+Web authentication establishes the caller, while command authorization decides whether that caller may attempt the operation. HTTP 401 or 403 can stop the request before the business decision. Web uses an HTTP error body for authorization failures rather than serializing the tagged `Unauthorized` constructor unchanged.
+
+Check whether the expected identity reached the application and whether its claims satisfy the command's access policy. [Verify caller identity](/guides/authentication/) covers tokens and identity; [Authorize commands](/guides/authorization/) covers operation permission. Do not remove an access check to make an order succeed. An authorized caller can still receive a business rejection afterward.
+
+## Store and provider failures <a id="resources" />
+
+A store failure and an external provider failure belong to different parts of the work. If retained history cannot be opened or written, use [Keep events across restarts](/guides/storage/) to inspect the configured event store. If a query is unavailable or hasn't caught up, use [Persist and rebuild queries](/guides/storage/query-rebuilds/) to inspect its separate stored rows and replay state.
+
+An accepted order does not prove that a later shipping-provider call succeeded. Provider completion and any receiving command have their own outcomes. [Workflows across entities](/concepts/event-driven-workflows/) explains those boundaries, and [Manage integration resources](/guides/integrations/resources/) covers resource ownership and cleanup. Before retrying a provider operation, establish whether the provider already performed it and how the application handles duplicates. Repeating the originating command is not a general recovery procedure for a later effect.
