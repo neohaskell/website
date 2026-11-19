@@ -1,0 +1,10 @@
+<div class="scalar-flow" role="img" aria-label="Text input 2 passes through Text.toInt to Just 2 and still needs quantity and stock checks. Text input two passes through Text.toInt to Nothing, with no number to check.">
+  <div class="scalar-row"><code>"2"</code><span class="scalar-step"><code>Text.toInt</code></span><div><code>Just 2</code><span>Quantity and stock checks</span></div></div>
+  <div class="scalar-row"><code>"two"</code><span class="scalar-step"><code>Text.toInt</code></span><div><code>Nothing</code><span>No number to check</span></div></div>
+</div>
+<style>
+.scalar-flow{margin:2rem 0;padding:1.5rem;border:1px solid var(--sl-color-hairline);border-radius:.5rem;font-size:16px;line-height:1.6}
+.scalar-row{display:grid;grid-template-columns:4rem 10rem 1fr;gap:1rem;align-items:center}.scalar-row+.scalar-row{margin-top:2rem}
+.scalar-step{position:relative;text-align:center}.scalar-step:before{content:'';position:absolute;left:0;right:0;top:50%;border-top:2px solid var(--sl-color-gray-3);z-index:0}.scalar-step code{position:relative;z-index:1}.scalar-row>div{display:flex;flex-direction:column;align-items:flex-start;gap:.5rem}
+@media(max-width:600px){.scalar-flow{padding:1rem}.scalar-row{grid-template-columns:4rem 1fr;gap:1rem}.scalar-step{grid-column:2}.scalar-row>div{grid-column:2;border-left:2px solid var(--sl-color-gray-3);padding-left:1rem}.scalar-row>code{align-self:start}}
+</style>

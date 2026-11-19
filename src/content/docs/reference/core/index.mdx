@@ -1,17 +1,100 @@
 ---
-title: "Values and common types"
-description: "Page plan. Which types and operations are already available through Core?"
-tableOfContents: false
-pagefind: false
-prev: false
-next: false
-head:
-  - tag: meta
-    attrs:
-      name: robots
-      content: noindex
+title: Values and common types
+description: Read Core types, find their qualified operations, and check text, number and identity conversions.
 ---
 
-## Page plan <a id="page-plan" />
+import ScalarFlow from '@components/learn/ScalarFlow.astro';
 
-This page will serve as the `Core` entry point and scalar lookup: `Text`, numeric types, `Bool`, `Unit`, `Uuid`, and the difference between a re-exported type and qualified module operations. A short type-to-module table will route readers to containers, optional results, tasks, and JSON. Selected signatures will show text conversion and arithmetic conventions; advanced concurrency and implementation modules will remain linked source rather than fill the sidebar.
+`Core` supplies the everyday types used in a NeoHaskell application: a mug's name is `Text`, its requested quantity is `Int`, and its order identity is `Uuid`. This page is a lookup for those values and the operations that work on them. [Syntax and expressions](../language/) explains how to read function calls and pipelines; [Types and records](../language/types/) explains signatures and type parameters.
+
+## Types and their operations <a id="core" />
+
+A type being available through `Core` does not bring every operation from its module into scope. For example, `Core` re-exports `Text`, while converting its contents to uppercase uses a qualified import:
+
+```haskell
+import Core
+import Text qualified
+
+productLabel :: Text
+productLabel =
+  "ceramic mug"
+    |> Text.toUpper
+```
+
+`productLabel` is `"CERAMIC MUG"`. In `Text.toUpper`, the part before the dot names the imported module. It is different from `order.quantity`, where the dot reads a field from a record. Starter modules import `Core` explicitly, as above, and the generated language settings disable the implicit standard Prelude import.
+
+## Text becoming a quantity <a id="text" />
+
+A checkout receives text, but an order needs a number. `Text.toInt` can recognize a number without deciding whether the shop should accept it. Its result is `Maybe Int`: `Just` carries a parsed number and `Nothing` means parsing failed.
+
+<ScalarFlow />
+
+Even a parsed negative number is still an `Int`. The order decision must separately require a positive quantity and sufficient stock. When reviewing an agent's checkout code, inspect both the conversion failure and the business check; successful parsing only establishes the number's representation.
+
+These signatures show the direction and possible absence of each conversion. They describe library functions, rather than definitions to add to the application:
+
+```haskell
+Text.toInt :: Text -> Maybe Int
+Text.fromInt :: Int -> Text
+Text.toFloat :: Text -> Maybe Float
+Text.fromFloat :: Float -> Text
+```
+
+For example, `Text.toInt "2"` gives `Just 2`, `Text.toInt "two"` gives `Nothing`, and `Text.toInt "-2"` gives `Just (-2)`. In the other direction, `Text.fromInt 2` gives `"2"`. Decimal input such as `Text.toFloat "12.5"` gives `Just 12.5`; `Text.fromFloat 12.5` gives `"12.5"`. Quoted inputs here are example checkout values, not special keywords.
+
+`Text` stores Unicode text. Use `Char` for a single character and `Bytes` for binary data. The [Text module](https://github.com/neohaskell/NeoHaskell/blob/414602b9510a92dfac647bc68d6afadfb594502c/core/core/Text.hs) contains trimming, splitting, casing and byte conversions as well as number conversion.
+
+## Numbers and arithmetic <a id="numbers" />
+
+`Int` is a machine-sized signed whole number, suitable for quantities within its bounds. `Int64` is explicitly 64-bit. NeoHaskell's `Float` is backed by a double-precision floating-point number; its spelling does not mean a 32-bit value. Floating-point calculations can round, so an integer number of minor currency units is often a clearer choice for a mug's price.
+
+The operators distinguish integer division from floating-point division:
+
+```haskell
+(//) :: Int -> Int -> Int
+(/) :: Float -> Float -> Float
+modBy :: Int -> Int -> Int
+remainderBy :: Int -> Int -> Int
+```
+
+Seven mugs packed two per box give `7 // 2 == 3` full boxes. `7 / 2 == 3.5` calculates a floating-point quotient. Integer division truncates toward zero, so `(-7) // 2 == -3`. Both division operators require care around a zero divisor.
+
+`modBy` and `remainderBy` take the divisor first. For a negative input they differ: `modBy 4 (-5) == 3`, while `remainderBy 4 (-5) == -1`. `round` chooses the nearest integer with ties going to the even integer: `round 2.5 == 2` and `round 3.5 == 4`. Use `floor`, `ceiling` or `truncate` when the required direction is explicit. The [Basics implementation](https://github.com/neohaskell/NeoHaskell/blob/414602b9510a92dfac647bc68d6afadfb594502c/core/core/Basics.hs) defines these conventions.
+
+Addition, subtraction and multiplication work on compatible numeric types. They do not implicitly mix an existing `Int` with a `Float`; `fromIntegral` can explicitly convert an integral value when a floating-point calculation needs it.
+
+You may also encounter `Natural Int`. `makeNatural` returns `Nothing` for zero or a negative input and `Just` for a positive input. Treat that as this helper's check, rather than a guarantee that every value of the exported `Natural` type was validated: its constructor and numeric instances are also available. `Decimal` is another type re-exported by `Core`; consult its module before choosing arithmetic or precision rules for a financial calculation.
+
+## Conditions and completion <a id="bool-and-unit" />
+
+`Bool` has two values, `True` and `False`. Comparisons produce booleans, and `&&`, `||` and `not` combine or reverse them. For example, `(2 :: Int) > 0 && True` is `True`. Use a sum type when a shop status needs named alternatives such as awaiting payment, dispatched and cancelled; one boolean cannot explain those separate states.
+
+`Unit` has one value, `unit`, also written `()`. It is useful when an operation completes without returning additional data. In `Task error Unit`, the task can still fail with `error`; `Unit` describes only the successful result. It does not mean the operation had no effects. [Tasks and effects](./tasks/) covers that distinction.
+
+## Order identities <a id="uuid" />
+
+`Uuid` represents an identifier rather than the text used to display it. Import `Uuid qualified` to parse, render or generate one:
+
+```haskell
+import Uuid qualified
+
+parseOrderId :: Text -> Maybe Uuid
+parseOrderId input = Uuid.fromText input
+```
+
+`parseOrderId "mug-1"` gives `Nothing`. The text `"00000000-0000-0000-0000-000000000000"` parses as `Just Uuid.nil`, and `Uuid.toText Uuid.nil` renders that same text. The nil UUID is a fixed all-zero identifier, not a fresh order ID.
+
+`Uuid.generate` returns a `Task` that generates a random UUID when run. `Uuid.generateV5` instead derives an identifier deterministically from a namespace UUID and a text name. Repeating that pair produces the same identifier; it is not a secret. Parsing an ID checks its format, not whether an order exists or the caller may access it. The [Uuid module](https://github.com/neohaskell/NeoHaskell/blob/414602b9510a92dfac647bc68d6afadfb594502c/core/core/Uuid.hs) defines these operations.
+
+## Finding related modules <a id="modules" />
+
+Use the type in a signature to find the relevant family of operations. A qualified module import is still needed for operations such as `Array.map` or `Task.yield`.
+
+| Types in application code | Qualified modules | Reference |
+| --- | --- | --- |
+| `Array value`, `LinkedList value`, `Map key value` | `Array`, `LinkedList`, `Map` | [Arrays and maps](./containers/) |
+| `Maybe value`, `Result error value` | `Maybe`, `Result` | [Maybe and Result](./results/) |
+| `Task error value` | `Task` | [Tasks and effects](./tasks/) |
+| `Json.Value` | `Json` | [JSON and schemas](./json/) |
+
+Unlike `Text`, `Json.Value` is not a type re-exported by `Core`; import `Json qualified` to name it. The [Core export list](https://github.com/neohaskell/NeoHaskell/blob/414602b9510a92dfac647bc68d6afadfb594502c/core/core/Core.hs) is the exact index of available names. It also links the concurrency and implementation modules when a specific task calls for them.
