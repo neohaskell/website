@@ -1,17 +1,123 @@
 ---
-title: "Test shop behavior"
-description: "Page plan. What checks show that the shop behaves as specified?"
-tableOfContents: false
-pagefind: false
+title: Test shop behavior
+description: Turn the mug shop's behavior into repeatable decision, replay, and HTTP checks, then use a failing test to find a boundary error.
+tableOfContents:
+  minHeadingLevel: 2
+  maxHeadingLevel: 2
 prev: true
 next: true
-head:
-  - tag: meta
-    attrs:
-      name: robots
-      content: noindex
 ---
 
-## Page plan <a id="page-plan" />
+The mug shop accepts an order when at least one mug remains. A sold-out shop rejects it, while an unopened shop gives a different rejection. We have tried these cases by hand; repeatable tests let us check them again whenever the agent changes the application.
 
-This page will turn the original shop table into repeatable checks for an accepted order, sold-out rejection, missing shop state, and the resulting stock query. Readers will distinguish a decision test from an event replay check and an HTTP scenario, then inspect one intentional failure and its repair. Expected and observed results will appear together. The agent's evidence must include the actual checks run and account for delayed query updates rather than assuming immediate consistency.
+Use the project from [Place an order over HTTP](../http-orders/), with its existing `Shop` Feature, application composition, and `AvailableStock` query. Each accepted order buys one mug. Opening a shop records three mugs, and rejections must leave both its history and stock unchanged. This page turns that agreement into checks and uses one deliberate mistake to see whether they catch it.
+
+## The agreement as checks
+
+The table from [Plan the mug shop](../) describes outcomes, rather than particular testing tools. We can make each row precise enough for the agent to test:
+
+| Starting situation | Expected decision | Expected stock afterward |
+| --- | --- | --- |
+| Shop has three mugs | Accept and record one `OrderPlaced` | 2 |
+| Shop has one mug | Accept and record one `OrderPlaced` | 0 |
+| Shop has zero mugs | Reject with `Sold out`, record no events | 0 |
+| Shop does not exist | Reject with `Shop not found`, record no events | No shop row |
+
+The one-mug case matters. A condition that accidentally requires two mugs could pass an ordinary three-mug example while refusing the last valid order.
+
+Give your agent this task from the project root:
+
+```text wrap
+Follow the project's active NeoHaskell guidance. Add repeatable shop checks under tests/. Preserve existing Shop Feature and App composition, HTTP routes, and AvailableStock.
+
+Check decisions for stock 3, stock 1, stock 0, and a missing shop. Assert the accepted event and distinct rejection reasons. Check replay from ShopOpened through three OrderPlaced events. Run real commands against a fresh store and verify unchanged history after both rejections.
+
+Keep a live HTTP scenario in tests/integration/http-orders.hurl. Check stock 3, 2, then 0, acceptance of the last mug, Sold out and Shop not found, and unchanged zero stock. Retry only query reads with a bounded deadline, because query updates are asynchronous.
+
+Run neo --ci test. Show the changed files, actual results, and which checks exercise decisions, replay, query maintenance, and real HTTP. Do not treat a manually updated query as proof of a working subscription.
+```
+
+Here `tests/` is the project's test directory. The `.hurl` file describes requests and assertions that Neo runs against an application it starts for the integration checks. It saves the browser exercise as a repeatable scenario; it doesn't replace the more focused checks below.
+
+## Decisions and replay answer different questions
+
+A decision test supplies a command and a particular state directly to `decide`. There is no HTTP request and no history to load. Under `tests/Shop/`, ask the agent to show the last-mug case in `PlaceOrderDecisionSpec.hs`. Its setup and call can look like this excerpt inside the test's `do` block:
+
+```haskell wrap
+let shop = ShopEntity {
+      shopId = Uuid.nil,
+      availableMugs = 1
+    }
+let cmd = PlaceOrder {entityId = Uuid.nil}
+result <- runTestDecision
+  (decide cmd (Just shop) Auth.emptyContext)
+```
+
+`Just shop` supplies an existing shop. `Nothing` supplies the missing-shop case. `Uuid.nil` is a fixed test identifier here, not the identifier to paste into a running shop. `Auth.emptyContext` supplies an empty request context; this tutorial hasn't added access restrictions.
+
+`decide` produces a `Decision`, so the test needs a small helper to run it and obtain an inspectable result. This is the helper used by the starter's decision tests, with the imports omitted:
+
+```haskell wrap
+runTestDecision :: Decision event -> Task Text (CommandResult event)
+runTestDecision decision = do
+  let decisionCtx = DecisionContext {genUuid = Uuid.generate}
+  Decider.runDecision decisionCtx decision
+```
+
+The helper supplies the identifier generator required by the decision interpreter. In the test result, `AcceptCommand` carries the stream choice and proposed events; `RejectCommand` carries the reason. Check that acceptance proposes exactly one `OrderPlaced` for this shop, and that rejection returns the expected reason. This checks what the decision proposes. It doesn't prove that an event was stored.
+
+Replay asks a different question: given recorded events, what state do they produce? In `tests/Shop/ShopStockSpec.hs`, inspect the sequence built from one `ShopOpened` with opening stock three, followed by three `OrderPlaced` events. The expected counts are:
+
+```text wrap
+Initial state       0
+ShopOpened          3
+First OrderPlaced   2
+Second OrderPlaced  1
+Third OrderPlaced   0
+```
+
+This check calls `update` for each event. It never calls `decide`, so it can't establish that a fourth order would be rejected. Feeding invented extra orders to replay would test a history the command should never have allowed. The decision check protects that boundary; replay checks the calculation for an accepted history.
+
+## Recorded history and the running query
+
+A stored-command check joins those two parts. Inspect `tests/Shop/PlaceOrderSpec.hs`: open a shop in a fresh store, run orders through the real command executor, and compare the recorded event payloads. After three accepted orders, there should be one `ShopOpened` and three `OrderPlaced` events. After each rejection, the history must equal the history saved before it, not merely have the same count.
+
+The stock query adds another boundary. A test can run the real query updater over the recorded events and call the keyed query handler to check answers at three, two, and zero. That is useful for checking query maintenance and retrieval, but it explicitly drives the updater. It cannot show that the running application's subscriptions connect the events to the query.
+
+The live HTTP scenario checks that connection. After opening or ordering, it reads the keyed route until the expected count appears. This excerpt from `tests/integration/http-orders.hurl` checks the answer after the first order; earlier requests open the shop and capture its identifier as `shop`:
+
+```hurl wrap
+GET http://localhost:8080/queries/available-stock/{{shop}}
+[Options]
+retry: 10
+retry-interval: 200
+HTTP 200
+[Asserts]
+jsonpath "$.availableMugs" == 2
+```
+
+`{{shop}}` reuses the captured identifier. Hurl retries this read up to ten times with a 200-millisecond interval. If the answer never reaches two, the check fails. Retrying a read is safe here; retrying `place-order` would buy another mug. A successful command response alone doesn't mean that an immediate query read is current.
+
+You can also trace this connection in the native IDE with `neo ide`. In **Ungrouped**, use **Fit View** and follow both `ShopOpened` and `OrderPlaced` into `AvailableStock`. If decisions and replay pass but the live query never changes, those are the event subscriptions to inspect in `src/Shop/Feature.hs`. The graph shows the declared connection; the HTTP scenario checks it in the running application.
+
+## A failure at the last mug
+
+A test that has only passed hasn't yet shown which mistake it can catch. Ask the agent to make one temporary change in `src/Shop/Commands/PlaceOrder.hs`: replace the acceptance condition `shop.availableMugs > 0` with `shop.availableMugs > 1`. Leave the tests' expectations unchanged, then run:
+
+```sh
+neo --ci test
+```
+
+The last-mug decision test should fail because stock one now returns `Sold out`. The stored-command check should also fail when its third order is rejected. Neo stops after the failing unit tests, so it skips the HTTP scenarios in this run. If run against this faulty decision, the live scenario would also be unable to reach its expected zero stock. The replay check still passes because `update` hasn't changed. These results locate the mistake in accepting commands, rather than in subtracting stock from recorded events.
+
+Restore the condition to `shop.availableMugs > 0` and run the same command again. In the verified shop, the results were:
+
+| Check | Expected | Observed after repair |
+| --- | --- | --- |
+| Last-mug decision | Accept one event | Passed |
+| Sold-out and missing-shop decisions | Distinct rejection reasons | Passed |
+| Shop replay | Counts 0, 3, 2, 1, 0 | Passed |
+| Stored commands and query handler | No new history or stock change after rejection | Passed |
+| Live HTTP scenario | Stock 3, 2, 0 and both rejections | Passed |
+
+Keep the agent's actual test output alongside its explanation. A useful report names the checks run and their results, identifies any failed case, and distinguishes manually driven query updates from the live subscription check. Once the original condition is restored, the same last-mug check that exposed the mistake should pass without weakening its expectation.

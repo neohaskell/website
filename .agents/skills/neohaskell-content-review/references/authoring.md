@@ -22,6 +22,8 @@ Run the documented path in an isolated directory when tools permit. Verify every
 
 For a running-service lesson, verify readiness with a real request, then exercise stopping and restarting the process. Download progress, a compilation success, a startup log, or a test that merely times out cannot establish that the server answers. Check optional modes against their implementation and observed behavior too; a help message promising automatic restart is not evidence that restart occurs. Keep the working path in the article and record unsupported optional behavior for its owning ticket. If that behavior is necessary to the page's stated result, treat it as a blocker.
 
+For testing lessons, verify the runner's failure behavior as well as the example failure. A command may stop after unit failures and skip HTTP scenarios. Distinguish observed failures from consequences inferred for skipped checks. Capture the deliberate failure and restored success without changing the expected behavior.
+
 Keep revisions, commands, output, review reports, and verification limits under ignored `.agents-state/`. Separate source inspection, executed behavior, and approved product intent. Public prose explains the task confidently without a source-audit sidebar. A real contradiction that prevents honest instructions is a blocker to resolve, not a disclaimer to hide in the article.
 
 ## Teach through meaningful inspection
