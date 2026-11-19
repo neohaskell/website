@@ -79,6 +79,8 @@ For NeoHaskell diagrams, load `$neohaskell-diagram-colors`. For inline Event Mod
 
 # Teaching examples
 
+For every substantive documentation page, identify its hardest relationship or mechanism and add a purpose-built visual explanation beside the relevant prose. Show data flow, dependencies, state transitions, or failure and recovery as appropriate. Screenshots and code excerpts do not replace that explanation. Use the reviewed introductory lessons as the teaching baseline. Static diagrams are appropriate for stable relationships; animation should reveal sequence or transformation, with reduced-motion and static alternatives. Place figures immediately beside the explanation; put a page-premise figure near the opening. Use connected shapes, a clear focal point and reading path, and danger color plus a non-color cue for failures. Avoid text-card grids, decorative filler or mandatory interaction. The content-review authoring reference and visual-language skill own this practice; complete the fresh teaching-example review and correction loop.
+
 When choosing or simplifying a teaching graphic, load `$minimal-teaching-visuals` for representation choice and the test of what each element contributes to the explanation.
 
 For NeoHaskell code examples, load `$neohaskell-code-examples`. It owns record layout with opening braces beside constructors and commas at field ends, plus local bindings inside `do` blocks.

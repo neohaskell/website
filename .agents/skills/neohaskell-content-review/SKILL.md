@@ -7,6 +7,10 @@ description: Author and review NeoHaskell documentation within the reader's lear
 
 For documentation creation, revision, or deletion, follow [authoring a page](references/authoring.md) and [documentation voice](references/documentation-voice.md). The voice reference applies the Rust Book's connected explanations and descriptive headings instead of a chain of imperative steps or benefit slogans. For a bounded copy review, use the prerequisite review below without expanding the edit scope.
 
+## Teach the difficult part visually
+
+Every substantive page should make its hardest mechanism or relationship visible in a purpose-built figure, following the authoring reference. Review the visual explanation as part of the page's teaching, not as optional decoration after the prose. Screenshots and code alone do not satisfy a data-flow explanation. Use the accepted introductory lessons as the baseline and complete the fresh teaching-example visual review.
+
 ## Review the reader's prerequisites
 
 Review what the reader must understand to follow the argument, not just which technical words appear. Use the actual page order and preceding explanations as evidence of what has been taught. A glossary entry, later page, heading, source excerpt, or screenshot label does not by itself teach a concept.

@@ -10,9 +10,21 @@ prev: true
 next: true
 ---
 
+import DeployedContracts from "@components/learn/DeployedContracts.astro";
+
 Imagine the mug shop from [Test shop behavior](../test-behavior/) has been deployed. Customers can order its final mug through `PlaceOrder`. Other programs may already call that command, and its accepted `OrderPlaced` events are part of the shop's history. Those callers and facts now depend on the behavior we shipped.
 
 The shop needs a new online policy: keep one mug for customers buying in person. We will add that behavior alongside the deployed command. In NeoHaskell, a deployed command, event, or query keeps its identity and implementation. New requirements get a new slice rather than a rewrite of deployed code, as [Model the whole process](../../introduction/event-modeling/#freeze-the-contract-when-it-is-deployed) explains.
+
+At one mug remaining, rewriting `PlaceOrder` would turn an existing caller's accepted order into a rejection. A separate online command gives the new policy its own route. Each path below starts with its own example shop at one mug:
+
+<DeployedContracts kind="callers" />
+
+The saved events also depend on a compatible reader. Imagine renaming the required `entityId` field to `shopId` under the same event identity. Existing records would still contain `entityId`; a reader that requires only the new field could no longer decode them. That incompatible rewrite can stop rebuilding the shop from its history:
+
+<DeployedContracts kind="history" />
+
+Freezing `OrderPlaced` keeps its reader available for those records. If a new requirement needs a different event shape, introduce a new event identity and keep the old reader for retained history.
 
 ## Freezing the deployed shop
 

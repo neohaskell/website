@@ -1,0 +1,79 @@
+---
+interface Props { kind: 'callers' | 'history' }
+const { kind } = Astro.props;
+---
+{kind === 'callers' ? <div class="contract-diagram callers">
+  <section>
+    <h3>Rewrite the deployed command</h3>
+    <svg viewBox="0 0 350 260" role="img" aria-label="At one mug, an existing caller reaches a rewritten PlaceOrder. The caller now receives an unexpected rejection and one mug remains.">
+      <defs><marker id="rewrite-arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0 0L6 3L0 6" class="danger-stroke" /></marker></defs>
+      <g class="actor"><circle cx="30" cy="62" r="8"/><path d="M16 89V85C16 70 44 70 44 85V89"/></g>
+      <path d="M54 75H142" class="wire"/>
+      <rect x="150" y="51" width="48" height="48" rx="6" class="command"/>
+      <path d="M160 75H188M174 61V89" class="command-mark"/>
+      <path d="M207 75H245M275 75H313" class="danger-stroke" marker-end="url(#rewrite-arrow)"/>
+      <path d="M249 65L269 85M269 65L249 85" class="danger-stroke"/>
+      <text x="30" y="122" text-anchor="middle">Caller</text>
+      <text x="174" y="122" text-anchor="middle" class="code">PlaceOrder</text>
+      <text x="174" y="148" text-anchor="middle" class="danger-ink">Changed rule</text>
+      <text x="320" y="122" text-anchor="end" class="danger-ink">Rejected</text>
+      <text x="320" y="148" text-anchor="end">1 mug</text>
+      <path d="M245 191L259 167L273 191Z" class="danger-stroke"/><path d="M259 175V182M259 186V187" class="danger-stroke"/>
+      <text x="175" y="228" text-anchor="middle" class="danger-ink">Existing caller's behavior breaks</text>
+    </svg>
+  </section>
+  <section>
+    <h3>Add a separate slice</h3>
+    <svg viewBox="0 0 350 300" role="img" aria-label="At one mug, the existing caller keeps PlaceOrder and buys the final mug. An online caller uses the new PlaceOnlineOrder, which rejects and keeps one mug. These are separate requests against separate example shops.">
+      <defs><marker id="safe-arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0 0L6 3L0 6" class="wire" /></marker></defs>
+      <g class="actor"><circle cx="30" cy="40" r="8"/><path d="M16 67V63C16 48 44 48 44 63V67"/></g>
+      <path d="M54 53H142M207 53H314" class="wire" marker-end="url(#safe-arrow)"/>
+      <rect x="150" y="29" width="48" height="48" rx="6" class="command"/>
+      <path d="M166 53V48A8 8 0 0 1 182 48V53M164 53H184V67H164Z" class="command-mark"/>
+      <text x="30" y="103" text-anchor="middle">Caller</text>
+      <text x="174" y="103" text-anchor="middle" class="code">PlaceOrder</text>
+      <text x="320" y="103" text-anchor="end">0 mugs</text>
+      <g class="actor"><circle cx="30" cy="198" r="8"/><path d="M16 225V221C16 206 44 206 44 221V225"/></g>
+      <path d="M54 211H142M207 211H314" class="new-wire" marker-end="url(#safe-arrow)"/>
+      <rect x="150" y="187" width="48" height="48" rx="6" class="command new-command"/>
+      <path d="M162 211H186M174 199V223" class="command-mark"/>
+      <text x="30" y="261" text-anchor="middle">Online</text>
+      <text x="174" y="261" text-anchor="middle" class="code">PlaceOnlineOrder</text>
+      <text x="320" y="261" text-anchor="end">1 mug</text>
+      <text x="320" y="287" text-anchor="end">Reserved</text>
+    </svg>
+  </section>
+</div> : <div class="contract-diagram history">
+  {[false, true].map(broken => <section>
+    <h3>{broken ? 'Rewrite the event reader' : 'Keep the original event reader'}</h3>
+    <svg viewBox="0 0 350 210" role="img" aria-label={broken ? 'Saved entityId field cannot match a rewritten event reader that requires shopId. Replay stops.' : 'Saved entityId field matches the original event reader. Replay continues.'}>
+      <path d="M17 41H60L75 56V115H17ZM60 41V56H75" class="event"/>
+      <path d="M28 72H62M28 85H62M28 98H48" class="event-lines"/>
+      <text x="17" y="147" class="code">entityId</text>
+      <path d="M86 78H126M158 78H195" class={broken ? 'danger-stroke' : 'wire'}/>
+      {broken ? <path d="M130 68L150 88M150 68L130 88" class="danger-stroke"/> : <path d="M135 70L143 78L135 86" class="wire"/>}
+      <path d="M205 46H330V111H205M205 46V65H193V92H205V111" class="reader"/>
+      <text x="267" y="85" text-anchor="middle" class={broken ? 'code danger-ink' : 'code'}>{broken ? 'shopId' : 'entityId'}</text>
+      <text x="267" y="147" text-anchor="middle">Required field</text>
+      <text x="175" y="196" text-anchor="middle" class={broken ? 'danger-ink' : ''}>{broken ? 'Replay stops: field does not match' : 'Replay continues'}</text>
+    </svg>
+  </section>)}
+</div>}
+<style>
+.contract-diagram {--danger:#ffaaaa;display:grid;grid-template-columns:1fr 1fr;gap:24px;margin:32px 0;font-size:16px;color:var(--sl-color-text);}
+:global([data-theme='light']) .contract-diagram {--danger:#a51e2c;}
+.contract-diagram section {min-width:0;margin:0;}
+.contract-diagram h3 {font-size:18px;font-weight:500;line-height:1.5;margin:0 0 16px;}
+svg {width:100%;height:auto;overflow:visible;}
+svg text {font-family:var(--sl-font);font-size:17px;fill:currentColor;}
+svg .code {font-family:var(--sl-font-mono);}
+.actor,.wire,.reader {stroke:currentColor;stroke-width:1.5;fill:none;}
+.command {fill:var(--diagram-command-surface);stroke:var(--diagram-command-line);stroke-width:1.5;}
+.command-mark,.new-wire {stroke:var(--diagram-command-ink);stroke-width:1.5;fill:none;}
+.new-command {stroke-dasharray:4 3;}
+.danger-stroke {stroke:var(--danger);stroke-width:2;fill:none;}
+svg .danger-ink {fill:var(--danger);}
+.event {fill:var(--diagram-event-surface);stroke:var(--diagram-event-line);stroke-width:1.5;}
+.event-lines {stroke:var(--diagram-event-ink);stroke-width:1.5;fill:none;}
+@media(max-width:760px){.contract-diagram{grid-template-columns:1fr;gap:24px;}.contract-diagram svg{display:block;max-width:420px;margin:0 auto;}}
+</style>
