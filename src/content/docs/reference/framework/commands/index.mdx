@@ -1,17 +1,137 @@
 ---
 title: "Commands and decisions"
-description: "Page plan. What must a command define, and what can a decision return?"
-tableOfContents: false
-pagefind: false
-prev: false
-next: false
-head:
-  - tag: meta
-    attrs:
-      name: robots
-      content: noindex
+description: "Read command routing, decision outcomes, request context and generated Command instances."
+prev: true
+next: true
 ---
 
-## Page plan <a id="page-plan" />
+import CommandContract from '@components/learn/CommandContract.astro';
 
-This page will specify the command record, `EntityOf`, `getEntityId`, `decide`, `RequestContext`, transport permissions, and derivation helpers, mapping authored functions to public `Command` methods. It will compare `acceptNew`, `acceptExisting`, `acceptAny`, `acceptAfter`, and `reject` through a compact outcome table. `Counter` decision cases will ground accepted and rejected behavior. Multi-tenant signatures and authorization hooks will have anchors, with task guides owning the longer implementation and access-policy walkthroughs.
+A command carries a requested change. Its decision checks that request against the entity's current state and proposes events or a rejection. The executor loads state, interprets the decision and attempts to record accepted events. These are separate boundaries: an accepted decision is not yet a successful append.
+
+[Event models and features](../) explains where a command belongs in a feature. This reference follows the starter's `IncrementCounter` and `CreateCounter` declarations. [Commands, decisions, and outcomes](/concepts/command-outcomes/) follows the same boundaries through the mug shop, including empty outcomes and storage failures.
+
+## The command record and its destination <a id="command-record" />
+
+In `src/Starter/Counter/Commands/IncrementCounter.hs`, the record carries the counter identity and the requested amount:
+
+```haskell
+data IncrementCounter = IncrementCounter {
+  entityId :: Uuid,
+  amount :: Int
+}
+
+type instance EntityOf IncrementCounter = CounterEntity
+
+getEntityId :: IncrementCounter -> Maybe Uuid
+getEntityId cmd = Just cmd.entityId
+```
+
+`EntityOf` names the entity type this command changes. `getEntityId` selects an individual entity of that type. Returning `Just id` asks execution to load its current state; a missing stream still reaches the decision as `Nothing`. The identifier type is `EntityIdType (EntityOf command)`, which defaults to `Uuid`.
+
+The starter's `CreateCounter` instead carries a `label` and returns `Nothing` from `getEntityId`. Its decision generates an identity for the new counter and places that identity in its proposed event. Execution then obtains the destination from that event. Returning `Nothing` does not itself accept creation or generate an identity.
+
+## The decision and its inputs <a id="decide" />
+
+The ordinary decision signature receives the command, optional current state and caller context:
+
+```haskell
+decide :: IncrementCounter -> Maybe CounterEntity
+  -> RequestContext -> Decision CounterEvent
+```
+
+The starter rejects a missing counter with `"Counter not found"`. For an existing counter, its central branch is this reading excerpt:
+
+```haskell
+  Just existing ->
+    if cmd.amount <= 0
+      then Decider.reject "Amount must be positive"
+      else
+        Decider.acceptExisting
+          [ CounterIncremented
+              CounterIncremented.Event {
+                entityId = existing.counterId,
+                amount = cmd.amount
+              }
+          ]
+```
+
+For a counter at value two, amount one proposes one `CounterIncremented` event carrying amount one. Amount zero rejects with `"Amount must be positive"`. The proposed event is still subject to the executor's stream checks and storage operation.
+
+<CommandContract />
+
+The creation decision has corresponding cases: an empty label rejects with `"Label cannot be empty"`; an already supplied entity rejects with `"Counter already exists"`; an absent entity and nonempty label generate an identity and propose `CounterCreated` through `acceptNew`.
+
+A `Decision event` describes this computation. `Decider.runDecision` interprets it using a `DecisionContext` and returns `Task Text (CommandResult event)`. The context supplies UUID generation. Protected-value operations can also perform cryptography and key lookup during interpretation. Constructing a decision does not append its events, and interpreting it is not a universal promise of effect-free execution. [Pure decisions and effects](/concepts/pure-decisions/) explains this distinction.
+
+## Acceptance and rejection <a id="outcomes" />
+
+The helpers below are exported by [Decider](https://github.com/neohaskell/NeoHaskell/blob/414602b9510a92dfac647bc68d6afadfb594502c/core/service/Decider.hs). Each acceptance helper takes an `Array variant`, with `EventVariantOf event variant` converting those values to the entity's event type. The starter uses its `CounterEvent` alternatives directly.
+
+| Helper | Additional input | Requested stream condition |
+| --- | --- | --- |
+| `acceptNew` | Event array | The stream must be new. |
+| `acceptExisting` | Event array | The stream must already exist. |
+| `acceptAny` | Event array | No new/existing condition. |
+| `acceptAfter` | `StreamPosition`, then event array | Append after the specified position. |
+| `reject` | `Text` reason | Refuse the request without an append. |
+
+Acceptance produces `AcceptCommand insertionType events`; rejection produces `RejectCommand reason`. Finish every decision path with an acceptance or rejection. A bare returned value fails interpretation, and an acceptance or rejection cannot be followed by more decision work.
+
+An empty accepted array still needs a destination identity and still undergoes applicable new/existing checks. With no append, `acceptAfter position []` does not check the position. For a nonempty `acceptExisting`, execution normally appends against the position of the loaded state and can reload and rerun the decision after contention. [Entities and event streams](/concepts/entities-and-streams/) covers those concurrency boundaries. Several proposed events belong to this one entity stream; they do not transact with another command, provider or query update.
+
+## Request context and authorization <a id="authorization" />
+
+`RequestContext`, exported by `Service.Auth`, carries `user :: Maybe UserClaims`, resolved `files`, a `requestId`, a `timestamp`, `trustedBypass`, and optional Web `origin` metadata. The decision can compare the caller with the loaded entity's owner. Origin addresses and user-agent strings are untrusted metadata, not identity.
+
+A separate top-level hook gates access before the decision:
+
+```haskell
+canAccess :: Maybe UserClaims -> Maybe AccessError
+```
+
+`Nothing` allows access; `Just error` refuses it. Define this hook before the derivation helper. Without a hook, the `Command` default requires authentication. The executor skips this gate for a trusted-bypass context, but the decision still receives that context and runs its own checks. Invalid Web tokens are rejected before this gate; an absent token is a distinct case that can reach the access policy.
+
+`RequestContext` is caller information, while `DecisionContext` supplies interpreter capabilities. Neither an allowed transport nor a passed access hook establishes entity ownership. [Verify caller identity](/guides/authentication/) and [Authorize a command](/guides/authorization/) develop the identity and stored-owner checks.
+
+## Transport declarations and derivation <a id="derivation" />
+
+The starter ends the command module with these declarations, after its record, routing and decision functions:
+
+```haskell
+type instance TransportsOf IncrementCounter = '[WebTransport]
+
+command ''IncrementCounter
+```
+
+`TransportsOf` is a type-level list of permitted transport adapters. It does not replace caller authorization or register a listener by itself. The feature declares the command, and the application supplies the transport configuration. [Expose an HTTP API](/guides/transports/) owns that setup.
+
+The `command` helper comes from `Service.CommandExecutor.TH`; `deriveCommand` is an alias. The double quote passes the type's name to compile-time generation. This is different from the Event Model's `command @IncrementCounter`, which declares a slice. The helper connects authored declarations to the [public Command contract](https://github.com/neohaskell/NeoHaskell/blob/414602b9510a92dfac647bc68d6afadfb594502c/core/service/Service/Command/Core.hs):
+
+| Authored declaration | Generated connection |
+| --- | --- |
+| `getEntityId` | `getEntityIdImpl` |
+| `decide` | `decideImpl` |
+| Optional `canAccess` | `canExecuteImpl` |
+| Optional `MultiTenancy` | Associated `IsMultiTenant` |
+
+It also generates `NameOf`, a known hash, schema and JSON/deriving boilerplate. `EntityOf` and `TransportsOf` remain authored declarations. A schema describes structure; it does not express the positive-amount business rule.
+
+## Multi-tenant signatures <a id="multi-tenancy" />
+
+A command module that defines `type MultiTenancy = True` adds the tenant UUID as the first argument to both routing and decision functions. For the same counter types, the signature shapes are:
+
+```haskell
+getEntityId :: Uuid -> IncrementCounter -> Maybe Uuid
+
+decide :: Uuid -> IncrementCounter -> Maybe CounterEntity
+  -> RequestContext -> Decision CounterEvent
+```
+
+The first UUID is the tenant identity; the returned UUID identifies the counter within that tenant. `RequestContext` remains the final input. With no `MultiTenancy` alias, the generated instance uses the ordinary signatures shown earlier. The public type families `GetEntityIdFunction` and `DecideFunction` select these shapes from `IsMultiTenant`.
+
+When reviewing an agent's command change, trace the selected entity, each decision branch and the permitted transports together. Preserve deployed command definitions and their implementations. A new policy belongs to a separately named command and feature, as in [Add a feature safely](/tutorial/change-safely/).
+
+<style>{`
+.sl-markdown-content table:first-of-type td:first-child code { white-space: nowrap; }
+`}</style>
