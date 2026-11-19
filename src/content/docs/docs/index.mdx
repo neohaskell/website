@@ -1,6 +1,6 @@
 ---
-title: Documentation plan
-description: Find existing NeoHaskell guidance and browse planned installation steps, shop chapters, task guides, concepts, and API reference.
+title: Documentation
+description: "Find your starting point in NeoHaskell: introductory lessons, the Counter starter, the mug-shop tutorial, task guides, concepts, and reference."
 tableOfContents:
   minHeadingLevel: 2
   maxHeadingLevel: 2
@@ -13,9 +13,15 @@ head:
       content: noindex
 ---
 
-The four pages under [Start here](../introduction/), [Set up your agent](../getting-started/), and [Resources](../resources/) contain existing guidance. The other destinations contain page plans describing the explanations, examples, and figures to be written. Resources links to instructions available upstream now.
+NeoHaskell documentation follows an application from the questions it must answer to the code and checks that express its behavior. You can read the introductory lessons without installing anything, follow the Counter starter into a running project, or use the guides and reference while working on your own application.
 
-The first journey begins with developer judgment and business questions, explains why events retain the meaning of a change, then introduces commands and queries before connecting them in an Event Model. It will then check the Counter starter supplied with NeoHaskell. The tutorial will then build a ceramic-mug shop in that project, from its first decision to a tested HTTP interface. Each task guide will answer an independent question; concepts will explain the design and reference pages will define syntax and API contracts.
+## A path through the documentation <a id="reading-path" />
+
+The [introductory lessons](../introduction/) explain developer judgment, events, commands, queries, and how those parts connect in an Event Model. The [first-application guides](../getting-started/create-project/) then use Counter, the starter supplied with NeoHaskell, to show project structure and check a running application. Installation instructions are still being developed; use the [toolchain guidance in Resources](../resources/#start-building) before creating a project.
+
+The [mug-shop tutorial](../tutorial/) builds one connected example: deciding whether to accept an order, reading stock, exposing the behavior over HTTP, and testing it. Read those chapters in order because each builds on the shop established earlier.
+
+Task guides answer a particular application question, such as retaining history or restricting access. Concepts explain why the parts behave as they do. Reference pages define the syntax, types, and contracts you need when inspecting code. You can enter those pages directly and follow their prerequisite links when needed. The external-service and inbound-worker guides remain page plans; their links below describe the intended coverage.
 
 ## Start here <a id="start-here" />
 
@@ -34,7 +40,7 @@ The first journey begins with developer judgment and business questions, explain
 
 <dl class="docs-map">
   <dt><a href="../getting-started/installation/">Install NeoHaskell</a></dt>
-  <dd>What must be installed, and how can I tell the toolchain is available?</dd>
+  <dd>Planned installation walkthrough. Use Resources for current toolchain guidance.</dd>
   <dt><a href="../getting-started/create-project/">Create a project</a></dt>
   <dd>Where do I run project creation, and what will it produce?</dd>
   <dt><a href="../getting-started/run/">Run the application</a></dt>
@@ -113,9 +119,9 @@ The first journey begins with developer judgment and business questions, explain
 
 <dl class="docs-map">
   <dt><a href="../guides/integrations/">Call an external service</a></dt>
-  <dd>How do I perform an external effect after a decision?</dd>
+  <dd>Planned guide to performing an external effect after a decision.</dd>
   <dt><a href="../guides/integrations/inbound-workers/">Run an inbound worker</a></dt>
-  <dd>How can a background source send typed application commands?</dd>
+  <dd>Planned guide to sending typed application commands from a background source.</dd>
   <dt><a href="../guides/integrations/oauth-connections/">Connect an external account</a></dt>
   <dd>How does a user authorize access to a provider account?</dd>
 </dl>
@@ -148,6 +154,13 @@ The first journey begins with developer judgment and business questions, explain
   <dd>How does one recorded fact cause another part of the application to act?</dd>
   <dt><a href="../concepts/identity-and-permissions/">Identity and permissions</a></dt>
   <dd>Why does knowing who someone is not decide what they may do or read?</dd>
+</dl>
+
+<dl class="docs-map">
+  <dt><a href="../guides/integrations/create-reusable/">Create a reusable integration</a></dt>
+  <dd>How do I separate a provider module from application-specific mappings?</dd>
+  <dt><a href="../guides/integrations/resources/">Manage integration resources</a></dt>
+  <dd>Who acquires, shares, and releases resources used by integration work?</dd>
 </dl>
 
 ## Reference and help <a id="reference-and-help" />
@@ -189,6 +202,8 @@ The first journey begins with developer judgment and business questions, explain
   <dd>What updates a query row, and what may a caller read?</dd>
   <dt><a href="../reference/framework/transports/">Transport contracts</a></dt>
   <dd>What interface does a registered command or query expose?</dd>
+  <dt><a href="../reference/framework/integrations/">Integration contracts</a></dt>
+  <dd>Which types connect external work, resources, and application commands?</dd>
 </dl>
 
 ### Tooling and configuration <a id="tooling-and-configuration" />
