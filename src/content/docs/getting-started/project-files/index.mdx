@@ -8,13 +8,13 @@ prev: true
 next: true
 ---
 
-The Counter starter gives each part of its behavior a place in the source. We can find the condition that rejected a zero increment, the event an accepted increment produces, and the calculation behind the query's answer.
+In [Check your first response](../first-response/), we created a counter, added one to it, and tried adding zero. Counter rejected zero and kept the value at one. We can trace that behavior through the graphical IDE and the code that decides what happens.
 
-This page uses the unchanged project from [Create a project](../create-project/) and the behavior we tried in [Check your first response](../first-response/). The excerpts below are for reading beside your own files, not replacements to paste into them.
+Use the unchanged Counter starter from [Create a project](../create-project/). Read the excerpts alongside your own files.
 
 ## The application and its feature <a id="the-application-and-its-feature" />
 
-Open your project directory in your editor. Paths on this page start at the project root, the directory containing `neo.json`. Here is a selection of its files, focused on the increment:
+Open your project directory in your editor. Its root is the directory containing `neo.json`. Two source files describe how Counter is put together:
 
 ```text
 neo.json
@@ -22,21 +22,6 @@ src/
   App.hs
   Starter/Counter/
     Feature.hs
-    Commands/
-      IncrementCounter.hs
-    Events/
-      CounterIncremented.hs
-    Event.hs
-    Entity.hs
-    Queries/
-      CounterView.hs
-tests/
-  Decider/Counter/
-    IncrementCounterSpec.hs
-  Property/
-    CounterReplaySpec.hs
-  scenarios/
-    counter-flow.hurl
 ```
 
 These are actual starter paths, even if you chose a different project name. In `src/App.hs`, `appEventModel` assembles the application. Among its settings are the HTTP transport and the features to include:
@@ -47,22 +32,20 @@ EventModel.features do
   counterFlow
 ```
 
-The `counterFlow` definition is in `src/Starter/Counter/Feature.hs`. It groups the command and query slices under the feature `Counter flow` and chapter `Manage counters`. Within that chapter, the increment slice declares:
+The `counterFlow` definition in `Feature.hs` groups the slices under the feature `Counter flow` and chapter `Manage counters`. The `Increment a counter` slice declares which event the command can produce:
 
 ```haskell wrap
-slice "Increment a counter" do
-  entity @CounterEntity do
-    command @IncrementCounter do
-      produces @CounterIncremented.Event
+command @IncrementCounter do
+  produces @CounterIncremented.Event
 ```
 
-This says which command belongs to the slice and which event it can produce. It doesn't contain the condition for accepting that command. That implementation lives in `Commands/IncrementCounter.hs`.
+The condition for accepting the command lives in `Commands/IncrementCounter.hs`.
 
 ## The model in the graphical IDE <a id="the-model-in-the-graphical-ide" />
 
 Neo's graphical IDE displays those relationships on a canvas. It opens a diagram file named `event-model.json` in the project root. The unchanged starter doesn't include that file, so use the <a href={`${import.meta.env.BASE_URL}examples/counter-event-model.json`} download="event-model.json">Counter diagram</a> supplied for this lesson. Save it in your project root with the exact filename `event-model.json`. This adds a diagram of the existing starter; it doesn't change the application code.
 
-From that directory, run:
+If Counter is still running from the previous lesson, open a second terminal. From the project root, run:
 
 ```sh
 neo ide
@@ -70,18 +53,22 @@ neo ide
 
 Leave the terminal running and open [http://127.0.0.1:2323](http://127.0.0.1:2323) in a desktop browser. This is the IDE, separate from the running application's documentation at port `8080`. Counter itself doesn't need to be running to inspect the diagram.
 
-Select **Counter flow** in the feature list. Under **Manage counters**, select **Increment a counter** to locate its slice. Use **Zoom In**, **Zoom Out**, and **Fit View** at the lower left to adjust the canvas. In the increment column, follow `IncrementCounter` down to `CounterIncremented`, then follow that event's connection to `CounterView`.
+Select **Counter flow** in the feature list. Under **Manage counters**, select **Increment a counter** to locate its slice. Use **Zoom In**, **Zoom Out**, and **Fit View** at the lower left to adjust the canvas. Select `IncrementCounter` on the canvas to highlight its arrow to `CounterIncremented`.
 
-<picture>
-  <source media="(max-width: 40rem)" srcSet={`${import.meta.env.BASE_URL}images/docs/counter-ide-increment-dark.png`} />
-  <img src={`${import.meta.env.BASE_URL}images/docs/counter-ide-dark.png`} alt="The increment command and its accepted event in Counter's graphical IDE diagram" width="1440" height="840" />
-</picture>
+<p>
+  <a href={`${import.meta.env.BASE_URL}images/docs/counter-ide-dark.png`} aria-label="Open the full-size Counter IDE screenshot">
+    <picture>
+      <source media="(max-width: 40rem)" srcSet={`${import.meta.env.BASE_URL}images/docs/counter-ide-increment-dark.png`} />
+      <img src={`${import.meta.env.BASE_URL}images/docs/counter-ide-dark.png`} alt="A highlighted arrow points from IncrementCounter to CounterIncremented" width="1440" height="840" />
+    </picture>
+  </a>
+</p>
 
-The names on the canvas identify the source definitions to inspect. The diagram shows connections and fields; to understand why zero is rejected, we still need the command's decision. Keep the diagram open beside the source, or stop its server with Ctrl+C when you're finished.
+Next, select `CounterIncremented` to highlight its connection to `CounterView`. The names on the canvas tell us which source definitions to inspect. To see why zero is rejected, we need the command's decision. Keep the diagram open beside the source, or stop its server with Ctrl+C when you're finished.
 
 ## The command and its accepted event <a id="an-increment-through-the-source" />
 
-In `src/Starter/Counter/Commands/IncrementCounter.hs`, the command carries the two fields we sent from the browser:
+Under `src/Starter/Counter/`, open `Commands/IncrementCounter.hs`. The command carries the two fields we sent from the browser:
 
 ```haskell wrap
 data IncrementCounter = IncrementCounter {
@@ -99,7 +86,7 @@ if cmd.amount <= 0
 
 `cmd` is the command being evaluated. The condition rejects zero and negative amounts with the message we saw in the browser. This excerpt ends before the `else` branch, which accepts a positive amount and produces a `CounterIncremented` event. This is where to inspect a proposed change to which amounts are allowed.
 
-The event's data is defined in `src/Starter/Counter/Events/CounterIncremented.hs`:
+The event's data is defined in `Events/CounterIncremented.hs` in the same Counter directory:
 
 ```haskell
 data Event = Event {
@@ -123,7 +110,7 @@ CounterIncremented e ->
 
 `e` contains the event's data. The expression keeps the entity's other fields and adds the event's amount to its value. Rejection never reaches this increment case because it records no increment event. To review how an accepted fact changes state, inspect `update` rather than the acceptance condition.
 
-`src/Starter/Counter/Queries/CounterView.hs` defines the query row. Its `combine` function takes the entity's state and supplies the fields the browser reads:
+The `Show counter values` slice in `Feature.hs` lists `CounterIncremented.Event` with `onEvent`. That's the arrow to `CounterView`: an accepted increment updates the query's maintained answer. In `Queries/CounterView.hs`, `combine` takes the entity's state and supplies the fields the browser reads:
 
 ```haskell wrap
 combine entity _maybeExisting =
@@ -139,7 +126,7 @@ These are the fields returned inside `items` by the list route and directly by t
 
 ## The behavior described by tests <a id="the-behavior-described-by-tests" />
 
-`tests/Decider/Counter/IncrementCounterSpec.hs` checks the decision directly. Its zero-amount case constructs an increment with `amount = 0`, runs `decide`, and inspects the result:
+Under `tests/Decider/Counter/`, `IncrementCounterSpec.hs` checks the decision directly. Its zero-amount case constructs an increment with `amount = 0`, runs `decide`, and inspects the result:
 
 ```haskell wrap
 case result of
