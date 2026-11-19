@@ -62,3 +62,95 @@ A focused native verification prerequisite must resolve the reader's complete sa
 The [planning decision](https://plane.p.egregore.io/egregore/projects/5535680e-e3f6-4023-b400-2b27544130e2/issues/247875fa-677c-4a7d-9537-8ee9e12cee93/) reconciles nine existing page scopes and adds four focused page tickets plus [native isolation and completion verification](https://plane.p.egregore.io/egregore/projects/5535680e-e3f6-4023-b400-2b27544130e2/issues/90c94d7e-d23a-4e61-adc4-72a9cd5fdeff/). Full saved ticket bodies, parentage, open/unassigned state for new work and sort order were checked. Ten prerequisite additions and four obsolete predecessor removals were read back through the native relation API. The latter used the signed-in browser route because the public REST API exposes no removal operation. Saved receipts remain under ignored .agents-state/integration-map.
 
 This delivery changes internal research and tracker planning only. Public page plans and sidebar navigation will be aligned as the pages are authored, under the reconciled map Notes. Persist and rebuild queries remains assigned and open for its separate source/scope decision. The native prerequisite remains open and unassigned; completing curriculum planning does not establish runtime success or start article authoring.
+
+## Native verification outcome, 19 November 2026
+
+The prerequisite was claimed and inspected at clean website checkpoint
+`2b8ade5caad6c7dec69b539c2b6f45ec2ffc1ffa`. The framework clone remains clean at
+`414602b9510a92dfac647bc68d6afadfb594502c`. The requested safe beginner exercise
+is blocked by concrete launch and substitution gaps. This is a failed safety
+gate, not completed runtime verification. Dependent articles must remain blocked.
+
+### Executed launch checks
+
+Ignored receipts are in `.agents-state/integration-map/native-verification/`.
+`argv-results.json` records exact argv, working directories, exit codes and both
+output streams. A copy of the retained storage-project executable ran only in a
+new empty `isolated-launch` directory. No retained project, history or example
+was edited. This executable was not rebuilt in this session; its SHA-256 and
+that provenance limitation are recorded in `receipt.json`.
+
+1. `neo-0.18.0 run --integrations=fake` exits 2 with an unexpected argument.
+2. `neo-0.18.0 run -- --integrations=fake` also exits 2. The CLI supplies no
+   application-argument forwarding route here.
+3. `./app --integrations=fake` exits 1 during configuration loading with
+   `Unrecognised args: --integrations=fake`.
+4. `./app --integrations=hybrid --fake=Name` exits 1 during configuration loading
+   with both arguments unrecognised.
+
+Source agrees with these observations. `Config.loadWithVersion` feeds raw argv
+to OptEnvConf, while StarterConfig declares port and upload settings rather than
+integration switches. Application configuration loading precedes integration
+context construction. The selection parser existing later in startup does not
+make these flags usable through this StarterConfig path. A supported launch
+contract needs framework-owned flag handling compatible with application
+configuration and a documented CLI forwarding or direct application route.
+
+### Substitution boundary and provider gap
+
+`Service.Integration.Adapter.mkDispatcher` selects explicit `runReal` or
+`runFake` for registered request adapters. Hybrid compares the reflected request
+type name with the supplied names. This substitutes that dispatch operation,
+not every Task, network call, worker or resource initializer in the process.
+
+Supplied `Integration.Http.Internal.toAction` ignores its action context and calls
+`executeRequest` directly. That function expands environment values, builds auth,
+performs HTTP with retries and maps responses/errors to commands. It never
+consults the selectable adapter registry. Enabling a fake flag therefore cannot
+be used as a safety boundary for this supplied HTTP path. No safe supplied
+provider mapping through that registry was established. Do not fill this gap by
+making beginners implement an adapter.
+
+The adapter class has an associated Response and requires both effect functions.
+It imposes no schema or codec constraint and provides no default generator.
+`Schema.ToSchema` derives structural descriptions through Generic; this is not
+response generation or JSON decoding. JSON encoding/decoding contracts remain
+separate from the associated type. The inspected SendEmail QuickCheck instance
+is handwritten, and ChargeIntent is scripted. Neither proves schema-derived
+fake generation. A schema-only automatic mock promise remains unsupported.
+
+### Completion, timer and resources
+
+Source inspection of `Integration.Timer.every` shows tick 1 is emitted
+immediately, then the worker sleeps before each later tick. It is inaccurate to
+promise an initial interval wait. Its mapping receives a tick count, not a
+shipment query result. Application-owned work would still need to find pending
+shipments and submit their commands.
+
+The inbound emit path uses `dispatchCommandWithSource`, which checks the
+receiving handler's acceptance callback. Its Unit result is not a shipment
+business result and does not await a query update or downstream outbound work.
+Worker failure can trigger restart/backoff; normal worker return ends it.
+Application shutdown cancels workers and joins with `waitCatch`. This proves the
+source's cancellation/join mechanism, not release of arbitrary resources.
+OutboundConfig exposes initialize/processEvent/cleanup with per-entity worker
+lifetimes. No symmetric inbound resource record or executed resource-release
+proof was established. Cleanup still requires a concrete cancellation-safe
+resource example before teaching guarantees.
+
+### Explicitly incomplete acceptance
+
+No new mug-order/provider/shipment runtime scenario was run. Provider success,
+provider failure, receiving-command rejection, timer behavior, query convergence
+and resource release have no new runtime proof. No compilation was substituted
+for these checks. Native IDE source contains an IntegrationNode component with
+inbound/outbound kind data, but actual rendered nodes and both-direction
+connections were not verified. Those remain acceptance checks after the launch
+and supplied-provider isolation contracts are repaired.
+
+The prerequisite stays open, preserving all dependent blocks. Resume with a
+source-matched native project after a supported supplied-provider fake path and
+StarterConfig launch contract exist. Re-run the full ticket, including failure,
+completion, cleanup and rendered IDE checks. Framework implementation and article
+authoring were not started. Existing ignored evidence and the separate query
+persistence claim remain untouched.
