@@ -1,17 +1,127 @@
 ---
 title: "Entities and events"
-description: "Page plan. How is an entity identified and rebuilt from its events?"
-tableOfContents: false
-pagefind: false
-prev: false
-next: false
-head:
-  - tag: meta
-    attrs:
-      name: robots
-      content: noindex
+description: "Read entity state, event routing, reconstruction and derivation contracts."
+prev: true
+next: true
 ---
 
-## Page plan <a id="page-plan" />
+import EntityFold from '@components/learn/EntityFold.astro';
 
-This page will specify `EntityOf`, `EventOf`, `EntityIdType`, `initialState`, `update`, event routing, and the relevant derive helpers. A short event sequence and successive entity states will show the pure fold, while signatures make argument order and stream identity explicit. It will explain the distinction between a single event payload and the entity event sum, linking persistence settings and compatibility changes to their task guides.
+An entity holds the state used to decide a command for one identity. Its events describe the accepted changes from which that state can be rebuilt. For the mug shop, one stock identity can retain the receipt of three mugs and an order for one; applying those facts leaves two available.
+
+[Commands and decisions](../commands/) covers how a command selects an entity and proposes events. This reference follows what those events mean for reconstruction. [Entities and event streams](/concepts/entities-and-streams/) explains the surrounding stream and concurrency boundaries.
+
+## State from a sequence of events <a id="update" />
+
+Start with `initialState`, then pass each event and the previous state to `update`. This repeated calculation is a left fold: every result becomes the state for the next event. The history remains intact while the calculated state changes.
+
+<EntityFold />
+
+Here is a compact stock model. `MugStock` is the state record; `StockEvent` is a sum type whose alternatives carry the facts needed to update it. The UUID identifies this stock stream, rather than a customer's separate order entity.
+
+```haskell
+data MugStock = MugStock {
+  stockId :: Uuid,
+  available :: Int
+} deriving (Show)
+
+data StockEvent
+  = StockReceived Uuid Int
+  | MugOrdered Uuid
+
+```
+
+The function signatures show the argument order. `update` takes the event first and the current state second. `getEventEntityId` selects the stock identity carried by either event:
+
+```haskell
+initialState :: MugStock
+initialState = MugStock {
+  stockId = Uuid.nil,
+  available = 0
+}
+
+update :: StockEvent
+  -> MugStock -> MugStock
+update event stock = case event of
+  StockReceived id quantity ->
+    stock {
+      stockId = id,
+      available =
+        stock.available
+          + quantity
+    }
+  MugOrdered _ ->
+    stock {
+      available =
+        stock.available
+          - 1
+    }
+
+getEventEntityId :: StockEvent
+  -> Uuid
+getEventEntityId event = case event of
+  StockReceived id _ -> id
+  MugOrdered id -> id
+
+```
+
+For a chosen `id`, applying `StockReceived id 3` and then `MugOrdered id` produces these successive `available` values:
+
+```text
+0, 3, 2
+```
+
+`Uuid.nil` is the initial record's placeholder. The receipt sets `stockId` to the identity in the event. Actual creation supplies the chosen identity; an initial record alone does not establish that a stored entity exists. A command loading a missing stream still receives `Nothing`.
+
+The updater applies already accepted facts. It does not ask the provider for current stock, rerun the ordering decision or reject an old order during replay. The positive-stock policy belongs in the decision before `MugOrdered` is recorded. Given the same initial state and ordered events, this pure updater returns the same state.
+
+## The public entity contract <a id="entity-contract" />
+
+The [Service.Entity.Core contract](https://github.com/neohaskell/NeoHaskell/blob/414602b9510a92dfac647bc68d6afadfb594502c/core/service/Service/Entity/Core.hs) separates type associations from instance methods:
+
+| Declaration | Meaning |
+| --- | --- |
+| `EntityOf command` | Entity type a command acts on. |
+| `EntityOf event` | Entity type associated with an event type. |
+| `EventOf entity` | Event sum consumed by that entity's updater. |
+| `EntityIdType entity` | Identifier type, defaulting to `Uuid`. |
+| `initialStateImpl :: entity` | Starting state for reconstruction. |
+| `updateImpl :: EventOf entity -> entity -> entity` | Apply one event to one state. |
+| `getEventEntityIdImpl :: event -> EntityIdType (EntityOf event)` | Obtain an event's entity identity. |
+
+`EntityOf` and `EventOf` are open type families. `EntityIdType` belongs to the `Entity` class. `initialState` and `update` are the application functions; their `Impl` counterparts are the methods the runtime calls. The routing method belongs to the `Event` class exported by `Service.Entity.Core`, distinct from the stored-event record named `Event` in `Service.Event`.
+
+For the stock model, the helper connects the functions and associations after they have been defined:
+
+```haskell
+import Service.Entity.TH (deriveEntity)
+import Service.Event.TH (deriveEvent)
+
+-- After the StockEvent declaration:
+deriveEvent ''StockEvent
+
+-- After initialState, update and getEventEntityId:
+deriveEntity ''MugStock ''StockEvent
+```
+
+The double quotes pass type names to compile-time generation. [deriveEntity](https://github.com/neohaskell/NeoHaskell/blob/414602b9510a92dfac647bc68d6afadfb594502c/core/service/Service/Entity/TH.hs) supplies `EventOf MugStock = StockEvent`, `EntityOf StockEvent = MugStock`, the entity and routing instances, naming, JSON/Generic plumbing and a default value delegated to the initial state. Existing instances take precedence; incompatible existing entity/event mappings fail compilation. Define custom instances before the helper. It cannot invent state transitions or routing functions.
+
+## Individual payloads and the entity event sum <a id="event-payloads" />
+
+The starter separates each event payload into a module. `Starter.Counter.Events.CounterIncremented.Event` contains `entityId` and `amount`; `Starter.Counter.Event.CounterEvent` wraps it in the `CounterIncremented` alternative alongside creation and decrement payloads. `EventOf CounterEntity` is the whole `CounterEvent` sum, so its updater can handle every alternative.
+
+A payload's `EntityOf` association identifies its entity type. An `EventVariantOf` instance converts that payload to and from the entity sum. This conversion is what allows a decision helper to accept an individual payload while the entity consumes its sum. It does not append or route an event by itself.
+
+The [event helpers](https://github.com/neohaskell/NeoHaskell/blob/414602b9510a92dfac647bc68d6afadfb594502c/core/service/Service/Event/TH.hs) serve different jobs. `deriveEvent` (also named `event`) generates Show, Generic and JSON instances for a named payload or sum, preserving existing instances. `deriveEntityEvents` instead builds a sum from an explicit, nonempty list of payload types, with associations, routing and `EventVariantOf` instances. Each payload must already map to the entity before this helper runs. Payload routing instances are also required, but may be declared afterward. Keep the helper's generated names distinct from a handwritten sum; it rejects an existing event mapping rather than extending it.
+
+The starter's `Entity.hs` and `Event.hs` show the handwritten equivalent. Follow `initialStateImpl = initialState`, `updateImpl = update`, and `getEventEntityIdImpl = getEventEntityId` to see where application behavior enters those contracts.
+
+## Identity, storage and compatible history <a id="event-routing" />
+
+The entity type and an individual identity have different jobs. `EntityOf` selects the kind of state; the event's routing function selects an instance of that kind. Runtime storage also carries the entity name and stream identity. Multi-tenant command execution scopes its stream with the tenant identity. Matching UUID text alone does not make two entity types or tenant scopes the same stream.
+
+For a new command without an input entity ID, execution can obtain the destination from its proposed events. Keep every event in that outcome on the intended entity stream. The stored `Service.Event.Event payload` wraps a payload with `entityName`, `streamId` and `metadata`; these storage fields are separate from the application sum's alternatives.
+
+Reconstruction may start from a snapshot and apply later events, rather than reading the full history for every command. Query rows are maintained separately; an entity update is not an immediate update of every query answer. [Configure storage](/guides/storage/) covers event and query storage, while [History and current state](/concepts/history-and-state/) explains retained facts and derived state.
+
+Changing a decoder or updater changes how retained history is interpreted. Preserve deployed command, event and query definitions and their implementations; keep old event alternatives readable as new behavior is introduced. The CLI's discovered lock paths do not automatically protect an entity reducer outside those paths. [Add a feature safely](/tutorial/change-safely/) covers adding new identities and preserving existing callers. When reviewing an agent's entity change, check the event alternatives, routing branches and successive states together, including old histories that still need to rebuild.
