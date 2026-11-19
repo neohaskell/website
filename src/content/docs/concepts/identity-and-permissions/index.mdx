@@ -1,17 +1,60 @@
 ---
 title: "Identity and permissions"
-description: "Page plan. Why does knowing who someone is not decide what they may do or read?"
-tableOfContents: false
-pagefind: false
-prev: false
-next: false
-head:
-  - tag: meta
-    attrs:
-      name: robots
-      content: noindex
+description: "Separate who is calling, which operations they may invoke, which data they own, and whether a business change is acceptable."
 ---
 
-## Page plan <a id="page-plan" />
+import IdentityPermissions from '@components/learn/IdentityPermissions.astro';
 
-This page will separate authenticated identity, permission to invoke an operation, ownership of particular data, and domain acceptance. A small comparison table will trace the same signed-in user through an allowed query, a forbidden record, and a rejected business command. It will explain request context and the distinct query access and instance checks, while leaving provider setup, policy implementation, and endpoint testing to the access-control guide.
+A customer signs in to the mug shop and opens their orders. They can read their delivery details, but changing an order identifier must not reveal another customer's address. Even for their own order, cancellation can fail once the mugs have been dispatched. The same verified identity participates in all three outcomes.
+
+Authentication establishes who is calling. Authorization decides which operations and data that caller may access. A business decision then determines whether a requested change is acceptable in the entity's current state. Keeping these questions separate lets us explain a refusal without treating every refusal as a sign-in problem.
+
+## One identity, different outcomes
+
+Suppose we add customer-owned orders to the shop. Each order's accepted creation event records the verified customer's subject as `ownerId`; the entity reconstructs that owner along with the order's status. This is an extension to the stock example, whose shop entity alone does not establish customer ownership.
+
+Our customer has permission to invoke cancellation. Their own order has already been dispatched. The query allows signed-in callers, then compares each stored row's owner with that caller. Cancellation checks the recorded entity owner and dispatch status separately.
+
+<IdentityPermissions />
+
+The diagram follows this illustrative owned-order design. The query row and the order entity carry ownership from the same accepted creation fact, but serve different checks: one protects returned information, the other protects a change.
+
+| Attempt by the same customer | Relevant check | Outcome |
+| --- | --- | --- |
+| Read their own order | Query access, then row ownership | Order details returned |
+| Read another customer's order by identifier | Query access passes; row ownership fails | Not found |
+| Cancel their own dispatched order | Command permission and ownership pass; dispatch condition fails | Decision rejects; no cancellation event |
+
+No new login is needed to explain the last two outcomes. Knowing who the customer is supplies an input to these checks; it does not settle them.
+
+## Identity arrives with the request
+
+With HTTP authentication configured, the transport validates a bearer token and supplies its verified claims to the application. A command decision receives those claims through `RequestContext.user`. A present user includes `sub`, the subject identifying the caller within the configured issuer, and a permissions array. A customer identifier typed into a command body is ordinary input, not verified identity.
+
+An absent token and an invalid token follow different paths. With no bearer token, the auth-enabled HTTP request proceeds as anonymous and reaches the operation's access policy. A supplied token that fails validation stops during authentication. A public operation may admit the anonymous request; it does not turn an invalid token into a verified user. [Verify caller identity](../../guides/authentication/) explains issuer and audience configuration.
+
+The context carries identity to the decision, while the decision also receives the current entity. That combination lets it compare the caller's subject with the order's recorded owner. It must use the stored owner rather than trusting a replacement `ownerId` supplied by the caller.
+
+## Permission to invoke a command
+
+A command's `canAccess` declaration receives optional user claims. For example, a permission policy could require `orders:cancel`, an application-defined permission that the issuer places in verified claims. The gate runs before entity state is fetched, so it can decide whether this caller may invoke cancellation but cannot inspect who owns the selected order.
+
+Once the gate allows the command, the decision checks the current order. A different owner can be rejected even when the caller holds `orders:cancel`. An actual owner can still be refused because the order has already been dispatched. Ownership and dispatch conditions both belong in that decision, where the recorded entity is available. [Authorize a command](../../guides/authorization/) develops this owned-order example and its policy declarations.
+
+A gate denial and a business rejection are separate outcomes. With authenticated HTTP access configured, missing required identity produces 401 at the gate, while a signed-in caller lacking a required permission produces 403. An ownership refusal expressed with `Decider.reject` is a decision rejection, not automatically that gate's 403 error. None of these refusals records a cancellation event. Acceptance still has to pass event persistence before cancellation becomes a recorded fact, as explained in [Pure decisions and effects](../pure-decisions/).
+
+## Permission to read particular data
+
+Queries protect reads independently of commands. A query's `canAccess` checks optional claims before fetching from the store. Its `canView` checks those claims against each stored row. In the example, the first check requires a signed-in customer and the second compares that customer with the row's `ownerId`.
+
+A collection omits rows denied by `canView`. A lookup by identifier returns not found for a denied row, just as it does for a missing row. This is why the second table entry does not reveal whether another customer's order exists. Changing the requested identifier cannot change the verified subject used by the policy.
+
+The collection calculates its total and pagination after visibility and client filters. A customer's page therefore describes their visible orders rather than the whole store. [Restrict query results](../../guides/authorization/query-access/) shows these declarations and the separate collection and by-ID checks. A command's owner check cannot substitute for them: reading does not run the cancellation decision.
+
+## Trusted execution and customer ownership
+
+A trusted command invocation is execution authority, not proof of a customer's identity. Local CLI, MCP stdio and internal integration commands can bypass the command access gate while carrying no signed-in user. A decision that requires an owner must still reject a missing user or model a separate system operation with its own conditions.
+
+Query endpoints do not inherit that command bypass. They run their access and row policies against the supplied optional claims. Direct store access sits below those endpoint policies and belongs inside trusted application code.
+
+HTTP authentication also needs explicit application configuration. Without it, the Web command path uses trusted execution; declaring a command access policy alone does not enable token validation. Review authentication wiring, operation policies, stored ownership and business conditions as separate parts of the application's behavior. Each answers a different question about the same caller.

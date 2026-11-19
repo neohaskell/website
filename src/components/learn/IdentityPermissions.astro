@@ -1,0 +1,47 @@
+<div class="identity-permissions" role="img" aria-label="The same verified customer follows two paths. Reading an order passes query access, then row ownership permits their own row or denies another owner's row. Cancelling passes command permission, then the decision checks the stored order and rejects the owner's dispatched order. No cancellation event is recorded.">
+  <div class="caller">Same verified customer</div>
+  <div class="paths">
+    <section>
+      <div class="link">Read order</div>
+      <div class="node" data-diagram-role="query">canAccess: signed in</div>
+      <div class="link">Stored row + caller</div>
+      <div class="node">canView: owner matches?</div>
+      <div class="outcomes">
+        <div class="outcome" data-diagram-role="query">Own row: details returned</div>
+        <div class="outcome denied">Other owner: not found</div>
+      </div>
+    </section>
+    <section>
+      <div class="link">Cancel order</div>
+      <div class="node" data-diagram-role="command">canAccess: permission held</div>
+      <div class="link">Stored order + caller</div>
+      <div class="node">Decision: owner matches,<br />but already dispatched</div>
+      <div class="outcomes">
+        <div class="outcome denied">Rejected: no cancellation event</div>
+      </div>
+    </section>
+  </div>
+</div>
+<style>
+.identity-permissions { margin:32px 0; font-size:16px; line-height:1.5; }
+.caller,.node,.outcome { padding:16px; border:1px solid var(--diagram-line,var(--sl-color-gray-3)); border-radius:8px; background:var(--diagram-surface,var(--sl-color-gray-6)); color:var(--diagram-ink,var(--sl-color-text)); }
+.caller { text-align:center; }
+.paths { position:relative; display:grid; grid-template-columns:1fr 1fr; gap:24px; margin:0; }
+.paths section { margin:0; min-width:0; }
+.paths section > * { margin-block:0; }
+.link { margin-left:24px; padding:16px; border-left:2px solid var(--sl-color-gray-3); }
+.outcomes { margin-left:24px; padding-left:16px; padding-top:16px; }
+.outcomes .outcome { position:relative; margin:0 0 16px; }
+.outcomes .outcome:last-child { margin-bottom:0; }
+.outcome::before { content:''; position:absolute; width:17px; top:24px; left:-18px; border-top:2px solid var(--sl-color-gray-3); }
+.outcome::after { content:''; position:absolute; top:-17px; height:41px; left:-18px; border-left:2px solid var(--sl-color-gray-3); }
+.outcome:not(:last-child)::after { height:calc(100% + 17px); }
+.denied { border-style:dashed; border-color:var(--sl-color-red-high); color:var(--sl-color-red-high); }
+@media(max-width:600px) {
+.paths { display:block; padding-left:16px; }
+.paths section { position:relative; }
+.paths section:first-child { padding-bottom:32px; }
+.paths section:first-child::after { content:''; position:absolute; top:0; bottom:0; left:-16px; border-left:2px solid var(--sl-color-gray-3); }
+.paths section::before { content:''; position:absolute; top:0; left:-16px; width:40px; border-top:2px solid var(--sl-color-gray-3); }
+}
+</style>
