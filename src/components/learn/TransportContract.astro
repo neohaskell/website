@@ -1,0 +1,16 @@
+<section class="transport-contract" aria-label="Command transport permission and installation converge before execution">
+  <div class="inputs">
+    <div data-diagram-role="command">PlaceMugOrder<br /><code>TransportsOf: Web</code></div>
+    <div>Application model<br /><code>withTransport server</code></div>
+  </div>
+  <div class="join" aria-hidden="true"></div>
+  <div class="stage">Registered Web endpoint</div>
+  <div class="connector" aria-hidden="true"></div>
+  <div class="stage">Decode body, run command</div>
+  <div class="connector" aria-hidden="true"></div>
+  <div class="stage">Command response<br /><code>Accepted / Rejected / Failed / Unauthorized</code></div>
+</section>
+<style>
+.transport-contract{font-size:16px;line-height:1.5;margin:2rem 0;padding:1.5rem;border:1px solid var(--sl-color-gray-5);border-radius:8px;background:var(--sl-color-gray-7,var(--sl-color-black));}
+.transport-contract *{margin:0;box-sizing:border-box}.inputs{display:grid;grid-template-columns:1fr 1fr;gap:24px}.inputs>div,.stage{border:1px solid var(--sl-color-gray-4);border-radius:6px;padding:12px;text-align:center}.inputs>[data-diagram-role]{background:var(--diagram-surface);border-color:var(--diagram-line);color:var(--diagram-ink)}.transport-contract code{font-size:16px;white-space:normal;overflow-wrap:anywhere;background:none;padding:0}.join{height:24px;width:calc(50% + 12px);margin:auto;border:solid var(--sl-color-gray-3);border-width:0 1px 1px}.connector{height:24px;width:1px;background:var(--sl-color-gray-3);margin:auto}.join+.stage{position:relative;margin-top:24px}.join+.stage:before{content:'';position:absolute;height:24px;width:1px;background:var(--sl-color-gray-3);top:-25px;left:50%}@media(max-width:550px){.transport-contract{padding:16px}.inputs{gap:16px;grid-template-columns:1fr;position:relative;padding-left:16px}.inputs:before{content:"";position:absolute;left:0;top:40px;bottom:-24px;border-left:1px solid var(--sl-color-gray-3)}.inputs>div{position:relative}.inputs>div:before{content:"";position:absolute;width:16px;left:-17px;top:50%;border-top:1px solid var(--sl-color-gray-3)}.join{border-width:0 0 1px 1px;width:50%;height:24px;margin:0}.join+.stage{margin-top:0}.join+.stage:before{display:none}}
+</style>

@@ -1,17 +1,142 @@
 ---
-title: "Transport contracts"
-description: "Page plan. What interface does a registered command or query expose?"
-tableOfContents: false
-pagefind: false
-prev: false
-next: false
-head:
-  - tag: meta
-    attrs:
-      name: robots
-      content: noindex
+title: Transport contracts
+description: How Web, application CLI and MCP expose registered commands and queries through different interfaces.
+tableOfContents:
+  minHeadingLevel: 2
+  maxHeadingLevel: 2
+prev: true
+next: true
 ---
 
-## Page plan <a id="page-plan" />
+import TransportContract from '../../../../../components/learn/TransportContract.astro';
 
-This page will compare Web, application CLI, and MCP registration, showing that a command must allow its transport and the model must install it. It will record route naming, command responses, query handler inputs, and schema registration with one request and response shape. An advanced anchored section will describe the public Transport interface. The application CLI will be clearly distinguished from the neo development command reference.
+A transport connects a caller to registered application behavior. Web accepts HTTP requests, the application CLI reads terminal arguments, and MCP accepts tool calls from a local client. Each reaches a command's decision through the same command execution machinery, but each presents its own input and response format.
+
+This reference builds on [Event models and features](../), [Commands and decisions](../commands/) and [Queries and projections](../queries/). The mug shop supplies the concrete names: `PlaceMugOrder` requests an order, while a stock query returns a maintained answer. Transport completion and command acceptance remain separate from an external shipment booking or a later query refresh.
+
+## Command permission and application registration <a id="registration" />
+
+Two declarations determine whether a command is available. Its `TransportsOf` instance lists the transport types it permits. The application's Event Model supplies a configuration for every declared transport. Merely importing a command, or installing another transport, doesn't expose that command through it. The command must also belong to a registered Feature.
+
+<TransportContract />
+
+The retained mug-shop command permits Web:
+
+```haskell wrap
+type instance TransportsOf PlaceMugOrder = '[WebTransport]
+```
+
+This module imports `WebTransport` from `Service.Transport.Web`. In the surrounding `EventModel.eventModel do` block, the application registers its configuration before its Features:
+
+```haskell wrap
+EventModel.withTransport WebTransport.server
+EventModel.features shopFlow
+```
+
+Here `WebTransport` is also the qualified module alias used by `App.hs`, and `shopFlow` registers the shop's command and query slices. The configuration value and the transport type have different jobs. A missing declared transport stops handler setup with `Transport not registered`; the declaration does not install it automatically.
+
+For a new command that genuinely needs several interfaces, its type list can contain several transport types. Preserve deployed commands unchanged when adding an interface later: create new command identities and slices with the required permissions, as [Expose MCP tools and resources](../../../guides/transports/mcp/) demonstrates. A transport declaration belongs to the command's frozen contract too.
+
+## The three supplied interfaces <a id="interfaces" />
+
+Web uses `WebTransport.server`. Commands have kebab-case HTTP routes, and queries have collection and keyed reads. The application CLI uses `CliTransport.cli`; it generates entity groups, command names and field flags, with no query commands. MCP stdio uses original command type names as tools and exposes collection resources.
+
+The CLI registration is:
+
+```haskell wrap
+EventModel.withTransport CliTransport.cli
+```
+
+MCP takes a server identity instead of supplying a default configuration value:
+
+```haskell wrap
+EventModel.withTransport McpTransport.McpTransport {
+  serverName = "mug-shop",
+  serverVersion = "0.1.0"
+}
+```
+
+These excerpts assume a corresponding qualified import from `Service.Transport.Web`, `Service.Transport.Cli` or `Service.Transport.Mcp`. Choose the registrations for the process you intend to run. Registered transports aren't a promise of simultaneous servers: a long-running transport can keep the next one from starting.
+
+The application CLI is part of your built application. Its generated groups come from entity names with the `Entity` suffix removed, and fields become flags such as `--entity-id`. It is separate from the `neo` development commands that create, build, inspect and test projects. [Run commands from a terminal](../../../guides/transports/cli/) covers argument ownership, history between invocations and JSON output.
+
+The supplied CLI and MCP command paths use trusted local execution, bypassing the command authorization gate while still running the decision. This does not establish a signed-in caller or bypass query visibility. MCP query reads use an anonymous context. Web obtains its request context through HTTP authentication; see [Verify caller identity](../../../guides/authentication/) and [Authorize commands](../../../guides/authorization/).
+
+## Web routes and responses <a id="web-routes" />
+
+Web derives route segments from registered names. `PlaceMugOrder` becomes `POST /commands/place-mug-order`; `AvailableStock` becomes `GET /queries/available-stock`. A keyed read adds the row's storage UUID at `/queries/available-stock/{id}`. Use the query row identity, which need not be the command's entity identity.
+
+For `PlaceMugOrder`, this request body names the example entity and its shipment mode:
+
+```json wrap
+{
+  "entityId": "9b4dbfcb-477f-49f2-9156-629a24457f86",
+  "mode": "success"
+}
+```
+
+The UUID is an example value. `entityId` and `mode` are required field names of this particular command, not universal transport fields. An accepted response has this shape:
+
+```json wrap
+{
+  "entityId": "9b4dbfcb-477f-49f2-9156-629a24457f86",
+  "tag": "Accepted"
+}
+```
+
+`CommandResponse` also has `Rejected { reason }`, `Failed { error }` and `Unauthorized { authError }` alternatives. For example, the command's existing-order decision can return:
+
+```json wrap
+{
+  "reason": "Already recorded",
+  "tag": "Rejected"
+}
+```
+
+Web maps `Accepted` to HTTP 200 and both `Rejected` and `Failed` to 400. Authorization failures map to 401 or 403; Web replaces the tagged `Unauthorized` value with its HTTP error body. Invalid command JSON fails decoding before the decision; it isn't a business rejection. Inspect the response body as well as its status. An accepted response does not return the query row or certify a provider's later effect.
+
+The CLI prints the serialized command response, but a domain rejection still exits with status zero. MCP wraps command outcomes in tool-result content: accepted calls have `isError: false`, while refusals have `isError: true` and text such as `Command rejected: Already recorded`. Neither a zero process exit nor a successful JSON-RPC exchange alone means the command was accepted.
+
+## Query inputs and endpoint schemas <a id="query-inputs" />
+
+At the public transport boundary, collection handlers receive caller claims, an optional parsed NeoQL expression and a page request:
+
+```haskell wrap
+type QueryEndpointHandler =
+  Maybe UserClaims -> Maybe Expr -> QueryPageRequest
+  -> Task QueryEndpointError Text
+
+type QueryByIdEndpointHandler =
+  Maybe UserClaims -> Uuid -> Task QueryEndpointError Text
+```
+
+These are aliases exported by `Service.Transport`; the returned `Text` contains serialized JSON. Web parses `q`, `limit` and `offset` for collections and a UUID for keyed reads. Access checks and row visibility remain inside the query endpoint. Collection results use `items`, `total`, `hasMore` and `effectiveLimit`; keyed reads return a single row. [Queries and projections](../queries/#pagination) explains filtering, bounds and visibility.
+
+MCP publishes a URI such as `neohaskell://queries/AvailableStock`, using the original query name. Its displayed resource name is `available-stock`. The supplied resource reader uses limit 100, offset zero and no NeoQL filter. Adding HTTP-style parameters to that URI doesn't select another page or row. Discover and use the actual resource URI; use Web for the keyed and paginated interfaces.
+
+Registration captures an `EndpointSchema` before command types are erased into endpoint maps. It carries an optional request schema, response schema, description, deprecation flag and optional entity name. Commands have request bodies; queries don't. Application startup currently supplies keyed query handlers to Web; other transports receive an empty keyed-handler map. Web uses this metadata for `/openapi.json` and its browser documentation at `/docs`. MCP uses command request schemas for tool input discovery. Schema metadata describes the contract; JSON decoding still performs serialization checks, and the decision still applies business policy. See [JSON and schemas](../../core/json/).
+
+## The public Transport interface <a id="transport-interface" />
+
+A custom transport implements `Service.Transport.Transport`. Its associated types are `Request transport`, `Response transport` and `RunnableTransport transport`. The assembled representation is produced and run through:
+
+```haskell wrap
+assembleTransport ::
+  Endpoints transport -> RunnableTransport transport
+
+runTransport ::
+  transport -> RunnableTransport transport -> Task Text Unit
+```
+
+`Endpoints transport` holds the configuration, command handlers, collection query handlers, keyed query handlers and command/query schema maps. The common command endpoint shape is:
+
+```haskell wrap
+type EndpointHandler =
+  RequestContext -> Bytes
+  -> ((CommandResponse, Bytes) -> Task Text Unit)
+  -> Task Text Unit
+```
+
+`buildHandler` receives a transport configuration, a `Record.Proxy command`, and a typed function `RequestContext -> command -> Task Text CommandResponse`. Under its `Command`, `Json.FromJSON` and name constraints, it builds an `EndpointHandler`: decode bytes, call that function with the context, and pass the structured response plus encoded bytes to the callback. A custom interface must also decide how its protocol represents those outcomes.
+
+These callbacks carry a command response, not a typed provider result or a query-convergence signal. The [public Transport source](https://github.com/neohaskell/NeoHaskell/blob/414602b9510a92dfac647bc68d6afadfb594502c/core/service/Service/Transport.hs) defines the complete constraints and records for implementing an additional protocol. The supplied-interface walkthroughs belong in [Expose an HTTP API](../../../guides/transports/), [Expose MCP tools and resources](../../../guides/transports/mcp/) and [Run commands from a terminal](../../../guides/transports/cli/).
