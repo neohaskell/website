@@ -1,0 +1,24 @@
+<div class="model-assembly" role="img" aria-label="Feature declarations are validated, then assembled into an application. At runtime accepted counter events form history, entity state is derived, and separate query rows are maintained.">
+  <div class="assembly-stage">Counter feature<br/><code>FeatureAction</code></div>
+  <div class="connector" aria-hidden="true"></div>
+  <div class="assembly-stage">Structural validation<br/><code>Ok model</code></div>
+  <div class="connector" aria-hidden="true"></div>
+  <div class="assembly-stage">Runtime assembly<br/><code>toApplication</code></div>
+  <div class="runtime-path">
+    <div data-diagram-role="event">Accepted counter events<br/><strong>Retained history</strong></div>
+    <div class="connector" aria-hidden="true"></div>
+    <div>Derived counter state<br/><code>CounterEntity</code></div>
+    <div class="connector" aria-hidden="true"></div>
+    <div data-diagram-role="query">Maintained query rows<br/><code>CounterView</code></div>
+  </div>
+</div>
+<style>
+.model-assembly {font-size:16px; line-height:1.5; margin-block:2rem; max-width:100%;}
+.assembly-stage,.runtime-path > div:not(.connector) {border:1px solid var(--sl-color-gray-4); padding:16px; border-radius:4px; margin:0;}
+.connector {height:28px; width:1px; background:var(--sl-color-gray-3); margin:0 0 0 24px; position:relative;}
+.connector::after {content:'';position:absolute;bottom:0;left:-4px;border-left:4px solid transparent;border-right:4px solid transparent;border-top:6px solid var(--sl-color-gray-3);}
+.runtime-path {margin:24px 0 0; border-left:2px solid var(--sl-color-gray-4);padding-left:20px;}
+.runtime-path [data-diagram-role] {background:var(--diagram-surface);border-color:var(--diagram-line);color:var(--diagram-ink);}
+.model-assembly code {font-size:1em;overflow-wrap:anywhere;}
+@media(min-width:60rem) {.runtime-path {display:grid;grid-template-columns:1fr 24px 1fr 24px 1fr;align-items:center;} .runtime-path .connector {width:24px;height:1px;margin:0;} .runtime-path .connector::after {left:auto;right:0;bottom:-4px;border:4px solid transparent;border-left:6px solid var(--sl-color-gray-3);}}
+</style>

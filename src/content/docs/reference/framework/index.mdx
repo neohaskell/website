@@ -1,17 +1,109 @@
 ---
-title: "Event models and features"
-description: "Page plan. How do the declared features become a running application?"
-tableOfContents: false
-pagefind: false
-prev: false
-next: false
-head:
-  - tag: meta
-    attrs:
-      name: robots
-      content: noindex
+title: Event models and features
+description: Read the Counter feature declaration and follow its validated model into application assembly.
 ---
 
-## Page plan <a id="page-plan" />
+import ModelAssembly from '@components/learn/ModelAssembly.astro';
 
-This page will map `EventModel`, `FeatureAction`, `chapter`, `slice`, `entity`, `command`, `produces`, `query`, and `readsFrom` to the source-local `Counter` feature. A compact relationship figure will show declaration, validation, and runtime assembly without mixing event history with `query` rows. Builder signatures and ordering constraints will sit beside the model. Direct `Service.Application` assembly will be a linked advanced section, preserving its public status while leading with the current starter architecture.
+An `EventModel` connects the behavior declared in features to the application that runs it. If you are reviewing an agent's change, this is where you can check which commands are registered, which events they declare, and which entities supply a query. [Model the whole process](../../../introduction/event-modeling/) introduces the chapters and slices used here.
+
+This reference follows the generated Counter feature in `src/Starter/Counter/Feature.hs`. Counter creates a named counter, increments or decrements its value, and maintains a `CounterView` answer. The declarations describe those connections; the command decisions and query implementation live in their own modules.
+
+## From declaration to application <a id="event-model" />
+
+`EventModel.eventModel` collects a declaration and returns `Result Text EventModel`. A valid declaration produces `Ok model`; a structural problem produces `Err problem`. Constructing that result does not start a server or write events.
+
+<ModelAssembly />
+
+The top path is application assembly. The lower path shows what the assembled application does when a counter changes: record accepted events, derive entity state, and maintain query rows separately. Declaring `produces` does not itself emit an event, and declaring a query does not make its rows part of event history.
+
+With `counterFlow` imported from `Starter.Counter.Feature`, a minimal model declaration is:
+
+```haskell
+appEventModel :: Result Text EventModel.EventModel
+appEventModel = EventModel.eventModel do
+  EventModel.appName "Counter reference"
+  EventModel.features counterFlow
+```
+
+Here `EventModel` is a qualified import of `Service.EventModel`. The app name is chosen for this example. A running application's `src/App.hs` also supplies its configuration, storage and transports. Keep those settings when reviewing a feature addition. The `features` call includes the feature; merely importing its module does not register it.
+
+`EventModel.toApplication :: EventModel -> Application` assembles a validated model into the public `Service.Application` runtime. `EventModel.run :: Result Text EventModel -> Task Text Unit` handles the result: it fails the task with the validation text for `Err`, or assembles and runs the application for `Ok`. Configuration is applied before feature registrations.
+
+## The Counter feature <a id="features" />
+
+The generated `counterFlow :: FeatureAction` groups its work under `feature "Counter flow"` and `chapter "Manage counters"`. A `FeatureAction` is a declaration builder, not the running feature or a business command. Within that chapter, these two slices show the change and answer sides of Counter. The starter also has separate increment and decrement slices.
+
+```haskell
+counterFlow :: FeatureAction
+counterFlow = feature "Counter flow" do
+  chapter "Manage counters" do
+    slice "Create a counter" do
+      entity @CounterEntity do
+        command @CreateCounter do
+          produces @CounterCreated.Event
+
+    slice "Show counter values" do
+      query @CounterView do
+        readsFrom @CounterEntity do
+          onEvent @CounterCreated.Event
+          onEvent @CounterIncremented.Event
+          onEvent @CounterDecremented.Event
+```
+
+These are excerpts using the starter's imports. Each event module exports a payload type named `Event`, so qualified names such as `CounterCreated.Event` distinguish the payloads. The `@` syntax selects an existing type, as explained in [Types and records](../language/types/#visible-type-application).
+
+`chapter` groups slices by the process they belong to. `slice` gives one unit of behavior a name. Each slice must have exactly one primary declaration: a command under `entity`, a `query`, or an integration. Rules can sit beside that declaration without becoming another primary.
+
+The command slice connects `CreateCounter` to `CounterEntity` and declares `CounterCreated.Event` as a possible output. Its decision still determines whether a particular command is accepted and which events it proposes. The declaration does not replace that implementation or require every invocation to produce an event.
+
+The query slice declares the entity and event types that trigger `CounterView` maintenance. `readsFrom @CounterEntity` is the source entity; its `onEvent` declarations select event payloads. The query's `QueryOf CounterEntity CounterView` instance supplies the row identity and update logic. In the starter, `queryId` uses the counter ID and `combine` copies the entity's label and value into the query row. See [Query projections and replay](../../../concepts/query-projections/) for the distinction between a triggering event and the current entity state supplied to that update.
+
+## Builder relationships <a id="builders" />
+
+The nesting in the example is part of the API. These call shapes summarize the builder inputs and results; the generic constraints are described immediately below them.
+
+<dl class="builder-shapes">
+  <dt><code>eventModel :: EventModelAction -&gt; Result Text EventModel</code></dt>
+  <dd>Collects application settings and features, then validates the model.</dd>
+  <dt><code>features :: FeatureAction -&gt; EventModelAction</code></dt>
+  <dd>Adds the features built by its argument to the application declaration.</dd>
+  <dt><code>feature name chapters</code> and <code>chapter name slices</code></dt>
+  <dd>A feature contains chapters, and each chapter contains slices.</dd>
+  <dt><code>slice name parts</code></dt>
+  <dd>Collects one primary declaration and any rules for that slice.</dd>
+  <dt><code>entity @Entity (command @Command outputs)</code></dt>
+  <dd>The command's associated entity must match the selected entity. Each <code>produces @Payload</code> must belong to that entity's event type.</dd>
+  <dt><code>query @Query sources</code></dt>
+  <dd>Each <code>readsFrom @Entity events</code> needs the matching query-source relationship. Its <code>onEvent @Payload</code> values select that entity's event payloads.</dd>
+</dl>
+
+The compiler checks these type relationships. For example, `command` requires a runnable command with the matching `EntityOf`, while `produces` requires membership in the entity's event variants. `query` requires the query contract, codecs, schema and wiring for its declared entities. [The implementation of Service.EventModel](https://github.com/neohaskell/NeoHaskell/blob/414602b9510a92dfac647bc68d6afadfb594502c/core/service/Service/EventModel.hs) contains the complete constrained signatures.
+
+Source order preserves the feature, chapter and slice order in the model and its registration traversal. It does not schedule a customer's actions. Placing the query slice after the create slice does not make a query wait for the next counter creation. Runtime subscriptions maintain answers when their selected events occur.
+
+## Structural validation <a id="validation" />
+
+A model needs exactly one `appName`, at least one feature, at least one chapter per feature, and at least one slice per chapter. Each slice needs exactly one primary. There may be at most one `withConfig` declaration. These checks happen when `eventModel` constructs its result, before `run` starts application effects.
+
+For example, a declaration containing only `appName "Empty"` returns:
+
+```text
+eventModel requires at least one Feature
+```
+
+Other checks cover integration declarations, including one outbound trigger and complete declared inbound outputs. These are structural checks. They do not prove that the counter's arithmetic, access policy, provider behavior or query answer matches the intended business behavior. Rules and runtime tests address those separate questions.
+
+When asking an agent to add a slice, inspect both its declaration and the modules it names. A correct-looking feature tree can still register a decision with the wrong policy. Conversely, a correct command module that is never included in the model is absent from this application's registration path.
+
+## Direct application assembly <a id="application" />
+
+`Service.Application` remains a public API for assembling an application directly. `Application.new` creates the starting value; builders such as `withService`, `withQuery` and `withTransport` register its capabilities, and `Application.run` starts it. The Event Model route uses this same runtime, registering command runners and query subscriptions from the declared slices.
+
+For a starter-based app, keep the feature declaration as the normal entry point. Use the exported `EventModel.with...` settings for configuration supported by the model builder. Direct assembly is useful when explicitly composing the lower-level runtime, but independently registering the same behavior through both routes can duplicate registrations. [Transports](../../../guides/transports/) and [Storage and databases](../../../guides/storage/) explain the settings needed by a running application.
+
+<style>{`
+.builder-shapes {font-size: 1rem;}
+.builder-shapes dt {margin-block-start: 1.25rem; overflow-wrap:anywhere;}
+.builder-shapes dd {margin-inline-start:0; margin-block-start:.5rem;}
+`}</style>
