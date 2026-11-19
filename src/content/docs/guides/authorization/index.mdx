@@ -1,17 +1,105 @@
 ---
 title: "Authorize a command"
-description: "Page plan. Who may run this command against this entity?"
-tableOfContents: false
-pagefind: false
-prev: false
-next: false
-head:
-  - tag: meta
-    attrs:
-      name: robots
-      content: noindex
+description: "Declare who may run a command and check that the caller owns the entity being changed."
 ---
 
-## Page plan <a id="page-plan" />
+import CommandAuthorization from '@components/learn/CommandAuthorization.astro';
 
-This page will protect one command with a declared access policy and a decision that checks the relevant entity ownership. A table will compare anonymous callers, authenticated owners, other users, and a trusted local invocation. The accompanying tests will verify that denied commands do not reach the decision or append events, and show why enabling authentication is necessary for the HTTP policy gate to apply.
+A signed-in customer should be able to cancel their own mug order before dispatch. Signing in must not let them cancel another customer's order by changing an identifier in the request. Authentication establishes the caller's identity; authorization decides what that identity may do.
+
+[Verify caller identity](../authentication/) connects HTTP requests to verified user claims. Here we use those claims at two points: an access gate requires a signed-in caller, then the decision compares that caller with the order's recorded owner. The gate cannot inspect an order because it receives only user claims. Ownership belongs in the decision, where the current entity is available.
+
+<CommandAuthorization />
+
+## A new cancellation contract
+
+Use a new command named `CancelOwnedOrder`, with an `orderId` identifying the order to cancel. As in [Add a feature safely](../../tutorial/change-safely/), preserve deployed commands, events and queries. Adding an access check to an existing deployed command would change its behavior under the same identity.
+
+The example assumes an order entity whose accepted creation event records `ownerId` from the verified caller's `user.sub`. That value becomes part of the reconstructed order state. A caller-supplied `ownerId` is not evidence of ownership, and the cancellation command does not need one. If your existing order history never recorded an owner, define a new owned-order flow rather than guessing ownership for old orders.
+
+Ask your agent to implement this bounded change:
+
+```text
+Add a new CancelOwnedOrder command and Feature slice for owned mug orders.
+If no owned-order flow exists, add a separately named creation flow that
+records the verified subject in a new creation event. Preserve old history.
+Require authenticated access and compare the verified subject with the
+order's recorded owner inside the decision. Reject missing users,
+missing orders, other owners and orders already dispatched or cancelled.
+Record the accepted cancellation and restore stock through the existing
+modeled workflow. Preserve deployed commands, events and queries.
+Keep OIDC configured with the intended API audience.
+Test gate rejection separately from decision rejection and acceptance.
+```
+
+The snippets below are focused excerpts for reviewing that implementation. Your agent supplies the complete command, entity, event and Feature declarations appropriate to the application's order model. Retain the existing registrations and add the new Feature and HTTP command transport; do not replace the application's configuration wholesale.
+
+## The access gate sees claims
+
+In the new command module, import `Service.AccessControl` qualified as `AccessControl`, plus `AccessError` from that module and `UserClaims` from `Service.Auth`. Declare this function before the module's final `command ''CancelOwnedOrder` generation call:
+
+```haskell
+canAccess :: Maybe UserClaims -> Maybe AccessError
+canAccess = AccessControl.authenticatedAccess
+```
+
+`Nothing` as an input means there is no authenticated caller. `Nothing` as a result means access is allowed; `Just` an access error means it is denied. `authenticatedAccess` returns `Just Unauthenticated` for an anonymous caller. The command generator connects the top-level `canAccess` function to the command's executor. Without a custom declaration, commands use authenticated access by default, but an explicit declaration makes the intended policy visible beside the command.
+
+With HTTP authentication configured, a denied gate stops execution before the decision and event append. An anonymous request receives 401. A valid token passes this gate even when its subject belongs to another customer, because being signed in says nothing about which order the caller owns.
+
+For a command that also requires an issuer-granted permission, the declaration can instead use:
+
+```haskell
+canAccess :: Maybe UserClaims -> Maybe AccessError
+canAccess = AccessControl.requirePermission "orders:cancel"
+```
+
+`orders:cancel` is an example permission name to agree with your identity provider. It must appear in the verified permissions array described in [Verify caller identity](../authentication/). A signed-in caller without that permission receives 403 before the decision. Permission to use a command still does not grant ownership of every order. The [access helpers](https://github.com/neohaskell/NeoHaskell/blob/414602b9510a92dfac647bc68d6afadfb594502c/core/service/Service/AccessControl.hs) also provide any-permission and all-permissions checks.
+
+## The decision sees the order
+
+The decision receives the command, the current order and a `RequestContext`. Import `RequestContext` and `UserClaims` with their fields from `Service.Auth`, and use `Decider` qualified for rejection. This opening excerpt checks identity and ownership before the remaining cancellation conditions:
+
+```haskell
+decide command maybeOrder ctx =
+  case (maybeOrder, ctx.user) of
+    (Nothing, _) -> Decider.reject "Order not found"
+    (_, Nothing) -> Decider.reject "Sign in to cancel an order"
+    (Just order, Just user) ->
+      if order.ownerId != user.sub
+        then Decider.reject "This order belongs to another customer"
+        else decideCancellation command order
+```
+
+Here `decideCancellation` is an application helper your agent defines in the new slice. It rejects dispatched or already cancelled orders and accepts the cancellation event only for an eligible order. The ownership check does not replace those business conditions. Review the complete decision so that every accepting path passes through the owner check.
+
+The comparison uses the owner reconstructed from accepted events and the subject supplied in the verified context. Changing `orderId` selects another order, but does not change the caller's subject. A different owner reaches the decision and is rejected there, with no cancellation event appended. That business rejection is distinct from the gate's typed 401 or 403 access errors.
+
+## Trusted calls still face the decision
+
+Keep `Application.withAuth` or `Application.withAuthOverrides` enabled on the HTTP application, including its audience configuration. Without it, the Web transport constructs a trusted context and skips the command access gate. Declaring `canAccess` alone does not enable token verification or protect an HTTP deployment.
+
+Trusted local and internal command execution also bypasses that gate. This is an execution authority, not a signed-in customer identity. A trusted context can have `user = Nothing`; the ownership decision above rejects it. Do not add a `trustedBypass` exception to the owner comparison merely to make a background caller succeed. If the application needs a system cancellation, model a separate command with its own narrowly defined conditions.
+
+For the authenticated-access version of `CancelOwnedOrder`, compare these paths against the same eligible order:
+
+| Caller | Access gate | Ownership decision | Cancellation event |
+| --- | --- | --- | --- |
+| Anonymous HTTP caller with auth configured | Denied, 401 | Not reached | None |
+| Authenticated owner | Allowed | Allowed if cancellation conditions pass | Appended on acceptance |
+| Authenticated other customer | Allowed | Rejected | None |
+| Trusted local call with no user | Bypassed | Rejected for missing user | None |
+
+An invalid bearer token stops even earlier, during authentication. It must not be represented as an authenticated caller that later fails ownership.
+
+## Evidence for both boundaries
+
+A passing decision test alone cannot prove that the transport runs the access gate. Run `neo --ci test` with both decision cases and HTTP scenarios. Use fresh orders and disposable identities, retaining the accepted history so you can inspect which events were appended.
+
+For the gate test, submit an anonymous HTTP request to the auth-enabled application. Assert 401, verify the decision was not invoked in the executor test, and verify that the event stream did not grow. For a permission-based variant, repeat with a valid token lacking the required permission and expect 403. Keep these tests separate from a bad-signature token test, which exercises authentication before the gate.
+
+For ownership, create an eligible order as one customer, then submit its identifier with another customer's valid token. Check the decision rejection and unchanged history. Finally cancel a fresh eligible order as its actual owner and verify the cancellation event and resulting stock answer. Allow the asynchronously maintained query to catch up; an accepted HTTP response alone does not prove the query has updated.
+
+Exercise a trusted local call with no user as a separate case. The gate should be bypassed and this decision should still reject it. That test protects the distinction between trusted execution and authenticated ownership. Keep dispatched-order and repeated-cancellation cases too, so authorization does not accidentally remove the shop's existing promises.
+
+In the native IDE, locate the new cancellation slice and follow its declared event connection. Review the decision in source alongside the test results. The model locates the behavior; the tests establish who can reach and complete it. Query visibility has its own boundary, covered in [Restrict query results](./query-access/).

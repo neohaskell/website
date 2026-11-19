@@ -1,0 +1,29 @@
+<div class="command-authorization" role="img" aria-label="Authenticated HTTP flow. CancelOwnedOrder and caller claims reach the signed-in access gate. No stops with 401. Yes reaches a decision supplied with recorded order state. A different owner is rejected without an event. An eligible owner produces OrderCancelled.">
+  <div class="node" data-diagram-role="command">CancelOwnedOrder + caller claims</div>
+  <div class="connection">Auth-enabled HTTP</div>
+  <div class="node">Access gate: signed in?</div>
+  <div class="branches">
+    <div class="connection">Yes</div>
+    <div class="failure"><span aria-hidden="true">×</span> No: 401<br />Decision not reached</div>
+  </div>
+  <div class="state">Recorded order: owner + status</div>
+  <div class="connection">Load order for the decision</div>
+  <div class="node">Decision: owner matches and order can be cancelled?</div>
+  <div class="branches">
+    <div class="connection">Yes</div>
+    <div class="failure"><span aria-hidden="true">×</span> No: reject<br />No event</div>
+  </div>
+  <div class="node" data-diagram-role="event">OrderCancelled</div>
+</div>
+<style>
+.command-authorization { margin:32px 0; font-size:16px; }
+.node, .state { padding:16px; border:1px solid var(--diagram-line, var(--sl-color-gray-3)); border-radius:8px; background:var(--diagram-surface, var(--sl-color-gray-6)); color:var(--diagram-ink, var(--sl-color-text)); }
+.state { margin-left:24px; }
+.connection { position:relative; margin-left:24px; padding:16px 24px; border-left:2px solid var(--sl-color-gray-3); }
+.connection::after { content:''; position:absolute; bottom:0; left:-6px; border-top:8px solid var(--sl-color-gray-3); border-left:5px solid transparent; border-right:5px solid transparent; }
+.branches { position:relative; display:grid; grid-template-columns:1fr 1fr; }
+.branches::before { content:''; position:absolute; top:16px; left:24px; width:calc(50% - 24px); border-top:2px dashed var(--sl-color-red-high); }
+.failure { position:relative; align-self:start; margin-top:16px; padding:8px 12px; border-left:2px dashed var(--sl-color-red-high); color:var(--sl-color-red-high); }
+
+.failure span { margin-right:4px; }
+</style>
