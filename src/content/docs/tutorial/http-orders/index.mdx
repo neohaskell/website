@@ -1,17 +1,133 @@
 ---
-title: "Place an order over HTTP"
-description: "Page plan. How can I place an order through the running service?"
-tableOfContents: false
-pagefind: false
+title: Place an order over HTTP
+description: Expose the mug shop's commands through HTTP, place orders, and read the resulting stock through the running service.
+tableOfContents:
+  minHeadingLevel: 2
+  maxHeadingLevel: 2
 prev: true
 next: true
-head:
-  - tag: meta
-    attrs:
-      name: robots
-      content: noindex
 ---
 
-## Page plan <a id="page-plan" />
+The mug shop can already decide whether to accept an order and maintain its stock query. To use that behavior from a browser, we need an HTTP entry point for its commands. We'll open a shop with three mugs, place orders against the running application, and read the stock after both acceptance and rejection.
 
-This page will register the shop's command and query through its `Feature` and compose that `Feature` into the application's named `Event` Model. Readers will send one accepted order and one rejected order, then inspect the stock query through the running HTTP service. A focused wiring excerpt and adjacent request-and-response pairs will connect source to observable behavior. The tutorial will use verified shop routes and payloads, with broader HTTP and MCP choices linked to their task guide.
+Use the project from [Query available stock](../stock-query/). It already registers `OpenShop`, `PlaceOrder`, and `AvailableStock` in the shop's Feature, and includes that Feature in the application's Event Model. The commands are still internal. The query is public, but a new running application has no shop until we open one there. The shops created by tests belong to separate stores.
+
+## The HTTP entry points
+
+A transport is an interface through which a caller reaches application behavior. The starter already runs the Web transport, which serves HTTP. Each command also declares which transports may expose it. Give your agent this task from the project root:
+
+```text wrap
+Follow the project's active NeoHaskell guidance. Expose OpenShop and PlaceOrder through WebTransport, replacing their InternalTransport declarations and imports. Preserve the decisions, events, stock query, existing Shop Feature and App composition, and working Counter routes. Keep opening stock at three.
+
+Run neo test. Add a live HTTP scenario that opens a shop, waits for stock 3, orders one mug and waits for 2, then orders the remaining two and waits for 0. Check Sold out on the next order and Shop not found for an unopened UUID. Both rejections must leave stock unchanged. Keep the existing history checks. Use bounded retries for asynchronous query reads.
+```
+
+In `src/Shop/Commands/PlaceOrder.hs`, inspect this declaration before `command ''PlaceOrder`:
+
+```haskell wrap
+import Service.Transport.Web (WebTransport)
+```
+
+```haskell wrap
+type instance TransportsOf PlaceOrder = '[WebTransport]
+```
+
+The import belongs with the module's imports. The type equation selects Web as the command's allowed transport; the apostrophe and brackets describe a list of types. `OpenShop` needs the corresponding equation with its own name. Neither change alters the stock condition in `decide`.
+
+The Feature connects these commands to the events they can produce. For example, this existing excerpt sits inside the shop's ordering slice in `src/Shop/Feature.hs`:
+
+```haskell wrap
+entity @ShopEntity do
+  command @PlaceOrder do
+    produces @OrderPlaced.Event
+```
+
+`entity` selects the state used for the command, and `produces` declares its event payload. The stock slice already subscribes `AvailableStock` to both `ShopOpened.Event` and `OrderPlaced.Event`. Those declarations register the behavior; the transport determines how a caller reaches it.
+
+In `src/App.hs`, the existing composition includes both Features and the HTTP server. This excerpt omits the application name, configuration, and event-store setup; preserve those settings.
+
+```haskell wrap
+EventModel.withTransport WebTransport.server
+EventModel.features do
+  counterFlow
+  shopFlow
+```
+
+With `event-model.json` saved, run `neo inspect sync` and open `neo ide`, or reload the graphical IDE if it's already open. In **Ungrouped**, use **Fit View** to trace `PlaceOrder` to `OrderPlaced`, then `OrderPlaced` to `AvailableStock`. Also follow `ShopOpened` into the query. These connections explain why opening and ordering can both change the answer. The running service's documentation is where we'll check that the HTTP entry points actually work. [Expose HTTP or MCP](../../guides/transports/) covers broader interface choices.
+
+## A shop in the running service
+
+Run `neo run` from the project root. If the application is already running, stop it with Ctrl+C first so the new command declarations are loaded. Open its [built-in API documentation](http://127.0.0.1:8080/docs). Keep this application running throughout the following requests. The tutorial store is in memory, so restarting gives us a fresh store.
+
+Under **ShopEntity**, select **open-shop** and open **Test Request**. Replace the **Body** with:
+
+```json wrap
+{"entityId":"9b4dbfcb-477f-49f2-9156-629a24457f86"}
+```
+
+This is a UUID chosen for this example's shop. You may choose another valid UUID, but keep using the same shop throughout the exercise. The key `entityId` is required as written. Click **Send** once. This sends `POST /commands/open-shop` and returns status `200 OK` with:
+
+```json wrap
+{
+  "entityId": "9b4dbfcb-477f-49f2-9156-629a24457f86",
+  "tag": "Accepted"
+}
+```
+
+Copy the response's `entityId` for the following requests. Here it matches the identifier we supplied to `OpenShop`; it isn't a new order identifier.
+
+Find `GET /queries/available-stock/{id}` in the documentation and open **Test Request**. Set its `id` path parameter to that copied UUID and send the request. When the query has refreshed, status `200 OK` accompanies this row:
+
+```json wrap
+{
+  "shopId": "9b4dbfcb-477f-49f2-9156-629a24457f86",
+  "availableMugs": 3
+}
+```
+
+The keyed route returns one row directly. The collection route, `GET /queries/available-stock`, instead puts rows inside `items`. If the keyed read initially returns 404, read again: command acceptance records events before the asynchronous query refresh necessarily finishes. Automated checks should wait with a bounded retry and fail if the expected answer never arrives.
+
+## An accepted order and its answer
+
+Under **ShopEntity**, select **place-order** and open **Test Request**. Send the following body, using the shop ID from the opening response:
+
+```json wrap
+{"entityId":"9b4dbfcb-477f-49f2-9156-629a24457f86"}
+```
+
+This sends `POST /commands/place-order`. The body selects the shop; every order in this example is for one mug, so there is no quantity field. The response has status `200 OK` and the same accepted response shape:
+
+```json wrap
+{
+  "entityId": "9b4dbfcb-477f-49f2-9156-629a24457f86",
+  "tag": "Accepted"
+}
+```
+
+Read the same keyed stock query again until `availableMugs` is `2`. One `OrderPlaced` has been recorded, and the query copies the shop's updated count. Reading the query doesn't place another order.
+
+Send **place-order** twice more with the same body. Both commands succeed, including the one that buys the last mug. Read the query until its count is `0`. Keep the service running so the next request addresses this same sold-out shop.
+
+## Rejection without a stock change
+
+Send **place-order** once more with the same shop ID. This time the response has status `400 Bad Request`:
+
+```json wrap
+{
+  "reason": "Sold out",
+  "tag": "Rejected"
+}
+```
+
+Read the keyed stock query again. It still returns `availableMugs: 0`. The rejected command records no `OrderPlaced`, so there is no further stock change for the query to apply. A stale browser answer cannot bypass this decision: `PlaceOrder` checks the shop's state, rather than trusting the displayed query count.
+
+For the other rejection, change `entityId` in the order body to `a16f8cc5-cb54-4f67-856e-d01ab0dc0072`, a different example UUID that we haven't opened. Send it once. Status `400 Bad Request` now accompanies:
+
+```json wrap
+{
+  "reason": "Shop not found",
+  "tag": "Rejected"
+}
+```
+
+The first UUID names an existing shop with no mugs left. The second names no shop at all. These are different decisions even though both reject the command. Reading the original shop's stock still returns zero; reading the unopened UUID returns 404 because it has no query row.
