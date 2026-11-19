@@ -1,0 +1,29 @@
+<div class="caller-identity" role="img" aria-label="Three separate HTTP paths. A valid token produces verified claims before command permission is checked. An invalid token stops with 401 before the command. No token produces an anonymous caller whose command permission is still checked.">
+  <div class="path">
+    <div class="node">Valid bearer token</div>
+    <div class="link">Verify signature, issuer, time and audience</div>
+    <div class="node">user = Just claims</div>
+    <div class="link">Check command permission</div>
+    <div class="node" data-diagram-role="command">May this customer place this order?</div>
+  </div>
+  <div class="path">
+    <div class="node">Invalid bearer token</div>
+    <div class="link failed">Verification fails <b aria-hidden="true">×</b></div>
+    <div class="node failed">401. Stop before the command</div>
+  </div>
+  <div class="path">
+    <div class="node">No token</div>
+    <div class="link">Anonymous caller</div>
+    <div class="node">user = Nothing</div>
+    <div class="link">Check command permission</div>
+    <div class="node" data-diagram-role="command">May an anonymous caller place an order?</div>
+  </div>
+</div>
+<style>
+.caller-identity { margin:32px 0; font-size:16px; }
+.path { margin:32px 0; }
+.node { padding:16px; border:1px solid var(--diagram-line, var(--sl-color-gray-3)); border-radius:8px; background:var(--diagram-surface, var(--sl-color-gray-6)); color:var(--diagram-ink, var(--sl-color-text)); }
+.link { position:relative; border-left:2px solid var(--sl-color-gray-3); padding:16px 24px; margin-left:24px; }
+.link::after { content:''; position:absolute; bottom:0; left:-6px; border-top:8px solid var(--sl-color-gray-3); border-left:5px solid transparent; border-right:5px solid transparent; }
+.failed { color:var(--sl-color-red-high); border-color:var(--sl-color-red-high); border-left-style:dashed; }
+</style>

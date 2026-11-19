@@ -1,17 +1,96 @@
 ---
 title: "Verify caller identity"
-description: "Page plan. How does my HTTP application recognize a caller?"
-tableOfContents: false
-pagefind: false
-prev: false
-next: false
-head:
-  - tag: meta
-    attrs:
-      name: robots
-      content: noindex
+description: "Connect HTTP requests to verified user claims with an OIDC issuer and an expected API audience."
 ---
 
-## Page plan <a id="page-plan" />
+import CallerIdentity from '@components/learn/CallerIdentity.astro';
 
-This page will connect an application to an OIDC issuer, configure the expected token audience where required, and inspect the user claims available to a command. A request comparison will cover a valid token, an invalid token, and an anonymous caller. A small boundary figure will separate identity verification from command permission and from connecting the caller to an external OAuth provider.
+The mug shop needs to distinguish the customer placing an order from someone supplying that customer's identifier in a request body. Authentication establishes who the caller is. NeoHaskell can verify a signed token from an identity provider and give the command the resulting user claims, rather than trusting an owner field supplied by the caller.
+
+This guide builds on [Place an order over HTTP](../../tutorial/http-orders/). It covers incoming HTTP identity. [Authorize a command](../authorization/) covers permission to run a command, while [Connect an external account](../integrations/oauth-connections/) covers permission for the application to use another service on a user's behalf. These are separate boundaries.
+
+<CallerIdentity />
+
+## An issuer the application trusts
+
+An identity provider signs tokens after a user signs in. OpenID Connect (OIDC) lets NeoHaskell discover that provider's issuer identity and public signing keys. The issuer identifies the provider; the audience identifies the API the token is intended to reach. A token issued for another API should not identify a caller to the mug shop.
+
+Before changing the application, obtain the provider's HTTPS issuer URL and the audience configured for your API. The provider must issue signed JWT bearer tokens that the API can validate. This setup does not create a login screen or turn an opaque token into a JWT. The client signs in through the provider and obtains a token intended for this API.
+
+Ask your agent for a focused configuration change:
+
+```text
+Configure OIDC authentication for the mug shop's HTTP transport.
+Use my provider's issuer URL and the audience registered for this API.
+Keep existing transport, storage and Feature registrations.
+Add a new signed-in command to inspect the authenticated subject.
+Preserve deployed commands, events and queries.
+Test valid, invalid, wrong-audience and absent tokens separately.
+Keep tokens out of logs, events and committed configuration.
+```
+
+In `App.hs`, import `Auth.Config` qualified as `AuthConfig`. The following excerpt belongs inside the existing `do` block that assembles the application:
+
+```haskell
+let authOverrides = AuthConfig.defaultOverrides {
+  audience = Just "mug-shop-api"
+}
+```
+
+Add this step to the existing application pipeline before `Application.run`:
+
+```haskell
+|> Application.withAuthOverrides @()
+     (\_ -> "https://identity.example.com") authOverrides
+```
+
+Both strings are examples to replace. Use your provider's issuer URL instead of `https://identity.example.com`, and the exact API audience instead of `mug-shop-api`. `@()` selects a factory that does not need an application configuration value. For a configuration-dependent issuer, register your configuration with `Application.withConfig` and have the factory read its issuer field instead, as in [Runtime configuration](../../reference/configuration/).
+
+`withAuth` uses default overrides, including no audience check. Setting `audience = Just ...` makes that intended recipient part of validation. Do not remove it to make a wrong-audience token pass. Discovery and key retrieval must also succeed; an unreachable or rejected issuer is a configuration problem to fix before checking requests. The [application authentication API](https://github.com/neohaskell/NeoHaskell/blob/414602b9510a92dfac647bc68d6afadfb594502c/core/service/Service/Application.hs) supplies these two configuration builders.
+
+## The identity a command receives
+
+The HTTP client sends the token in the `Authorization` header using the `Bearer` scheme. NeoHaskell verifies the token's signature, issuer and validity times, along with the audience when configured. It then constructs a `RequestContext` for the command. Inside a decision, inspect its `user` field:
+
+```haskell
+case ctx.user of
+  Nothing -> Decider.reject "Sign in to place an order"
+  Just user -> do
+    let ownerId = user.sub
+```
+
+This is a reading excerpt, not a complete decision. `ctx` is the decision's request context. The remaining signed-in branch uses `ownerId` when accepting the new order. Import `Service.Auth` for `RequestContext` and `UserClaims`, and retain the decision's normal entity and event handling. The subject, `user.sub`, comes from the verified token. An `ownerId` in a request body does not have that provenance.
+
+The subject is an identifier within the trusted issuer. Email and display name are optional profile information, not substitutes for that identifier. The available fields are:
+
+| Field | Meaning |
+| --- | --- |
+| `sub` | The provider's subject identifier. |
+| `email`, `name` | Optional profile claims, when supplied. |
+| `permissions` | Text values from the configured permissions claim. |
+| `tenantId` | An optional tenant claim, when configured. |
+| `rawClaims` | Custom claims for application-specific inspection. |
+
+By default the permissions claim is named `permissions` and is read as an array of text. Changing `permissionsClaim` changes the claim name, not its format. A space-separated OAuth `scope` string is not automatically converted into that array. `tenantIdClaim` chooses the optional tenant claim. Add these overrides only when the provider's token format requires them, and test the resulting values. Do not log the complete token or copy all claims into an event merely to inspect identity.
+
+## Three requests across the boundary
+
+With authentication configured, compare the same new HTTP command using three requests. Use your provider's supported login client to obtain a test token for your API. In a local HTTP client, send it as `Authorization: Bearer <token>`; replace `<token>` with the returned token, without angle brackets. If the application's browser API interface does not expose an authorization control, use a client that can set that header.
+
+| Request | Identity and result |
+| --- | --- |
+| Valid token for this issuer and audience | `ctx.user` contains verified claims. Command access and the business decision still apply. |
+| Invalid token, including a bad signature or wrong audience | HTTP 401. The command does not run. |
+| No authorization header | Anonymous context with `user = Nothing`. The command's access policy determines whether it may run. |
+
+For the signed-in inspection command, configure an authenticated access policy and have its decision reject a missing user too. An anonymous request should then fail, while a valid caller reaches the decision. A public command can still allow anonymous requests: enabling OIDC does not require every visitor to sign in. Authentication service failures can instead return 503, which is different from an invalid token.
+
+Run the wrong-audience comparison with a genuinely signed test token intended for another API. Editing a token's text only tests signature rejection. Also test an expired token, allowing for the configured clock tolerance, and verify that the accepted subject is the one your provider issued. Do this with disposable users and fresh application entities.
+
+## Identity and permission stay separate
+
+A verified customer identity does not grant access to every order. The command's access gate can require a signed-in caller or a permission, and the decision must compare the caller with the relevant order owner. Query access needs its own rules too. Those checks are developed in [Authorize a command](../authorization/) and [Restrict query results](../authorization/query-access/).
+
+Keep `withAuth` or `withAuthOverrides` wired into the running application when testing those checks. Without HTTP authentication configured, the Web transport uses a trusted context that skips the command access gate; an access declaration alone does not enable JWT verification. A decision that explicitly rejects `ctx.user = Nothing` still has no signed-in user in that configuration.
+
+Inspect the new command in the native IDE and review its decision beside the request tests. The model helps locate the behavior; the token comparisons establish which identity actually reaches it. Connecting an external OAuth account remains a separate action and does not replace this incoming-request verification.
