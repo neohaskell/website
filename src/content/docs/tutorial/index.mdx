@@ -1,17 +1,43 @@
 ---
-title: "Plan the mug shop"
-description: "Page plan. What must our one-mug order do?"
-tableOfContents: false
-pagefind: false
+title: Plan the mug shop
+description: Define the mug shop's opening stock, what happens when a customer orders, and the cases your agent will build against.
+tableOfContents:
+  minHeadingLevel: 2
+  maxHeadingLevel: 2
 prev: false
 next: true
-head:
-  - tag: meta
-    attrs:
-      name: robots
-      content: noindex
 ---
 
-## Page plan <a id="page-plan" />
+A small shop has three ceramic mugs to sell. Each order is for one mug. As soon as the shop accepts an order, that mug is committed to the customer and is no longer available to the next shopper. The shop accepts the last mug's order and turns down the next one.
 
-This page will specify a shop that starts with three ceramic mugs and accepts an order for one mug only while stock remains. Readers will predict the command, decision, recorded event, and stock query for accepted and sold-out cases. A small behavior table will become the acceptance criteria handed to the agent. The page will also distinguish the illustration's supplied opening stock from the initialization the implemented application must perform.
+In [Commands and queries](../learn/), customers could ask for different quantities. In this tutorial, every order asks for one mug, so we can follow what changes as the shop sells out. You can work out the behavior on this page before opening a project. When you're ready to build it with an agent, use the project prepared in [Set up your agent](../getting-started/).
+
+## The first and last orders <a id="the-first-and-last-orders" />
+
+The customer sends a command we'll call `PlaceOrder`. It asks the shop to set aside one ceramic mug. The shop's decision checks how many mugs are available when that command arrives. With three in stock, it accepts the command and records one `OrderPlaced` event. The stock query answers two once it has incorporated that change. The history still contains the fact that the shop accepted an order.
+
+Now imagine ordering the last mug. The shop accepts it and records an `OrderPlaced` event. The next customer sends the same command and gets a sold-out rejection, which adds no event to the history. The stock query answers zero in both cases once it's up to date. That answer alone can't tell you whether the shop accepted the command. For that, check the decision and what it records.
+
+## Where the three mugs come from <a id="where-the-three-mugs-come-from" />
+
+The order illustration in [Events and history](../introduction/history/) starts with three mugs already on the shelf. The application we build has to establish that opening stock. When we set up a fresh shop, it should record that three mugs came into stock. Before anyone orders, the stock query should answer three from that opening history. After an order, applying the history means starting from the opening stock and subtracting one for each `OrderPlaced`.
+
+The Counter starter has a similar starting point. If you have the diagram from [Find your project files](../getting-started/project-files/#the-model-in-the-graphical-ide), open it in the graphical IDE. Select `CounterCreated` in **Create a counter** to highlight its connection to `CounterView` in **Show counter values**. Use **Fit View** to see both ends. The [starter's `Feature.hs`](https://github.com/neohaskell/NeoHaskell/blob/414602b9510a92dfac647bc68d6afadfb594502c/neo/starter/src/Starter/Counter/Feature.hs#L33-L38) includes this line among the events the query reads.
+
+```haskell wrap
+onEvent @CounterCreated.Event
+```
+
+That line tells the query to update from the counter's state when it is created. This gives us a value to read before the first increment. Look for the same relationship when you review the shop's model. The stock query needs to account for the event that brings the first three mugs into stock as well as the orders that take them out.
+
+## The cases to give your agent <a id="the-cases-to-give-your-agent" />
+
+Each row is a separate case. Given the stock shown, imagine sending `PlaceOrder` for one mug. The last column gives the expected answer once the query has caught up.
+
+| Stock before | Decision and event | Stock query |
+| --- | --- | --- |
+| 3 mugs | Accept, record `OrderPlaced` | 2 mugs |
+| 1 mug | Accept, record `OrderPlaced` | 0 mugs |
+| 0 mugs | Reject as sold out. No event | 0 mugs |
+
+The opening-stock requirement and this table are the acceptance criteria for the shop's backend. Give them to your agent as you build each part. When you review the implementation, ask the agent to show how the shop gets its starting count, which test checks the decision for each row, what gets recorded, and what the stock query answers. Pay particular attention to where the code distinguishes an order for the last mug from an order after the shop has sold out.
