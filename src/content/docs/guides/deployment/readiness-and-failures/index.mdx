@@ -1,17 +1,82 @@
 ---
-title: "Check readiness and failures"
-description: "Page plan. How do I tell whether the application is ready and locate a failed operation?"
-tableOfContents: false
-pagefind: false
-prev: false
-next: false
-head:
-  - tag: meta
-    attrs:
-      name: robots
-      content: noindex
+title: Check readiness and failures
+description: Distinguish HTTP health from query readiness and trace a failed mug-shop operation through structured command logs.
+tableOfContents:
+  minHeadingLevel: 2
+  maxHeadingLevel: 2
+prev: true
+next: true
 ---
 
-## Page plan <a id="page-plan" />
+import QueryReadiness from '@components/learn/QueryReadiness.astro';
 
-This page will compare the health endpoint with query readiness and follow a failed operation using its request identifier and structured logs. A small state diagram will show rebuilding, ready, and failed query states alongside their HTTP results. Worked diagnostics will distinguish a storage failure from an unavailable integration, and connect recovery steps to evidence rather than treating a running process as proof that every query is usable.
+A mug-shop process can answer HTTP while it is still rebuilding the stock query. It can also reject an order while its queries remain ready. These are different observations, and each calls for a different response.
+
+[Deploy an application](../) established a pinned executable and checked the same shop before and after a restart. Here we use that application to separate process health, query readiness and one command's outcome. Keep its existing history and configuration throughout the investigation.
+
+## Health and readiness answer different questions
+
+Open [the local health endpoint](http://127.0.0.1:8080/health) in your browser. With the default Web configuration, it returns HTTP 200 with `"status":"ok"`. This shows that the HTTP route is answering. It does not check every database operation or call an external provider.
+
+[The local readiness endpoint](http://127.0.0.1:8080/ready) reports the query subscriber's state. During startup replay it returns HTTP 503 with `"status":"rebuilding"`. When replay completes, it returns HTTP 200 with `"status":"ready"`. If replay fails, it returns HTTP 503 with `"status":"failed"` and a `reason` describing the failure category.
+
+<QueryReadiness />
+
+The two branches are possible replay outcomes, not steps that every startup must visit. A small retained history may finish replay before you open the browser. The HTTP listener can start independently of replay, so a successful health check alone is not a signal to send users to stock-dependent screens.
+
+The normal application enables both endpoints. If you have changed their paths or disabled them, use that configuration when setting up monitoring; a 404 is not a readiness state. Configure your hosting environment's traffic-readiness check against `/ready`, and use `/health` separately to check that HTTP responds.
+
+## The query behind the readiness answer
+
+In the application log, look for `Query replay progress` and `Query replay complete`. Their messages include `events_replayed`, `lag_from_head` and `duration_seconds`. These describe startup catch-up. A failed replay instead records a warning, with context such as `queryName` and `position` on the coordinated replay path. Preserve that context when investigating which retained event or updater failed.
+
+Readiness is aggregated across registered queries. Any failed query makes the aggregate failed; otherwise a rebuilding query makes it rebuilding. Ready means startup query maintenance reached its live state. It does not promise that a query has already processed a command accepted a moment ago, or that an external service is available. A failure in a live query updater can also be logged without changing `/ready` to failed. Check updater warnings and the affected query answer even when readiness stays ready.
+
+The normal Web query handlers also check their own query's readiness around a successful read. A rebuilding or failed query does not return that read as a usable answer. For an authorized request this can produce HTTP 503, rather than an empty result that looks like there is no stock. Access checks and other handler failures can still reject the request independently. [Restrict query results](../../authorization/query-access/) explains that separate access boundary.
+
+When `/ready` reports rebuilding, compare successive replay progress messages before replacing the process. When it reports failed, keep the reason and the nearby logs. Repeated restarts will not repair a deterministic updater failure. [Persist and rebuild queries](../../storage/query-rebuilds/) explains normal replay and separately named replacement queries; deleting retained events is not a recovery step.
+
+## One rejected order in the logs
+
+Use [the local application documentation](http://127.0.0.1:8080/docs) to send commands and read `AvailableStock`, as in the deployment check. On a fresh shop, two accepted `place-online-order` commands leave one mug. A third is rejected with `Reserved for in-person sales`. If your existing shop already has one mug, send only the rejecting command. Keep the deployed online command from [Add a feature safely](../../../tutorial/change-safely/); the original `PlaceOrder` has different behavior.
+
+Record the time, command and shop UUID. In the application's structured logs, find the corresponding `command_result` record by `commandName` and `streamId`. Copy its `requestId`, then search the retained logs for that exact value to follow that execution. The HTTP response need not include this identifier; obtain it from the log record. Separate attempts have separate request identifiers, even when they address the same shop.
+
+The relevant fields of the rejected order look like this. Values such as the generated identifiers and timestamp are omitted here:
+
+```json
+{
+  "kind": "command_result",
+  "commandName": "PlaceOnlineOrder",
+  "result": "rejected",
+  "failureStage": "decision",
+  "errorClass": "CommandRejected",
+  "eventsAppended": 0
+}
+```
+
+`failureStage` locates the refusal and `errorClass` classifies it. Here the decision enforced the reserve policy, so no new order event was appended. Read `AvailableStock` again: it should still show one. `/health` and `/ready` can both remain successful during this rejection. Restarting the process or retrying the same order does not change the stock policy.
+
+Ask your agent for a bounded diagnosis when the result is unexpected:
+
+```text wrap
+Find the command_result record for this command, shop UUID and time.
+Report its requestId, result, failureStage, errorClass and eventsAppended.
+Trace the relevant logs without exposing tokens or private payloads.
+Compare the result with the deployed decision and current query answer.
+Do not retry commands, change frozen source or delete history.
+```
+
+Supply the actual command, UUID and time with that request. The diagnosis should identify the failed boundary before proposing a recovery action.
+
+## Storage and provider failures have different boundaries
+
+Suppose a command log instead reports `result: "append_failed"`, `failureStage: "append"` and `errorClass: "StorageFailure"`. This combination identifies a reported event-store append failure, not a business refusal. A `fetch` failure points earlier, where the executor could not obtain entity state. Inspect the matching storage logs and configured connection or path before changing the decision. Check service reachability, credentials and access to the existing storage location. Preserve the failed request's identifiers and retained history while restoring the dependency.
+
+Storage adapters have different failure guarantees. In particular, the simple file store can log a persistence warning without reporting an append failure to the command. An accepted command and a healthy process therefore do not establish crash-safe disk durability. Treat persistence warnings as an operational fault and verify the retained state with the storage configuration from [Keep events across restarts](../../storage/), rather than inferring durability from `eventsAppended` alone.
+
+An unavailable shipment provider is downstream of a different boundary. The order can already be accepted and recorded before an integration attempts the external call. Its command result then describes the order, not delivery of the shipment. Inspect the integration's error and the receiving completion or failure command, together with the shipment's business status. A provider HTTP 503 does not by itself mean the event store is unavailable, and `/ready` does not probe that provider.
+
+For example, a controlled provider failure can be mapped to a receiving command that records `provider-failed`; a rejected receiving command can leave no shipment query row at all. These outcomes require different repairs. Check whether the provider action happened and whether its result was accepted before retrying. Keep a stable business operation identifier where the provider supports idempotency, since an uncertain response can follow a completed external action.
+
+After restoring a dependency, check readiness and the affected business answer separately. For storage, confirm the same shop and history are readable. For an integration, confirm the intended completion or failure state and whether a retry is safe. A return to `"status":"ok"` cannot answer those business questions.
