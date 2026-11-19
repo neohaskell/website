@@ -1,0 +1,8 @@
+<div class="json-boundary" role="img" aria-label="Two independent inputs. A negative integer decodes then fails the quantity check. A string quantity fails decoding and never reaches the check.">
+  <div class="path"><code>quantity: -1</code><div class="connector">decodeText</div><div class="step">MugRequest</div><div class="connector">quantity &lt;= 0</div><div class="failure">Err<br/>Quantity must be positive</div></div>
+  <div class="path"><code>quantity: "two"</code><div class="connector">decodeText</div><div class="failure">Err<br/>Expected integer<br/>Quantity check skipped</div></div>
+</div>
+<style>
+.json-boundary{font-size:16px;padding:24px;border:1px solid var(--sl-color-gray-5);border-radius:8px;margin-block:24px;display:grid;grid-template-columns:1fr 1fr;gap:24px;max-width:100%}.json-boundary *{margin:0;min-width:0;box-sizing:border-box}.step,.failure,.path>code{padding:16px;border:1px solid var(--sl-color-gray-4);border-radius:4px;display:block;overflow-wrap:anywhere}.failure{border:2px dashed var(--sl-color-red);color:var(--sl-color-red-high)}.connector{border-left:2px solid var(--sl-color-gray-3);margin-left:24px;padding:16px;font-size:16px;min-height:48px}.broken{border-left-style:dashed}.json-boundary code{font-size:16px;white-space:normal}@media(max-width:600px){.json-boundary{grid-template-columns:1fr;padding:16px}}
+:global(.json-signatures){font-size:16px}:global(.json-signatures dt){margin-top:16px}:global(.json-signatures dd){margin:4px 0 0}:global(.json-signatures code){font-size:16px;white-space:normal;overflow-wrap:anywhere}
+</style>

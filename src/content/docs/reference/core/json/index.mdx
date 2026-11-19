@@ -1,17 +1,115 @@
 ---
 title: "JSON and schemas"
-description: "Page plan. How do typed values become JSON and API schemas?"
-tableOfContents: false
-pagefind: false
-prev: false
-next: false
-head:
-  - tag: meta
-    attrs:
-      name: robots
-      content: noindex
+description: "Encode typed values, decode external JSON, and describe their structure with schemas."
 ---
 
-## Page plan <a id="page-plan" />
+import JsonBoundary from '@components/learn/JsonBoundary.astro';
 
-This page will cover `Json` encoding and decoding, `FromJSON` and `ToJSON` instances, malformed input as `Result`, and the separate `Schema` contract used to describe API data. A small record will be paired with its JSON shape and one invalid input. It will distinguish serialization from validation and generated API descriptions, keeping parser helpers in anchored tables and linking command payload details to the transport reference.
+JSON carries data between an application and its callers or providers. In NeoHaskell, `Json` supplies the operations that turn typed values into JSON and read JSON back. `Schema` describes a type's structure for tools such as API documentation. These are separate contracts: a description of an integer field doesn't decide how many mugs a customer may order.
+
+This reference uses the record and instance notation from [Types and records](../../language/types/), and the `Ok` and `Err` branches from [Maybe and Result](../results/). The example is a mug order received as text.
+
+## Values, JSON and text <a id="encoding-and-decoding" />
+
+There are two boundaries to recognize. `Json.Value` is a JSON value already held in memory. `Text` may contain a serialized JSON document, including its braces and quotes. Choose the operation for the value you actually have.
+
+```haskell
+import Core
+import Json qualified
+import Schema qualified
+
+data MugRequest = MugRequest {
+  product :: Text,
+  quantity :: Int
+} deriving (Show, Eq, Generic)
+
+instance Json.ToJSON MugRequest
+instance Json.FromJSON MugRequest
+instance Schema.ToSchema MugRequest
+```
+
+`Generic` makes the record's structure available to the default implementations. `ToJSON` supplies encoding, `FromJSON` supplies decoding, and `ToSchema` supplies a structural description. Each instance is declared separately. The first two use the JSON library's default representation; changing a custom codec doesn't automatically change a schema.
+
+```haskell
+order :: MugRequest
+order = MugRequest {
+  product = "blue-mug",
+  quantity = 2
+}
+
+encoded :: Text
+encoded = Json.encodeText order
+
+roundTrip :: Result Text MugRequest
+roundTrip = Json.decode (Json.encode order)
+```
+
+`encoded` contains `{"product":"blue-mug","quantity":2}`. Object member order isn't significant. `roundTrip` is `Ok (MugRequest {product = "blue-mug", quantity = 2})`: encoding produces a `Json.Value`, and decoding reads that value using the requested record type.
+
+<dl class="json-signatures">
+  <dt><code>encode :: ToJSON value =&gt; value -&gt; Value</code></dt>
+  <dd>Build an in-memory JSON value.</dd>
+  <dt><code>encodeText :: ToJSON value =&gt; value -&gt; Text</code></dt>
+  <dd>Serialize a value as JSON text.</dd>
+  <dt><code>decode :: FromJSON value =&gt; Value -&gt; Result Text value</code></dt>
+  <dd>Decode an already parsed JSON value.</dd>
+  <dt><code>decodeText :: FromJSON value =&gt; Text -&gt; Result Text value</code></dt>
+  <dd>Parse JSON text and decode the requested type.</dd>
+  <dt><code>decodeBytes :: FromJSON value =&gt; Bytes -&gt; Result Text value</code></dt>
+  <dd>Read JSON from bytes rather than text.</dd>
+</dl>
+
+These signatures omit the `Json.` qualifier for readability. Call the functions through the qualified module, as in `Json.decodeText @MugRequest input`. The visible type argument selects the decoded type when surrounding code doesn't already establish it.
+
+## Decoding and business checks <a id="malformed-input" />
+
+The generic decoder checks that the input can be read as a `MugRequest`. A malformed document such as `"{"` produces `Err`; so does a string such as `"two"` in the integer `quantity` field. Error text describes the parse failure, so callers should handle the `Err` branch rather than depend on the exact diagnostic wording.
+
+A negative integer still fits `Int`. The application needs a separate check if an order must contain at least one mug:
+
+<JsonBoundary />
+
+```haskell
+readOrder :: Text -> Result Text MugRequest
+readOrder input = do
+  order <- Json.decodeText input
+  if order.quantity > 0 then Ok order
+  else Err "Quantity must be positive"
+```
+
+Given `{"product":"blue-mug","quantity":2}`, `readOrder` returns `Ok (MugRequest {product = "blue-mug", quantity = 2})`. Given the same object with `quantity` set to `-1`, `Json.decodeText @MugRequest` succeeds, but `readOrder` returns `Err "Quantity must be positive"`. If decoding fails, the `do` block stops before inspecting `order.quantity`.
+
+This function checks the submitted quantity. Stock availability still belongs in the command's decision against current entity state. Reading JSON successfully doesn't accept a command or record an event. For effectful work that can fail, use [Tasks and effects](../tasks/).
+
+## Explicit JSON representations <a id="custom-codecs" />
+
+When a provider's field names differ from the application record, write the instances explicitly. `Json.withObject` checks that the input is an object before passing its fields to the parser. The qualified operator spelling has two dots: the first belongs to `Json.`, and the second starts `.:`.
+
+<dl class="json-signatures">
+  <dt><code>object Json..: "quantity"</code></dt>
+  <dd>Read a required field using its <code>FromJSON</code> instance.</dd>
+  <dt><code>object Json..:? "note"</code></dt>
+  <dd>Read an optional field as <code>Maybe</code>. Missing and null fields produce <code>Nothing</code>.</dd>
+  <dt><code>parser Json..!= fallback</code></dt>
+  <dd>Supply a default when an optional parser returns <code>Nothing</code>.</dd>
+  <dt><code>Json.yield value</code> and <code>Json.fail message</code></dt>
+  <dd>Finish a parser successfully or reject the input with a text diagnostic.</dd>
+  <dt><code>Json.object ["quantity" Json..= count]</code></dt>
+  <dd>Build an object with explicitly chosen member names and encoded values.</dd>
+</dl>
+
+These helpers operate inside the codec. `Json.decodeText` converts a parser failure into `Err`. Choose a custom codec when a rule is part of reading that value everywhere; keep context-dependent rules, such as available stock, in the application decision. The [Json source](https://github.com/neohaskell/NeoHaskell/blob/414602b9510a92dfac647bc68d6afadfb594502c/core/json/Json.hs) contains the complete helper signatures.
+
+## Schema descriptions <a id="schema" />
+
+`Schema.toSchema @MugRequest` returns an `SObject` containing two required fields: `product` with `SText`, and `quantity` with `SInt`. The generic schema describes field names and their types. A `Maybe` field is described as `SOptional` and marked non-required. The [Schema contract](https://github.com/neohaskell/NeoHaskell/blob/414602b9510a92dfac647bc68d6afadfb594502c/core/schema/Schema.hs) also represents arrays, enumerations and unions.
+
+A schema is metadata. Generating an API description from it doesn't execute `readOrder`, establish that quantity is positive, or generate test data. If you write a custom JSON representation, inspect its schema too so the published description agrees with the data callers send and receive.
+
+## Integration contracts <a id="integration-contracts" />
+
+The [generic adapter contract](https://github.com/neohaskell/NeoHaskell/blob/414602b9510a92dfac647bc68d6afadfb594502c/core/service/Service/Integration/Adapter.hs) ties a request type to its associated `Response` type. Its `runReal` and `runFake` operations each return `Task IntegrationError (Response request)`. The class itself requires neither JSON instances nor schema instances. An adapter that talks JSON must choose its codecs explicitly; a request/response type relationship alone doesn't establish a wire format. The supplied `Integration.Http` follows the separate `Integration.ToAction` route, so don't infer that every supplied integration implements `Adapter`.
+
+`Integration.TypedInbound outputs` carries a list of command/entity type pairs. `Integration.TypedInboundConfig.run` receives an emission callback whose command argument must satisfy `AllowedOutput command outputs`, `Json.ToJSON command` and `KnownSymbol (NameOf command)`. The membership constraint restricts which command types the worker can emit; the JSON constraint permits encoding the payload. Neither validates an external document or proves that a receiving command will be accepted. See [Create a reusable integration](../../../guides/integrations/create-reusable/) for application-owned mappings, and the [typed inbound source](https://github.com/neohaskell/NeoHaskell/blob/414602b9510a92dfac647bc68d6afadfb594502c/core/service/Integration.hs) for the full callback signature.
+
+`runFake` is an explicit adapter operation. A handwritten QuickCheck `Arbitrary` instance is a separate test fixture, not schema-derived generation. Keep the schema, codecs, business checks and test values consistent by checking each contract against representative inputs.
