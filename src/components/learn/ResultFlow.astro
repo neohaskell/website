@@ -1,0 +1,36 @@
+<div class="result-flow" role="img" aria-label="Quantity parsing: 2 becomes Ok 2 then Ok 24. Zero becomes Err NotPositive; invalid text becomes Err NotAnInteger. Both errors bypass the price calculation and retain their reason.">
+  <div class="flow-row"><code>"2"</code><span class="connector"><span>parseQuantity</span></span><code>Ok 2</code><span class="connector"><span>map (* 12)</span></span><code>Ok 24</code></div>
+  <div class="flow-label">parseQuantity <span>Result.map (\n -&gt; n * 12)</span></div>
+  <div class="flow-row failed"><code>"0"</code><span class="connector"><span>parseQuantity</span></span><code>Err NotPositive</code><span class="connector bypass"><span>map skips Err</span></span><code>Err NotPositive</code></div>
+  <div class="flow-row failed"><code>"many"</code><span class="connector"><span>parseQuantity</span></span><code>Err NotAnInteger</code><span class="connector bypass"><span>map skips Err</span></span><code>Err NotAnInteger</code></div>
+</div>
+<style>
+.result-flow { margin: 2rem 0; padding: 1.5rem 0; font-size: 16px; overflow-x: auto; }
+.result-flow * { margin: 0; }
+.flow-row { display:grid; grid-template-columns: 5rem 2rem 11rem 2rem 11rem; align-items:center; padding: .75rem 0; width: max-content; }
+.flow-row code { font-size:16px; padding:.5rem; border:1px solid var(--sl-color-gray-4); border-radius:4px; text-align:center; }
+.connector > span { display:none; }
+.connector { height:1px; background:var(--sl-color-gray-2); position:relative; }
+.connector::after { content:''; position:absolute; right:0; top:-3px; width:6px; height:6px; border-top:1px solid currentColor; border-right:1px solid currentColor; transform:rotate(45deg); }
+.flow-label { display:flex; gap: 3rem; padding-left:7rem; width:max-content; font-size:16px; }
+.failed code { border-color: var(--sl-color-red); }
+.failed .bypass { background:none; border-top:1px dashed var(--sl-color-red); }
+@media(max-width:600px) {
+.flow-row { display:flex; flex-direction:column; gap:0; width:auto; padding:1rem 0; }
+.flow-row code { min-width:12rem; }
+.connector, .flow-row > :nth-child(4) { width:auto; height:auto; background:none; padding:.75rem 0 1.25rem; text-align:center; }
+.connector > span { display:block; font-family:var(--sl-font-mono); font-size:16px; }
+.connector::after, .connector:nth-child(4)::after { transform:rotate(135deg); top:auto; bottom:.375rem; right:calc(50% - 3px); }
+.failed .bypass { border:0; color:var(--sl-color-red); }
+.flow-label { display:none; }
+}
+
+</style>
+
+<style is:global>
+.result-signatures { margin-block: 1.5rem; }
+.result-signatures dt { font-family:var(--sl-font-mono); font-size:16px; margin-top:1.5rem; }
+.result-signatures dd { margin:.5rem 0 1rem; }
+.result-signatures dd code { font-size:16px; white-space:normal; overflow-wrap:normal; }
+.result-signatures dd p { margin-top:.5rem; }
+</style>

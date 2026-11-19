@@ -1,17 +1,143 @@
 ---
 title: "Maybe and Result"
-description: "Page plan. How do I represent absence or a recoverable failure?"
-tableOfContents: false
-pagefind: false
-prev: false
-next: false
-head:
-  - tag: meta
-    attrs:
-      name: robots
-      content: noindex
+description: "Represent missing values and typed failures, transform successful values, and choose where to handle errors."
 ---
 
-## Page plan <a id="page-plan" />
+import ResultFlow from '@components/learn/ResultFlow.astro';
 
-This page will compare `Nothing` and `Just` with `Err` and `Ok`, showing when absence carries no explanation and when a typed error is needed. Compact signatures and paired cases will cover `map`, `andThen`, `withDefault`, `mapError`, and conversions between the two containers. A parsing or lookup example will retain the error until the caller deliberately handles it, and link effectful failure handling to `Task`.
+A mug color might be absent from a stock map. A quantity entered by a customer might fail to parse. Both operations can return no usable value, but only the second needs to explain what went wrong. `Maybe value` represents presence or absence; `Result error value` retains either a successful value or a reason for failure.
+
+This page builds on [values and common types](../) and [arrays and maps](../containers/). The examples use `Int` quantities and a price of 12 per mug, chosen for this shop. They are pure calculations, so they do not place orders or change stock.
+
+## Presence and failure <a id="maybe-and-result" />
+
+`import Core` brings the types and their constructors into scope. Helpers come from qualified imports:
+
+```haskell
+import Core
+import Maybe qualified
+import Result qualified
+import Text qualified
+```
+
+A `Maybe Int` is either `Just 2`, containing an integer, or `Nothing`, containing no value. A `Result QuantityError Int` is either `Ok 2` or `Err` carrying a `QuantityError`. The error parameter comes first. These are ordinary [sum types](../../language/types/): matching a constructor reveals the value it holds.
+
+```haskell
+quantityLabel :: Maybe Int -> Text
+quantityLabel quantity =
+  case quantity of
+    Just count -> Text.fromInt count
+    Nothing -> "No quantity"
+```
+
+`quantityLabel (Just 2)` returns `"2"`; `quantityLabel Nothing` returns `"No quantity"`. A missing value has no stored explanation to inspect. Use `Maybe` when absence itself is enough, such as a map lookup. Use `Result` when the caller should distinguish causes.
+
+## Retaining the reason <a id="andThen" />
+
+For a quantity, we need to distinguish text that is not an integer from an integer that is not positive. `Text.toInt` returns `Maybe Int`; we attach a parsing error before checking the business condition.
+
+```haskell
+data QuantityError
+  = NotAnInteger
+  | NotPositive
+  deriving (Eq, Show)
+
+positive :: Int -> Result QuantityError Int
+positive count =
+  if count > 0 then
+    Ok count
+  else
+    Err NotPositive
+
+parseQuantity :: Text -> Result QuantityError Int
+parseQuantity input =
+  input
+    |> Text.toInt
+    |> Result.fromMaybe NotAnInteger
+    |> Result.andThen positive
+```
+
+`parseQuantity "2"` returns `Ok 2`, `parseQuantity "0"` returns `Err NotPositive`, and `parseQuantity "many"` returns `Err NotAnInteger`. Negative integers also fail the positive check. `Result.andThen` calls `positive` only when the preceding result is `Ok`; an existing `Err` passes through unchanged.
+
+We can then calculate a price without losing either error:
+
+```haskell
+quote :: Text -> Result QuantityError Int
+quote input =
+  parseQuantity input
+    |> Result.map (\count -> count * 12)
+```
+
+`quote "2"` returns `Ok 24`. The other two inputs retain their respective errors. The dashed paths below bypass multiplication because there is no successful quantity to multiply.
+
+<ResultFlow />
+
+`map` takes a function that returns an ordinary value and wraps its answer in the same container. `andThen` takes a function that already returns a container, allowing the next step to fail without nesting `Result` inside `Result`.
+
+## Transforming optional and successful values <a id="map" />
+
+The helper's callback comes first and the container comes last, so the container can flow through `|>`. Here `a` and `b` are value types, and `e` is the error type. The signatures below use these shorter parameter names without changing the API.
+
+<dl class="result-signatures">
+  <dt>Maybe.map</dt><dd><code>(a -&gt; b) -&gt; Maybe a -&gt; Maybe b</code></dd>
+  <dt>Result.map</dt><dd><code>(a -&gt; b) -&gt; Result e a -&gt; Result e b</code></dd>
+  <dt>Maybe.andThen</dt><dd><code>(a -&gt; Maybe b) -&gt; Maybe a -&gt; Maybe b</code></dd>
+  <dt>Result.andThen</dt><dd><code>(a -&gt; Result e b) -&gt; Result e a -&gt; Result e b</code></dd>
+  <dt>Maybe.withDefault</dt><dd><code>a -&gt; Maybe a -&gt; a</code></dd>
+  <dt>Result.withDefault</dt><dd><code>a -&gt; Result e a -&gt; a</code></dd>
+</dl>
+
+```haskell
+optionalPrice :: Maybe Int -> Maybe Int
+optionalPrice quantity =
+  quantity |> Maybe.map (\count -> count * 12)
+
+optionalQuantity :: Text -> Maybe Int
+optionalQuantity input =
+  input
+    |> Text.toInt
+    |> Maybe.andThen (\count ->
+      if count > 0 then Just count else Nothing)
+```
+
+`optionalPrice (Just 2)` returns `Just 24`; `optionalPrice Nothing` returns `Nothing`. `optionalQuantity "2"` returns `Just 2`, but both `"0"` and `"many"` return `Nothing`. The optional version deliberately makes those failures indistinguishable. As with `Result`, neither helper runs its callback for the empty or failed case.
+
+## Handling the answer <a id="withDefault" />
+
+At the caller, a `case` can preserve the distinction long enough to choose a useful response. Ask your AI agent to keep the typed result through validation, then inspect the point where the caller handles each error.
+
+```haskell
+quantityMessage :: QuantityError -> Text
+quantityMessage problem =
+  case problem of
+    NotAnInteger -> "Enter a whole number"
+    NotPositive -> "Enter at least one mug"
+
+quoteLabel :: Text -> Text
+quoteLabel input =
+  case quote input of
+    Ok total -> Text.fromInt total
+    Err problem -> quantityMessage problem
+```
+
+`quoteLabel "2"` returns `"24"`; `quoteLabel "0"` returns `"Enter at least one mug"`; `quoteLabel "many"` returns `"Enter a whole number"`. The errors remained distinct until this presentation boundary.
+
+`withDefault` instead chooses one fallback and removes the container. `Just 2 |> Maybe.withDefault 1` returns `2`; `Nothing |> Maybe.withDefault 1` returns `1`. Similarly, `quote "2" |> Result.withDefault 0` returns `24`, while either failed quote becomes `0`. That loses the reason and can make invalid input look like a free order. Use a fallback only when that replacement matches the application's intent.
+
+## Converting errors and containers <a id="mapError" />
+
+`mapError` changes the error type without handling the failure. For example, `quote "0" |> Result.mapError quantityMessage` returns `Err "Enter at least one mug"`. A successful quote stays `Ok 24`. The result still requires a caller to handle it.
+
+<dl class="result-signatures">
+  <dt>Result.mapError</dt><dd><code>(e -&gt; f) -&gt; Result e a -&gt; Result f a</code><p>Transform only <code>Err</code>.</p></dd>
+  <dt>Result.fromMaybe</dt><dd><code>e -&gt; Maybe a -&gt; Result e a</code><p>Supply a reason for <code>Nothing</code>.</p></dd>
+  <dt>Result.toMaybe</dt><dd><code>Result e a -&gt; Maybe a</code><p>Discard the reason in <code>Err</code>.</p></dd>
+</dl>
+
+### Conversions <a id="conversions" />
+
+`Just 2 |> Result.fromMaybe NotAnInteger` returns `Ok 2`; `Nothing |> Result.fromMaybe NotAnInteger` returns `Err NotAnInteger`. The conversion supplies your chosen error, rather than recovering information from `Nothing`.
+
+In the other direction, `quote "2" |> Result.toMaybe` returns `Just 24`; both `quote "0" |> Result.toMaybe` and `quote "many" |> Result.toMaybe` return `Nothing`. Converting that absence back to `Result` cannot restore the original reason. The [Result implementation](https://github.com/neohaskell/NeoHaskell/blob/414602b9510a92dfac647bc68d6afadfb594502c/core/core/Result.hs) also provides `fromEither` and `toEither` for libraries using Haskell's `Either`: `Right` corresponds to `Ok`, and `Left` to `Err`.
+
+These containers describe values. Work that performs effects and can fail belongs in [Tasks and effects](../tasks/). Keeping parsing separate lets you inspect which inputs are accepted before connecting the calculation to that work.
