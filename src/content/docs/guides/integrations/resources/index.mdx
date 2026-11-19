@@ -1,17 +1,72 @@
 ---
 title: Manage integration resources
-description: "Page plan. How do integrations acquire and release resources?"
-tableOfContents: false
-pagefind: false
-prev: false
-next: false
-head:
-  - tag: meta
-    attrs:
-      name: robots
-      content: noindex
+description: Give outbound clients and inbound workers explicit lifetimes, and distinguish releasing a resource from completing business work.
+tableOfContents:
+  minHeadingLevel: 2
+  maxHeadingLevel: 2
 ---
 
-## Page plan <a id="page-plan" />
+import IntegrationResources from '@components/learn/IntegrationResources.astro';
 
-This page will explain ownership of clients, connections and worker lifetimes, including startup failure, cancellation and cleanup. A controlled native example will distinguish stopping a worker from releasing its resources.
+Booking a shipment may need only one HTTP call. Listening for shipment updates may keep a connection open for hours. Both are integrations, but the connection needs an owner that acquires it, uses it and releases it when work stops.
+
+[Create a reusable integration](../create-reusable/) separated the shipping provider's protocol from the mug shop. This advanced guide adds resource ownership to that boundary. The reusable module still lives outside `src/MyShop`; the application still maps order events to provider inputs and provider results to shipment commands.
+
+## A client belongs to a worker lifetime
+
+A stateless outbound handler constructs its work for each event without retaining a client between calls. Use that route when the supplied integration already manages the resources it needs. Adding lifecycle hooks is useful when your own integration needs an expensive client, connection or interpreter that several events can reuse.
+
+[`Integration.Lifecycle.OutboundConfig`](https://github.com/neohaskell/NeoHaskell/blob/414602b9510a92dfac647bc68d6afadfb594502c/core/service/Integration/Lifecycle.hs) describes this second route. The dispatcher creates a worker for an entity stream and gives its initialized state to each event processor. Events for that stream run sequentially. Different streams can have different workers, so a resource created here is not an application-wide singleton.
+
+<IntegrationResources />
+
+The bracketed lifetime ends when the idle worker is removed and cleaned up. A later event needs a fresh initialization. The entity's recorded history survives both clients; a client is a runtime resource, not the authoritative shipment state.
+
+## Three hooks, one resource owner
+
+The configuration has three fields. In these signatures, `state` is the resource value returned by initialization, such as a shipping client:
+
+```haskell
+initialize :: StreamId -> Task Text state
+processEvent ::
+  state ->
+  Event Json.Value ->
+  Task Text (Array Integration.CommandPayload)
+cleanup :: state -> Task Text Unit
+```
+
+`Task error value` describes work that can fail with an error or finish with a value. Here errors are `Text`; initialization returns `state`, event processing returns command payloads, and cleanup returns `Unit`, meaning no useful result value. Constructing the Task does not run it. [Tasks and effects](/reference/core/tasks/) explains execution separately from business decision acceptance.
+
+Initialization receives the stream identity. Use it when the provider needs a resource scoped to that entity. Once initialization succeeds, the dispatcher retains the returned resource and passes it to `processEvent` and `cleanup`. Resource state is ordinary runtime state; the hooks do not make it durable across process restarts.
+
+The event passed to `processEvent` is a raw `Event Json.Value`. Decode the events your integration understands and map them to its protocol input. Return command payloads for the application to dispatch, using `Integration.makeCommandPayload` to encode a command. Keep the application's mapping outside the generic client module. This lower-level lifecycle record is a separate route from the typed outbound handler used in the preceding guide; it does not automatically supply a typed event payload or reconstructed entity state.
+
+Cleanup releases what initialization returned. Close the client and stop any subordinate work it owns. Keep cleanup short and safe to retry. If initialization opens a connection and then fails before returning it, it must release that connection itself: the dispatcher has no successfully returned state to clean up. The same care is needed when acquiring several resources in sequence.
+
+## Idle removal and shutdown
+
+The dispatcher periodically checks for idle workers. Removing one ends that worker's resource lifetime; a subsequent event creates another worker and calls initialization again. Initialization therefore needs to tolerate repeated lifetimes for the same entity. It should open the client, not repeat the business operation of booking a shipment.
+
+Register this route with `Application.withOutboundLifecycle @() @MugOrderEntity (\_ -> config)`, where `config` is your `Lifecycle.OutboundConfig` value. The first type argument selects unit configuration, and the factory ignores that unit value. For settings supplied at startup, use your application configuration type instead and construct the client configuration from its value. Add the focused import and registration to the application's composition rather than replacing its whole setup. Preserve deployed command, event and query definitions. The hook can return a new receiving command when the existing deployed receiver does not permit `InternalTransport`, as explained in [Add a feature safely](/tutorial/change-safely/).
+
+Normal worker stopping calls cleanup. Dispatcher shutdown initiates stopping; its return alone does not prove all resources have been released. Forced cancellation and process termination are also different from a completed graceful stop. Do not depend on cleanup as the only record that a shipment is pending or complete.
+
+An event-processing failure can be retried by the dispatcher, so a provider operation needs an explicit duplicate-handling policy. A cleanup failure cannot roll back an accepted mug order or undo a provider booking. Keep the durable operation identity and pending status in application state, use a stable provider idempotency key when supported, and reconcile an uncertain provider outcome before treating a retry as a new booking.
+
+## An inbound worker owns its acquisition
+
+An inbound integration reverses the direction: it waits for provider input and emits application commands. Its resource lifetime belongs inside its `run` function. There is no matching inbound record with `initialize`, `processEvent` and `cleanup` fields.
+
+`Integration.InboundConfig` and `Integration.TypedInboundConfig` both supply `run` with an emission function. The typed variant restricts the commands and target entities it may emit. Neither variant supplies an automatically managed provider connection. A worker should acquire its input connection, run its reading loop and release the connection when that loop finishes or fails.
+
+Use `Task.finally release work` around work that owns an acquired resource. The cleanup Task is the first argument. This protects the reading loop's exit, including cancellation; acquisition itself must also handle partial failure and the handoff to protected work. A cancellation-safe acquisition/release pattern is needed for production resources so cancellation cannot arrive between acquiring a handle and installing its cleanup.
+
+When an inbound run returns an integration error, the application restarts it with backoff. Each attempt must release the resources it acquired before another attempt opens replacements. A normally completed run ends instead of being restarted. At application shutdown, the runtime cancels inbound tasks and joins them with `AsyncTask.waitCatch`; joining waits for the worker to finish, including its cleanup. If cleanup blocks forever, joining can block too.
+
+## Resource release and shipment completion
+
+A listener waiting for the next notification is healthy work in progress. A listener that emitted `RecordShipmentBooking` has submitted a command. A shipment whose receiving decision accepted and recorded a booking has a business result. These observations answer different questions.
+
+Ask your agent to test those boundaries independently against controlled resources. For outbound work, exercise initialization, reuse, idle cleanup and reinitialization for one stream, plus isolation between streams. Include processing failure, partial acquisition failure and shutdown. For inbound work, count acquisitions and releases on normal return, failure, restart and cancellation, then join and check that no further notifications arrive. Inspect the resulting shipment state separately from the resource counters.
+
+A closed socket proves release. It does not prove the last notification was accepted, that a provider action was undone, or that pending work will resume after a restart. Those outcomes need their own application commands, retained facts and recovery policy.

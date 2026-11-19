@@ -1,0 +1,24 @@
+<div class="integration-resources" role="img" aria-label="For one entity stream, initialization opens client A. Two recorded events use that same client. Idle removal closes client A. A later event initializes client B. Resource replacement does not erase the entity's recorded history.">
+  <div class="node">One entity stream</div>
+  <div class="arrow"><svg viewBox="0 0 20 28" aria-hidden="true"><path d="M10 0V24M4 18L10 24L16 18" /></svg></div>
+  <section>
+    <div class="node" data-diagram-role="integration">initialize opens client A</div>
+    <div class="arrow"><svg viewBox="0 0 20 28" aria-hidden="true"><path d="M10 0V24M4 18L10 24L16 18" /></svg></div>
+    <div class="use"><span data-diagram-role="event">Recorded event 1</span><span>processEvent uses A</span></div>
+    <div class="arrow"><svg viewBox="0 0 20 28" aria-hidden="true"><path d="M10 0V24M4 18L10 24L16 18" /></svg></div>
+    <div class="use"><span data-diagram-role="event">Recorded event 2</span><span>processEvent reuses A</span></div>
+    <div class="arrow">Idle worker removed<svg viewBox="0 0 20 28" aria-hidden="true"><path d="M10 0V24M4 18L10 24L16 18" /></svg></div>
+    <div class="node" data-diagram-role="integration">cleanup closes client A</div>
+  </section>
+  <div class="arrow">Later event, new worker<svg viewBox="0 0 20 28" aria-hidden="true"><path d="M10 0V24M4 18L10 24L16 18" /></svg></div>
+  <div class="node" data-diagram-role="integration">initialize opens client B</div>
+</div>
+<style>
+.integration-resources{margin:32px 0;font-size:16px;line-height:1.5;}
+section{border-left:2px solid var(--sl-color-gray-3);padding:0 0 0 16px;}
+.node{padding:12px;border:1px solid var(--diagram-line);border-radius:8px;background:var(--diagram-surface);color:var(--diagram-ink);text-align:center;overflow-wrap:anywhere;}
+.use{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:12px;}
+.use span:first-child{border:1px solid var(--diagram-line);background:var(--diagram-surface);color:var(--diagram-ink);border-radius:4px;padding:8px;}
+.arrow{display:flex;flex-direction:column;align-items:center;text-align:center;padding:8px;gap:4px;}
+.arrow svg{width:20px;height:28px;fill:none;stroke:var(--sl-color-gray-2);stroke-width:1.5;}
+</style>
