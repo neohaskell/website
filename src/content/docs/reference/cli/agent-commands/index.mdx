@@ -1,17 +1,75 @@
 ---
 title: "Skills and agent guidance"
-description: "Page plan. How do I select installed skills and refresh matching API guidance?"
-tableOfContents: false
-pagefind: false
-prev: false
-next: false
-head:
-  - tag: meta
-    attrs:
-      name: robots
-      content: noindex
+description: "Install shared workflow skills and recover API guidance matched to your project's framework source."
 ---
 
-## Page plan <a id="page-plan" />
+import AgentGuidanceFlow from '@components/learn/AgentGuidanceFlow.astro';
 
-This page will document `neo skills setup` tool selection, skill filtering, `all-tools`, `force`, `dry-run`, and `refresh` options, plus `neo guidance retry`. It will distinguish shared workflow skills from source-matched framework guidance synchronized by `build`, `run`, and `test`. A concise destination and option table will explain what is written and preserved. Longer agent onboarding stays in its guide, and no generic feature-generation command will be implied.
+An agent working on the mug shop needs both a way to approach the work and the API details for the version the project uses. Neo supplies these through two separate paths: `neo skills setup` installs shared workflow skills, while project reconciliation synchronizes framework guidance to the selected source commit. This reference covers their commands and files. [Set up your agent](../../../getting-started/) explains the longer onboarding process.
+
+<AgentGuidanceFlow />
+
+## Shared workflow skills <a id="skills-setup" />
+
+Run setup from the directory where you want the tool folders installed, normally the mug shop's project root. Setup uses the current working directory directly; it does not search parent directories for a project.
+
+```sh
+neo skills setup --tool codex --dry-run
+```
+
+This prints the proposed destinations without writing skills or ownership receipts into the project. It still fetches or refreshes the shared skills cache, so dry-run can use the network and write cache files. The library comes from [neohaskell/skills](https://github.com/neohaskell/skills). Setup checks whether a cached checkout matches upstream; if that check is unavailable, it can reuse the existing checkout.
+
+After reviewing the plan, omit `--dry-run` to install:
+
+```sh
+neo skills setup --tool codex
+```
+
+The bare `neo skills` command also runs setup. In an interactive terminal, omitting tool selection opens a picker. In CI mode, omitting it selects all supported tools. Select a tool explicitly when you want a narrower installation.
+
+### Tool destinations <a id="destinations" />
+
+| Tool ID | Project-relative destination | Installed form |
+| --- | --- | --- |
+| `claude` | `.claude/skills/<name>/` | Whole skill folder |
+| `codex` | `.agents/skills/<name>/` | Whole skill folder |
+| `kiro` | `.kiro/skills/<name>/` | Whole skill folder |
+| `cursor` | `.cursor/rules/<name>.mdc` | Rendered rule file |
+
+Folder copies include bundled scripts and references. Cursor receives a single rule file; bundled files do not travel with it, and setup reports that limitation. Setup leaves `AGENTS.md` and `CLAUDE.md` unchanged. It can warn about legacy primer files or references that you should review against the source-matched guidance.
+
+### Selection and replacement <a id="options" />
+
+| Option | Effect |
+| --- | --- |
+| `--tool ID`, `--all-tools` | Repeat `--tool` to select several tools. `--all-tools` selects every supported tool and takes precedence over explicit tool IDs. |
+| `--skill NAME` | Repeat to select named skills; omitting it selects all discovered skills. An unknown name is an error. |
+| `--dry-run` | Print the plan after fetching the library and checking preservation; do not install project files. |
+| `--force` | Replace existing destinations without confirmation. Folder replacement removes local edits and extra files inside that skill folder. |
+| `--refresh` | Fetch a fresh library checkout instead of reusing the cache. This does not override destination preservation. |
+
+`--ci` and `--verbose` are [global Neo options](../#global-options). CI mode avoids the interactive picker and overwrite confirmation.
+
+Setup records installed content hashes in `.neo/skills-setup-receipts.json`. Identical destinations are skipped. If a destination differs from the incoming skill, setup checks its receipt: an unrecognized or developer-edited destination is preserved unless `--force` is supplied. An unchanged, previously installed destination can be replaced with the newer library version, but that replacement needs confirmation in an interactive terminal. In CI mode it fails with a conflict instead, until you deliberately use `--force`.
+
+For a refresh, inspect the plan before deciding which local changes to replace:
+
+```sh
+neo skills setup --tool codex --refresh --dry-run
+```
+
+The cache normally lives in `$HOME/.neo/skills-cache/neohaskell-skills`, or under `$NEO_HOME/skills-cache/neohaskell-skills` when `NEO_HOME` is set. Refresh affects this shared library cache; it does not select a framework version for the mug shop.
+
+## Source-matched API guidance <a id="framework-guidance" />
+
+The project's API guidance comes from its resolved framework source, separately from the shared workflow library. `neo build`, `neo run`, and `neo test` reconcile project files and synchronize this guidance before their main work. The active index is `.neo/agent-guidance/active.md`; generated project instructions point an agent there before it changes NeoHaskell APIs.
+
+A ready index identifies the exact framework commit and links to its cached guidance under `.neo/agent-guidance/cache/<source-sha>/index.md`. Read that index when reviewing an agent's proposed API usage. Installing the newest shared skills does not establish that an API exists in the project's selected source.
+
+If guidance retrieval or validation fails, the active index records guidance as unavailable rather than pointing to a different version's APIs. Ordinary build, run, and test reconciliation remembers that failure for the source commit instead of repeatedly fetching it. Fix the reported source or network problem, then run this from the project root:
+
+```sh
+neo guidance retry
+```
+
+Retry resolves the project's current source again, reconciles generated project files such as Cabal and Nix configuration, and attempts guidance synchronization. It does not build the application or install shared skills. A successful retry reports that framework guidance is synchronized for the current source. If the source cannot supply usable guidance, inspect the active index and the command's error before asking the agent to continue API changes. The project's generated build files can still use the selected source while guidance is unavailable.
