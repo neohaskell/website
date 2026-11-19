@@ -8,46 +8,48 @@ prev: false
 next: false
 ---
 
+import ProjectCompatibility from '@components/learn/ProjectCompatibility.astro';
+
 NeoHaskell is an AI-first programming language under active development. Start with a small behavior you can describe and check. The Counter starter gives you a concrete application to inspect before extending it with your agent.
 
 ## Start building <a id="start-building" />
 
 Begin with [The work behind the code](../introduction/) to follow the design process before [Set up your agent](../getting-started/). The design sequence requires no installation.
 
-- [CLI prerequisites and installation](https://github.com/neohaskell/NeoHaskell/blob/cacc8069070721539ae0aac53286ce9492e906a5/neo/README.md#prerequisites): the tools needed to create and run an application.
-- [Create and run a project](https://github.com/neohaskell/NeoHaskell/blob/cacc8069070721539ae0aac53286ce9492e906a5/docs/agent/project-and-cli.md): the project creation, build, and run sequence.
-- [Counter starter quickstart](https://github.com/neohaskell/NeoHaskell/blob/cacc8069070721539ae0aac53286ce9492e906a5/neo/starter/README.md#quickstart): the application behind the homepage's code excerpt, with an HTTP workflow and test instructions.
+[Create a project](../getting-started/create-project/) introduces the generated files and Counter starter. Continue with [Run the application](../getting-started/run/) and [Check your first response](../getting-started/first-response/) to inspect a running application. The [CLI prerequisites](https://github.com/neohaskell/NeoHaskell/blob/414602b9510a92dfac647bc68d6afadfb594502c/neo/README.md#prerequisites) describe the underlying toolchain; agent skills are installed separately through [Set up your agent](../getting-started/).
 
 ## Language and framework <a id="language-and-framework" />
 
-The following guidance is published in the NeoHaskell repository for application builders and coding agents. It describes an inspected source revision; use the corresponding revision when your project pins a different version.
+[Syntax and expressions](../reference/language/) and [Values and common types](../reference/core/) explain the language used in application code. [Skills and agent guidance](../reference/cli/agent-commands/) explains how an agent finds project-specific API instructions. The [upstream task index](https://github.com/neohaskell/NeoHaskell/blob/414602b9510a92dfac647bc68d6afadfb594502c/docs/agent/index.md) provides the corresponding source guidance at revision `414602b`.
 
-- [Syntax and Core](https://github.com/neohaskell/NeoHaskell/blob/cacc8069070721539ae0aac53286ce9492e906a5/docs/agent/syntax-and-core.md): a complete module, types, operators, and application conventions.
-- [Application guidance by task](https://github.com/neohaskell/NeoHaskell/blob/cacc8069070721539ae0aac53286ce9492e906a5/docs/agent/index.md): commands, events, queries, configuration, transports, and integrations.
-- [Testing](https://github.com/neohaskell/NeoHaskell/blob/cacc8069070721539ae0aac53286ce9492e906a5/docs/agent/testing.md): decision tests, HTTP scenarios, and checking a change.
-- [Storage](https://github.com/neohaskell/NeoHaskell/blob/cacc8069070721539ae0aac53286ce9492e906a5/docs/agent/storage.md): event history, query storage, and persistence.
+For checks on a change, [Test shop behavior](../tutorial/test-behavior/) works through decision tests, replay and HTTP scenarios. Configuration belongs in [Runtime configuration](../reference/configuration/); dependency selection belongs in [neo.json and dependencies](../reference/configuration/project/).
+
+## Releases and compatibility <a id="releases-and-compatibility" />
+
+A CLI release, a framework source revision and an agent-skills release identify different parts of your working environment. Neo runs the development commands, your project's dependencies select the framework APIs, and agent skills guide the work. Updating one does not establish that the others are compatible.
+
+<ProjectCompatibility />
+
+When investigating a failure or upgrading a project, record the installed Neo version and the dependency settings in `neo.json`, including any local source override. Follow [neo.json and dependencies](../reference/configuration/project/) to identify the effective source. A successful build checks that the combination compiles; behavior tests check the cases they actually execute. Neither establishes a compatibility promise for every release or application.
+
+The [Neo release history](https://github.com/neohaskell/NeoHaskell/releases) describes published changes. A source link pinned to a commit describes that revision, which may include work absent from your installed release. The separate [agent-skills releases](https://github.com/neohaskell/skills/releases) describe changes to instructions. Match API guidance to the framework source your project uses rather than assuming the newest instructions match every project.
 
 ## Before relying on an application <a id="before-relying-on-an-application" />
 
-The starter uses an in-memory event store by default. Its recorded events disappear when that process ends. Persistent event history and persistent query storage are separate configuration choices; follow the storage guide above when you need data to survive a restart.
+The starter uses an in-memory event store by default. Its recorded events disappear when that process ends. Persistent event history and persistent query storage are separate configuration choices; use [Keep events across restarts](../guides/storage/) and [Persist and rebuild queries](../guides/storage/query-rebuilds/) when you need data to survive a restart.
 
-Your application also owns its access rules. Read the [authorization guidance](https://github.com/neohaskell/NeoHaskell/blob/cacc8069070721539ae0aac53286ce9492e906a5/docs/agent/authorization.md) and test the allowed and rejected cases. An AI agent helps implement these rules; it does not decide your application's policies at runtime.
+Your application also owns its access rules. Read [Authorize a command](../guides/authorization/) and [Restrict query results](../guides/authorization/query-access/) and test the allowed and rejected cases. An AI agent helps implement these rules; it does not decide your application's policies at runtime.
 
 Published source and releases let you inspect what is available. They do not by themselves establish production readiness for your application.
 
-The [framework source license](https://github.com/neohaskell/NeoHaskell/blob/cacc8069070721539ae0aac53286ce9492e906a5/LICENSE) is available alongside the code. Check each tool's own license when choosing dependencies.
+The [framework source license](https://github.com/neohaskell/NeoHaskell/blob/414602b9510a92dfac647bc68d6afadfb594502c/LICENSE) is available alongside the code. Check each tool's own license when choosing dependencies.
 
 ## Follow changes and get help <a id="follow-changes-and-get-help" />
 
-- [CLI and framework release history](https://github.com/neohaskell/NeoHaskell/releases): changes to the application tooling and framework. [Version 0.17.1](https://github.com/neohaskell/NeoHaskell/releases/tag/neo-v0.17.1), published 6 November 2026, adds owned file storage for generated documents.
-- [Agent-skills releases](https://github.com/neohaskell/skills/releases): changes to the separate instructions collection for Claude Code and Codex.
-- [Ask the community on Discord](https://discord.com/invite/wDj3UYzec8): share what you are trying to build and where you got stuck.
-- [Browse reported issues](https://github.com/neohaskell/NeoHaskell/issues) or [read the contribution guide](https://github.com/neohaskell/NeoHaskell/blob/cacc8069070721539ae0aac53286ce9492e906a5/CONTRIBUTING.md): follow known problems and find the project's contribution workflow.
+If setup or a request fails, [Setup and build errors](../reference/errors/) and [Startup and request errors](../reference/errors/runtime/) connect symptoms to a recovery check. For a problem you cannot resolve, [browse reported issues](https://github.com/neohaskell/NeoHaskell/issues) or [ask the community on Discord](https://discord.com/invite/wDj3UYzec8). Include the intended behavior, the smallest failing example, the diagnostic, and your CLI and framework versions. Remove tokens, passwords and private application data before sharing logs. Community discussion and a published release do not establish a support response time.
 
-<section class="docs-plan" data-pagefind-ignore>
+## Contributing reusable work <a id="contributing-reusable-work" />
 
-## Page plan <a id="page-plan" />
+A provider integration can be useful beyond the application that first needed it. [Create a reusable integration](../guides/integrations/create-reusable/) separates the provider protocol from application-owned commands and events; [Manage integration resources](../guides/integrations/resources/) covers resource ownership and cleanup. Contribute generic integrations and their tests to the current [NeoHaskell monorepo](https://github.com/neohaskell/NeoHaskell), following its [contribution guide](https://github.com/neohaskell/NeoHaskell/blob/414602b9510a92dfac647bc68d6afadfb594502c/CONTRIBUTING.md). Have your agent read the repository's `AGENTS.md` before making a change.
 
-This page will retain its existing substantive setup, source, storage, authorization, license, release, and community guidance while linking the more precise reference destinations. Its upstream links will remain tied to the revision they describe, with current-main research kept separate from published releases and agent-skills versions. A compact compatibility table may be added once versions are verified; no new support commitment or runtime verification claim will be invented.
-
-</section>
+Keep application policy in the application. A reusable integration should describe the provider's inputs, results and failures, with tests that make its behavior inspectable without private credentials. Neo packages are a future distribution direction; use the monorepo contribution route for shared integrations today.
