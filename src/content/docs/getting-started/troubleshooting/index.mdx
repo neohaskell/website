@@ -1,17 +1,78 @@
 ---
-title: "Fix setup problems"
-description: "Page plan. Which setup step failed, and what is the smallest safe correction?"
-tableOfContents: false
-pagefind: false
+title: Fix setup problems
+description: Use Neo's error messages to recover a first project, start Counter, or restore guidance for your agent.
+tableOfContents:
+  minHeadingLevel: 2
+  maxHeadingLevel: 2
 prev: false
 next: false
-head:
-  - tag: meta
-    attrs:
-      name: robots
-      content: noindex
 ---
 
-## Page plan <a id="page-plan" />
+Neo creates, builds, and runs NeoHaskell projects. When setup stops, the message helps you find the step that failed. If the shell can't find `neo`, the tool never started. If the message names a line in `neo.json`, Neo reached your project settings.
 
-This page will connect common first-run symptoms to the failed step and its smallest corrective action: missing tools, the wrong working directory, an existing project name, invalid project configuration, unavailable dependencies, or missing agent guidance. Each case will show a verified diagnostic and the check that confirms recovery. It will preserve the reader's files, explain how to identify their CLI and framework versions, and link deeper compiler or runtime errors to the reference.
+## When a tool is missing
+
+If your shell says `neo: command not found`, check whether it can start Neo from the terminal you're using:
+
+```sh
+neo --version
+```
+
+If that still fails, check your installation instructions and open a new terminal. [Resources and project status](../../resources/#start-building) links to the CLI prerequisites and installation instructions. Retry once the command prints a version.
+
+Neo itself can start and still be unable to launch another tool. It needs Git to make the initial project commit and Nix to prepare the build environment. For `git init failed` with `could not spawn git`, check `git --version`. For `Nix is required but was not found on PATH`, check `nix --version`. Run the check in the same terminal where Neo failed. Once the missing tool prints a version there, retry the command that needed it.
+
+## Wrong folder or a name already in use
+
+If Neo says `No neo.json found in the current directory`, compare the terminal's location with the folder open in your editor. Run `pwd` to see the terminal's current directory. The project root is the folder that directly contains `neo.json`. In [Create a project](../create-project/), that was `my-neo-app`.
+
+From the folder that contains `my-neo-app`, enter it with `cd my-neo-app`. Substitute your own folder name if you chose a different one. Check that `ls neo.json` lists the file, then retry the project command.
+
+During creation, a message saying the directory already exists means the name you chose is already taken in that folder. If it contains the project you want, open it. To create a separate project, stay in the parent folder and choose a free name such as `my-neo-app-2`. Run `neo new my-neo-app-2 --ci` to create it with the default answers to Neo's setup questions. Check for its own `neo.json` before opening it.
+
+## Settings and dependencies
+
+The project root can be right and its settings can still contain a mistake. `Failed to parse neo.json` comes with a location in the file. Open that location in your editor and read the surrounding lines. For a trailing-comma error, compare the end of your file with the last two lines of the starter's default settings:
+
+```json
+  "license": "MIT"
+}
+```
+
+If a comma follows the last value immediately before the closing brace, remove that comma. Neo may point to the closing brace because it expected another setting after the comma. Save the correction and retry. Output that moves on to building confirms that Neo was able to read the settings.
+
+Once Neo can read the file, it can check which libraries your project depends on. If you see `Invalid dependency`, read the reason and inspect the named entry under `dependencies` in `neo.json`. For example, a package name that Neo can't find in its registry needs a correction to the name or source. If the error appeared after a dependency edit, compare that entry with the last settings that worked and restore just the entry if the change was accidental.
+
+If the build stops because it can't download a dependency or reach its repository, check access to the named source and retry once it's reachable. Downloads and compilation can take time on the first run. If the terminal is still showing progress, Neo is still preparing the application. When retrying the Counter starter from [Run the application](../run/), leave Neo running and check that [Counter's built-in documentation](http://127.0.0.1:8080/docs) opens in your browser.
+
+## When the IDE's address is already in use
+
+The graphical IDE opens the diagram for the folder where you run `neo ide`. Its address is separate from Counter's application. If the terminal reports `Address already in use` at port 2323, reuse the open IDE tab if it already shows your project. Otherwise, open a second IDE from the folder containing `neo.json` and choose a free port, such as 2324:
+
+```sh
+neo ide --port 2324
+```
+
+Open the URL Neo prints and check that you can see your project's diagram. [Find your project files](../project-files/#the-model-in-the-graphical-ide) supplies the diagram used to inspect the Counter starter in the IDE.
+
+## When the agent's guidance is unavailable
+
+Neo supplies shared workflow skills and project-specific API guidance. If a shared skill is missing, check the installation steps in [Set up your agent](../#install-agent-skills). If the agent can't open guidance for the project's NeoHaskell APIs, open `.neo/agent-guidance/active.md` in your editor. The status tells you whether the guidance is usable.
+
+If the file is missing or shows `status: unavailable`, use any warning in the terminal to find the source or network problem. For example, if the warning names `NEO_SKIP_NETWORK`, that setting can prevent Neo from fetching guidance. Run `unset NEO_SKIP_NETWORK` in that terminal if you want to allow fetching. Then retry from the project root:
+
+```sh
+neo guidance retry
+```
+
+After Neo reports that guidance is synchronized, reopen `active.md`. It should show `status: ready`, name the framework revision as `source-sha`, and link to an index you can open. Check those before asking your agent to use the framework APIs.
+
+The retry also checks your project settings and dependencies. If it stops on one of those errors, correct that first and retry. If guidance is still unavailable, include the warning from the retry in your report.
+
+## What to report when an error persists
+
+Include the failing command, the relevant error text, and what `neo --version` printed, even if the version check failed. If you have a `neo.json`, include its `neo-version` value separately. That is the project's framework selection. The plain `version` field is the version of your own application. If the agent's guidance shows `status: ready`, include the `source-sha` it reports as well.
+
+If Neo reports `neo::subprocess_raw`, it includes the output of the tool that failed. Use the report for this failure from the log Neo names, or copy the relevant terminal output if the log is unavailable. Remove credentials or private paths before sharing it.
+
+For a failure while compiling, see [Setup and build errors](../../reference/errors/). If the build succeeds and the application fails during startup or while handling a request, see [Startup and request errors](../../reference/errors/runtime/). [Resources and project status](../../resources/#follow-changes-and-get-help) lists where to ask for help.
