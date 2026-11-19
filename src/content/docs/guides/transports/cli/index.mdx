@@ -16,18 +16,11 @@ This guide uses the mug shop from [Expose MCP tools and resources](../mcp/). It 
 
 ## A configuration for one operation
 
-The CLI exercise uses `src/App.hs` as its active configuration. Preserve the current MCP composition, then start from the Web snapshot saved in [Expose MCP tools and resources](../mcp/):
-
-```sh wrap
-cp src/App.hs .neo/examples/App.Mcp.hs
-cp .neo/examples/App.Web.hs src/App.hs
-```
-
-Only run the copy commands when those snapshots match your reviewed work; preserve unrelated changes before switching. The new command modules and existing event directories stay in place.
+Edit `src/App.hs` to select the CLI transport and its Feature. Remove the Web and MCP transport registrations and replace the existing Feature registrations with `cliShopFlow`. Keep their command modules and event directories unchanged; this local configuration selects which behavior the terminal application exposes.
 
 Prepare a separate local CLI configuration with new command identities. Ask your agent to copy the opening and online-order command structure into `OpenCliShop` and `PlaceCliOrder`, with fresh CLI slices in `Shop.CliFeature`. Preserve every deployed command, event and query file byte-for-byte. The new commands use the same `ShopEntity`, `ShopOpened`, `OrderPlaced` and reserve decision, and the CLI feature registers the unchanged `AvailableStock` query with both event inputs.
 
-This local composition registers `cliShopFlow` rather than the Web and MCP Features or Counter commands. Their source and saved application configurations remain intact; this local switch does not alter the deployed application. We are building a separate terminal interface, not replacing their deployed application.
+This local composition registers `cliShopFlow` rather than the Web and MCP Features or Counter commands. Their source remains intact; changing this local application configuration does not alter the deployed application. We are building a separate terminal interface, not replacing their deployed application.
 
 Each new command imports `CliTransport` from `Service.Transport.Cli`. For `PlaceCliOrder`, inspect:
 
@@ -41,6 +34,7 @@ In `src/App.hs`, the import and registration are:
 
 ```haskell wrap
 import Service.Transport.Cli qualified as CliTransport
+import Shop.CliFeature (cliShopFlow)
 ```
 
 ```haskell wrap
@@ -51,7 +45,7 @@ EventModel.features do
 
 These registrations replace the feature and transport registration in this local CLI composition, with `cliShopFlow` imported from `Shop.CliFeature`. This exercise runs only the CLI. Adding it alongside the existing long-running transports would not give us a process that reliably exits after its terminal operation.
 
-The CLI configuration also omits `EventModel.withConfig @StarterConfig` and its import. That starter configuration parses process arguments for settings such as the HTTP port, before the CLI transport can read them. Here the CLI needs those arguments for the entity group, command and flags. Remove the Web-only `withCors` declaration and unused Web and MCP imports from this variant; keep `Starter.Config.hs` for the other interfaces.
+The CLI configuration also omits `EventModel.withConfig @StarterConfig` and its import. That starter configuration parses process arguments for settings such as the HTTP port, before the CLI transport can read them. Here the CLI needs those arguments for the entity group, command and flags. Remove the Web-only `withCors` declaration and unused transport imports. Remove the imports of `counterFlow`, `shopFlow`, `onlineShopFlow` and `mcpShopFlow` from `App.hs` too, since this configuration registers only `cliShopFlow`. Keep their modules and `Starter.Config.hs` in the project.
 
 ## History between invocations
 

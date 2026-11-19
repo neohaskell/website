@@ -20,15 +20,6 @@ MCP calls a change-making operation a **tool** and readable information a **reso
 
 ## The same shop behind another interface
 
-Before adding MCP, save the working Web composition outside `src`:
-
-```sh wrap
-mkdir -p .neo/examples
-cp src/App.hs .neo/examples/App.Web.hs
-```
-
-This local snapshot preserves the Web-only registration for the later storage exercise. The original command files remain in place and locked.
-
 The Web commands may already be deployed and locked. Ask your agent to copy their structure into new `OpenMcpShop` and `PlaceMcpOrder` command modules, retaining the opening-stock and reserve behavior respectively. Give these new commands their own MCP feature and slices, registered alongside the existing Features. Reuse `ShopEntity`, `ShopOpened`, `OrderPlaced`, and `AvailableStock` unchanged. Preserve every locked file and existing Web route.
 
 For the new commands, select `McpTransport` at creation time. Register MCP in `App.hs` alongside Web. These are new command identities; changing an existing frozen command's `TransportsOf` would edit its deployed contract. Run `neo build` as well as the behavior checks before using the new tools.
