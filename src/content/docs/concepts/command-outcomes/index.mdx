@@ -1,17 +1,83 @@
 ---
 title: "Commands, decisions, and outcomes"
-description: "Page plan. What can happen when a command reaches the application?"
-tableOfContents: false
-pagefind: false
-prev: false
-next: false
-head:
-  - tag: meta
-    attrs:
-      name: robots
-      content: noindex
+description: "Follow a stock request through its decision and storage, and distinguish accepted changes, rejection, and execution failure."
+prev: true
+next: true
 ---
 
-## Page plan <a id="page-plan" />
+import CommandOutcomes from '@components/learn/CommandOutcomes.astro';
 
-This page will follow a stock reservation from intention to domain decision and persistence. A compact outcome table will distinguish acceptance with one or several events, acceptance without events, domain rejection, and execution failure. It will explain why rejecting insufficient stock differs from failing to save an accepted change. The first shop illustration will remain a deliberately small case, with links to testing and troubleshooting for procedures.
+A customer asks for one mug. That request is an intention, not yet an accepted order. The application must check the shop's policy and, if the decision proposes a change, record the resulting events.
+
+[Commands and queries](/learn/) introduces this separation. Here we follow it through the online shop from [Add a feature safely](/tutorial/change-safely/): online orders may consume stock only while leaving one mug for in-person sales. This small example exposes two different questions: **does the policy allow the order, and can the application record it?**
+
+## From intention to a recorded fact
+
+`PlaceOnlineOrder` identifies the shop to order from. NeoHaskell loads that shop's current entity state and passes it, the command and the request context to the decision. The decision chooses rejection or acceptance with an array of events. It does not save the events itself.
+
+<CommandOutcomes />
+
+With two mugs available, the decision proposes `OrderPlaced`. After the event store accepts the append, that event becomes part of the shop's history. Applying it leaves one mug available. The stock query catches up separately; the command's success does not promise that every query already shows the new answer.
+
+With one mug available, the policy rejects the online order. No append is attempted for that rejection, and this request consumes no stock. A storage failure on the accepted path is different: the policy allowed the order, but execution could not complete the requested recording. Treating that failure as "Reserved for in-person sales" would give the customer the wrong explanation and hide the operational problem.
+
+## Reading the decision
+
+The decision receives `Maybe ShopEntity`: `Nothing` means the requested shop was not found; `Just shop` supplies its current state. The central branch in `src/Shop/Commands/PlaceOnlineOrder.hs` reads:
+
+```haskell
+  Just shop ->
+    if shop.availableMugs <= 0
+      then Decider.reject "Sold out"
+      else if shop.availableMugs > 1
+      then
+        Decider.acceptExisting
+          [ OrderPlaced
+              OrderPlaced.Event {
+                entityId = shop.shopId
+              }
+          ]
+      else Decider.reject "Reserved for in-person sales"
+```
+
+This is a reading excerpt from the existing command, not a replacement for its module. Its separate `Nothing` branch rejects with `"Shop not found"`. At stock two, the array contains one proposed event. At stock one, `reject` supplies the business reason and no event. At zero, the distinct reason is `"Sold out"`.
+
+An **event stream** is one entity's ordered event history, here the history of this shop. `acceptExisting` also asks execution to require an existing event stream. That storage condition is separate from the policy expressed by the stock comparison. A successful decision test establishes the proposed result for its inputs; it does not establish that an event store accepted the write.
+
+Keep deployed command, event and query definitions unchanged when exploring another policy. A changed decision belongs to a new command identity and feature, as in [Add a feature safely](/tutorial/change-safely/).
+
+## Acceptance can have different shapes
+
+One command does not necessarily mean one event. The [Decider API](https://github.com/neohaskell/NeoHaskell/blob/414602b9510a92dfac647bc68d6afadfb594502c/core/service/Decider.hs) accepts an array, so the outcome depends on the behavior being modeled:
+
+| Outcome | Meaning | History effect of this command |
+| --- | --- | --- |
+| Accepted with one event | One accepted fact, such as `OrderPlaced` | The event is appended when storage succeeds. |
+| Accepted with several events | The decision proposes several facts for the same entity stream | The proposed batch is submitted to the event store. |
+| Accepted without events | The request is allowed but has no new fact to record | No append is made, after the applicable stream condition passes. |
+| Domain rejection | The requested change violates a business condition | No proposed events are appended. |
+| Execution failure | Loading, interpreting or recording the command fails | The command has not completed successfully; investigate the failing stage. |
+
+An empty event array can express an allowed repeated request that needs no further change. It is not the same as rejecting a request. The decision must deliberately define that behavior; NeoHaskell does not make every command safe to repeat automatically.
+
+Several events in one decision still belong to that command's entity stream. They do not make another entity's command, a query update or an external provider call part of one transaction. Likewise, an accepted order does not mean a shipment provider has completed its work.
+
+## Choosing the stream condition
+
+The acceptance helpers combine the proposed event array with a condition on the destination stream. `acceptNew` requires a new stream; `acceptExisting` requires an existing one; `acceptAny` imposes neither condition. A stream position identifies a point in that ordered history. For a nonempty event array, `acceptAfter` supplies a specified stream position to the append, allowing a change to depend on the history position the caller expects.
+
+These conditions protect a different boundary from the shop policy. A missing stream, an unexpected position or another append error can prevent execution after the decision proposes events. Do not turn such errors into an insufficient-stock rejection: the business reason and the failed storage condition describe different problems.
+
+An empty array also needs a destination stream identity. If a creation command supplies no entity ID, execution cannot extract one from an empty event array and fails.
+
+An empty array still passes the new/existing stream checks. For example, `acceptExisting []` still requires an existing stream before it can return successful completion without appending events. However, `acceptAfter []` performs no append and does not check the specified position.
+
+For a normal nonempty `acceptExisting` result, execution appends against the position of the state it loaded. If another write wins first, it can reload the state and run the decision again. Two customers seeing two mugs on a screen therefore do not both acquire permission to consume the reserved mug. The decision must check the state it receives on each evaluation.
+
+## Checking the outcome at the right boundary
+
+A useful test follows the distinction all the way through. For two available mugs, inspect the decision's proposed `OrderPlaced`, then verify stored history and the eventual stock answer. For one mug, verify the rejection reason and unchanged history. A separate failure test checks what the caller receives when execution cannot record the accepted change.
+
+[Test shop behavior](/tutorial/test-behavior/) covers the decision, history and query checks. [Check readiness and failures](/guides/deployment/readiness-and-failures/) explains how to distinguish business rejection, append failure and downstream integration failure in the running application.
+
+A successful storage response has the guarantees of the configured store. In particular, the simple local store can warn about a failed persistence write while still acknowledging acceptance. A normal restart test therefore does not prove crash-safe disk durability. Preserve history while investigating failures, and establish the command's actual result before repeating a request that could consume another mug.

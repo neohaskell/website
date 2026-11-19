@@ -1,0 +1,47 @@
+<section class="command-outcomes" aria-label="Online order decision and storage outcomes">
+  <div class="node" data-diagram-role="command">PlaceOnlineOrder: one mug</div>
+  <div class="connector"><i aria-hidden="true"></i><span>current shop state</span></div>
+  <div class="node">Decision: leave one mug in reserve</div>
+  <div class="branches">
+    <div class="branch">
+      <div class="connector"><i aria-hidden="true"></i><span>stock 1</span></div>
+      <div class="node failure">Rejected: reserved<br />No append attempted</div>
+    </div>
+    <div class="branch">
+      <div class="connector"><i aria-hidden="true"></i><span>stock 2</span></div>
+      <div class="node" data-diagram-role="event">Proposed OrderPlaced</div>
+      <div class="connector"><i aria-hidden="true"></i><span>append to event store</span></div>
+      <div class="node">Storage result</div>
+      <div class="storage-branches">
+        <div class="storage-branch">
+          <div class="connector"><i aria-hidden="true"></i><span>append accepted</span></div>
+          <div class="node" data-diagram-role="event">Recorded OrderPlaced</div>
+          <div class="connector"><i aria-hidden="true"></i><span>query catches up</span></div>
+          <div class="node" data-diagram-role="query">Available mugs: 1</div>
+        </div>
+        <div class="storage-branch">
+          <div class="connector"><i aria-hidden="true"></i><span>append failed</span></div>
+          <div class="node failure">Execution failed<br />Investigate storage</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+<style>
+.command-outcomes{font-size:1rem;line-height:1.5;margin-block:2rem}
+.command-outcomes div,.command-outcomes span,.command-outcomes i{margin:0}
+.node{padding:.75rem;border:1px solid var(--sl-color-gray-3);border-radius:.25rem;overflow-wrap:anywhere}
+.node[data-diagram-role]{background:var(--diagram-surface);border-color:var(--diagram-line);color:var(--diagram-ink)}
+.connector{display:flex;align-items:center;gap:.75rem;min-height:3.25rem;padding:.25rem .75rem}
+.connector i{display:block;flex-shrink:0;width:1px;height:2.5rem;background:var(--sl-color-gray-3);position:relative}
+.connector i:after{content:'';position:absolute;bottom:0;left:-3px;width:7px;height:7px;border-right:1px solid var(--sl-color-gray-3);border-bottom:1px solid var(--sl-color-gray-3);transform:rotate(45deg)}
+.branches,.storage-branches{padding-inline-start:1rem}
+.branch,.storage-branch{position:relative;padding-inline-start:1rem}
+.branch:before,.storage-branch:before{content:'';position:absolute;left:0;top:0;bottom:0;border-left:1px solid var(--sl-color-gray-3)}
+.branch:last-child:before,.storage-branch:last-child:before{bottom:auto;height:1.625rem}
+.branch>.connector:first-child,.storage-branch>.connector:first-child{padding-inline-start:0;position:relative}
+.branch>.connector:first-child i,.storage-branch>.connector:first-child i{width:1rem;height:1px;margin-inline-start:-1rem}
+.branch>.connector:first-child i:after,.storage-branch>.connector:first-child i:after{left:auto;right:0;bottom:-3px;transform:rotate(-45deg)}
+.failure{color:var(--sl-color-red-high);border:2px dashed var(--sl-color-red);background:var(--sl-color-red-low)}
+
+</style>
