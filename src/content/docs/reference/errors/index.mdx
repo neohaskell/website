@@ -1,17 +1,100 @@
 ---
 title: "Setup and build errors"
-description: "Page plan. Why did the development command fail, and what should I check next?"
-tableOfContents: false
-pagefind: false
-prev: false
-next: false
-head:
-  - tag: meta
-    attrs:
-      name: robots
-      content: noindex
+description: "Find the cause of a failed Neo command, correct it, and check recovery."
 ---
 
-## Page plan <a id="page-plan" />
+import DiagnosticRecovery from '@components/learn/DiagnosticRecovery.astro';
 
-This page will index observable failures such as a missing workspace, invalid `neo.json`, missing prerequisites, invalid dependencies, unavailable framework guidance, and failed child processes. Entries will pair the diagnostic code and location with the smallest correction and a recovery check. One annotated diagnostic will explain source spans and retained child output. Source-defined messages will stay distinct from executed transcripts, with links to CLI options and community reporting when correction needs more evidence.
+A failed Neo command usually names the input or tool that stopped it. Start with that diagnostic, make the smallest correction, and rerun the same command from the same project. Reaching a later stage means the first problem is resolved; it does not yet mean the application builds.
+
+This reference covers the `neo` development CLI. For errors from your running application's settings, see [Runtime configuration](../configuration/). You can ask your AI agent to inspect a failure with you, while checking the named file and proposed change before applying it.
+
+<DiagnosticRecovery />
+
+## Reading a diagnostic <a id="reading-a-diagnostic" />
+
+This excerpt was produced by Neo 0.18.0 from a deliberately malformed `neo.json`. The documentation URL and help text are omitted here so we can focus on the source location:
+
+```text
+Error: neo::invalid_config
+
+  x Failed to parse `neo.json`: trailing comma at line 1 column 20
+   ,-[./neo.json:1:20]
+ 1 | {"name":"mug-shop",}
+   :                    |
+   :                    `-- syntax error here
+   `----
+```
+
+`neo::invalid_config` identifies the kind of failure. The reason says what the parser found, while `./neo.json:1:20` gives the file, line and column. The underline marks where parsing failed. Here the closing brace follows an extra comma: remove the comma, then rerun the command. This shortened file still lacks required fields, so its next diagnostic will be about those fields.
+
+The same code also covers a missing `version` or a field with the wrong type, even though the underline says `syntax error here`. Read the reason before deciding what to change. An underline can identify where the parser noticed the problem rather than the character that introduced it.
+
+A child-process failure has a different location: its useful evidence may be in Nix or compiler output rather than in `neo.json`. For `neo::subprocess_raw`, keep the operation, the last meaningful line and the retained full child output together. A final line saying that the build failed is often only a consequence of an earlier compiler or dependency error.
+
+## Workspace and project settings <a id="project-settings" />
+
+The codes below are defined by Neo's diagnostics. Variable paths and reasons depend on your project; these entries are a reference, not additional terminal transcripts.
+
+### No workspace: `neo::no_workspace`
+
+Neo could not find `neo.json` at the path it tried to load. For ordinary project commands, run from the project root containing that file, rather than from `src/` or a parent directory. If you have not created a project, follow [Create a project](../../getting-started/create-project/) instead of writing a replacement manifest for an existing application.
+
+Rerun the original command from that root. Recovery means it loads the manifest and proceeds; any later diagnostic has its own cause.
+
+### Invalid manifest: `neo::invalid_config`
+
+Open the named `neo.json` at the reported location. Correct JSON syntax, then check the required string fields `name`, `version` and `neo-version`. The optional `type` accepts `executable` or `library`; dependency values must be strings. JSON has no comments or trailing commas.
+
+Use [neo.json and dependencies](../configuration/project/) to check the field's meaning. Save and rerun the command. Do not repair a generated Cabal or Nix file to compensate for a manifest error: reconciliation regenerates those files from the manifest and source modules.
+
+### Invalid dependency: `neo::invalid_dep`
+
+The diagnostic names the dependency key, value and reason. It may also underline the entry when source context is attached. Fix the named entry in `neo.json`, using the [supported dependency forms](../configuration/project/#dependency-sources).
+
+For example, `"hackage:aeson": "^>= 2.1"` is rejected. A value such as `"^2.1.0"` uses the supported npm-style range syntax. Hackage goes in the key prefix; Git, GitHub and local paths go in the value. A valid range does not prove that a package exists or is compatible with your application.
+
+Run `neo build` after saving. Recovery means dependency resolution passes that entry and the build can continue, not merely that the JSON parses.
+
+## Required tools and accessible sources <a id="tools-and-sources" />
+
+`neo::nix_missing` and `neo::git_missing` mean Neo could not launch the corresponding tool. Check it in the same shell where you run Neo:
+
+```sh
+nix --version
+git --version
+```
+
+If the named tool is missing, follow the [development environment guidance](../../resources/) and open a new shell after installation. If it is installed, correct that shell's `PATH`. Rerun the version check and then the failed Neo command. A warning that `direnv` is absent concerns automatic editor integration; it is different from a missing required tool.
+
+For `neo::network`, inspect the URL and underlying network reason. Check connectivity or access to that source, then retry the original operation. Changing a dependency version does not repair a connection failure. `NEO_SKIP_NETWORK` supplies placeholders for offline tests; it is not a way to obtain a working offline application build.
+
+For `neo::io_error`, inspect the operation and path. Correct the specific missing directory, file permission or storage problem, then rerun. For `neo::git_error`, use the named Git subcommand and reason to locate the failing checkout or ref. Preserve application changes and retained history while correcting access or source selection.
+
+## Unavailable framework guidance <a id="framework-guidance" />
+
+Build, run and test reconciliation synchronizes API guidance for the project's resolved framework commit. If that synchronization fails, `.neo/agent-guidance/active.md` records the unavailable state and reason. This is separate from installing the shared agent skills, and it does not by itself establish a compiler failure.
+
+Inspect the active index, fix the reported source or retrieval problem, and retry from the project root:
+
+```sh
+neo guidance retry
+```
+
+Recovery means Neo reports synchronized guidance and the active index points to guidance for the current framework source. Retry also reconciles generated project files; it does not build the application. Run the original build or test afterward. See [Source-matched API guidance](../cli/agent-commands/#framework-guidance) for cache and retry behavior.
+
+## Failed builds and child processes <a id="child-processes" />
+
+`neo::subprocess` means a child operation failed and Neo recognized a cause in its output. Read the operation, cause and suggested correction together. A compiler error should lead you to its source file and line; a fetch failure should lead you to the named source. Make that correction and repeat the original command. [Neo commands](../cli/) explains `--ci` for line-oriented output and `--verbose` for additional detail.
+
+`neo::subprocess_raw` means Neo could not extract an actionable cause. It displays the last meaningful line and full child output, with stdout and stderr in capture order. It also attempts to append a JSON record to `$NEO_HOME/unrecognized-errors.jsonl`, or `$HOME/.neo/unrecognized-errors.jsonl` when `NEO_HOME` is unset or empty. Check the path in the diagnostic: if writing failed, terminal output remains available but the record may not have been saved.
+
+Keep that full output while locating the first concrete failure. For example, a Nix rejection of a shallow local framework checkout concerns the selected source, not a syntax error in the mug shop. Check any deliberate `NEO_NEOHASKELL_SOURCE` override against [Framework source and compatibility](../configuration/project/#framework-source-and-compatibility) before changing application code. Do not delete Git history or bypass build checks to silence the message.
+
+A `neo::lock_violation` stops the build because locked files were changed, renamed or deleted. Inspect the listed paths and preserve the deployed command, event and query behavior. Carry intended changes into a separately named feature slice as described in [Add a feature safely](../../tutorial/change-safely/). Review an accidental edit before restoring it so useful work is retained.
+
+## Reporting an unresolved failure <a id="reporting" />
+
+When a small correction does not resolve the cause, include the exact command, `neo --version`, operating system, diagnostic code and relevant source location in a report. Include the child output for a subprocess failure, with a minimal reproduction when possible. Inspect copied output and log records for secrets and private paths before sharing them; retained child output is not automatically redacted.
+
+Use the [unrecognized subprocess error report](https://github.com/neohaskell/NeoHaskell/issues/new?template=uninterpreted-subprocess-error.md) for `neo::subprocess_raw`, or find the issue tracker and community help through [Resources](../../resources/). Preserve the original failure and the result after your correction so another reader can distinguish the cause from later failures.

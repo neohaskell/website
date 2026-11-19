@@ -1,0 +1,18 @@
+<figure class="diagnostic-flow" aria-label="Removing a trailing comma resolves the syntax failure. The same build can then report missing required fields.">
+  <div>neo build</div>
+  <span class="wire" aria-hidden="true"></span>
+  <div class="failure">Stopped: trailing comma in neo.json</div>
+  <span class="wire" aria-hidden="true"></span>
+  <div>Remove the extra comma</div>
+  <span class="wire" aria-hidden="true"></span>
+  <div>Rerun neo build</div>
+  <span class="wire" aria-hidden="true"></span>
+  <div>Next diagnostic: missing required fields</div>
+</figure>
+<style>
+.diagnostic-flow { margin: 2rem 0; display: flex; flex-direction: column; align-items: center; font-size: 1rem; }
+.diagnostic-flow div { border: 1px solid var(--sl-color-gray-3); border-radius: .5rem; padding: .75rem 1rem; text-align: center; max-width: 100%; }
+.diagnostic-flow .failure { border: 2px dashed var(--sl-color-red); }
+.wire { height: 1.5rem; width: 1px; background: var(--sl-color-gray-3); position: relative; }
+.wire::after { content: ''; position: absolute; bottom: 0; left: -3px; width: 6px; height: 6px; border-right: 1px solid var(--sl-color-gray-3); border-bottom: 1px solid var(--sl-color-gray-3); transform: rotate(45deg); }
+</style>
