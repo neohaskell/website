@@ -1,17 +1,99 @@
 ---
-title: "Keep events across restarts"
-description: "Page plan. How do I keep recorded application history when the process stops?"
-tableOfContents: false
-pagefind: false
-prev: false
-next: false
-head:
-  - tag: meta
-    attrs:
-      name: robots
-      content: noindex
+title: Keep events across restarts
+description: Retain the mug shop's event history on disk and check that its behavior and stock answer recover after a restart.
+tableOfContents:
+  minHeadingLevel: 2
+  maxHeadingLevel: 2
+prev: true
+next: true
 ---
 
-## Page plan <a id="page-plan" />
+import StorageRecovery from '../../../../components/learn/StorageRecovery.astro';
 
-This page will replace the starter memory configuration with a persistent event store and verify the same recorded behavior before and after a restart. A comparison will distinguish `SimpleEventStore` disk persistence from PostgreSQL configuration, while a diagram separates event history from derived query state. The example will use a complete configuration for the selected framework revision and explain which storage paths or database volumes must survive.
+An accepted order should still count after the application stops. The starter's in-memory event store keeps history only for the lifetime of its process. To keep the shop open with the same stock after a restart, we need to retain the events that opened it and recorded its orders.
+
+This guide uses the mug shop from [Keep one mug in reserve](../../tutorial/change-safely/): it opens with three mugs, accepts orders while more than one remains, and reserves the final mug for in-person sales. We'll use the browser interface from [Expose an HTTP API](../transports/) to observe the same shop on both sides of a restart. If you completed [Run commands from a terminal](../transports/cli/), you have already used disk persistence between short-lived CLI processes. Here we'll also check the query that reports stock.
+
+## A directory that outlives the process
+
+Ask your agent to prepare a Web-only configuration from the existing shop application, using its active NeoHaskell guidance. Preserve both `counterFlow` and `shopFlow`, their decisions, events, queries and tests. Register only `WebTransport.server`, and allow only `WebTransport` in every command's `TransportsOf` declaration, including the Counter commands. Keep the starter configuration and the application-level CORS settings from the HTTP guide. Omit the CLI and MCP registrations and imports in this version.
+
+This gives us one HTTP server that can be stopped and restarted. Each command must name only registered transports; leaving a removed transport in a command declaration prevents startup. Restoring `EventModel.withConfig @StarterConfig` and its import matters if you're coming from the CLI-only version, which omitted them to leave the command arguments available to the CLI.
+
+In `src/App.hs`, ask the agent to replace the existing event-store factory with this one, inside `EventModel.eventModel do` and before the Features:
+
+```haskell wrap
+EventModel.withEventStore
+  (\(_ :: StarterConfig) -> SimpleEventStore {
+    basePath = Path.fromText ".neo/storage-events" |> Maybe.getOrDie,
+    persistent = True
+  })
+```
+
+Review this excerpt after the edit; it isn't an additional change to apply. Preserve the existing imports of `Maybe`, `Path`, `SimpleEventStore` and `StarterConfig`. The factory accepts the application's configuration, though these two storage settings are fixed for this exercise. `persistent = True` makes the simple store write events to disk and load them on startup. `basePath` chooses where that history lives.
+
+Use an unused directory for this exercise. `.neo/storage-events` is our example name; if it already contains history, choose another unused path instead of deleting it. A different directory starts a separate history. It doesn't migrate the events from `.neo/cli-events` or from any earlier store.
+
+Run from the same project root each time, because this path is relative to the working directory. Keep one application process using it. The simple store is suitable for this local exercise; choosing disk persistence alone doesn't establish a shared, multi-instance database or a backup policy.
+
+## The same shop after a restart
+
+Start the application with `neo run`. In its browser documentation at `http://localhost:8080/docs`, use the generated Shop command routes as in [Expose an HTTP API](../transports/). Open a shop with a valid UUID you haven't used in this new history, then place one order with that same UUID. Read its `AvailableStock` query until the answer is two mugs. Query maintenance happens asynchronously, so an immediate response can precede the update.
+
+Stop the application with Ctrl+C, wait for it to exit, and run `neo run` again from the same directory. Don't open the shop again: `ShopOpened` is already part of its retained history. Read the query for the same UUID until it reports two mugs again.
+
+Now place another order. It should be accepted, leaving one mug. A further order should be rejected with `Reserved for in-person sales`. Read stock again: it remains one. This last check matters because it exercises a decision against recovered entity state, rather than checking only that a browser can display an old answer. The rejected order adds no event.
+
+If the shop is missing after restart, check the selected store, `persistent`, and the directory from which the process was launched before opening anything new. If a query is briefly empty, allow it to catch up before concluding that the history is missing.
+
+## History and the stock answer
+
+`ShopOpened` and `OrderPlaced` are the recorded facts. `AvailableStock` maintains an answer derived from those facts. Keeping one does not mean that the other uses the same storage backend.
+
+<StorageRecovery />
+
+In this configuration, the events remain on disk while the query rows live in memory. Restarting loses those rows, but the query subscriber replays the retained events to rebuild them. It calculates two mugs from the opening three and one accepted order. Replay doesn't place another order or append another `OrderPlaced` event.
+
+The same distinction is visible in the native IDE. With `event-model.json` saved, run `neo inspect sync` and open `neo ide`. Select `AvailableStock` in the model and inspect its connections from `ShopOpened` and `OrderPlaced`. Those are the inputs that rebuild the answer. The diagram still describes the same shop behavior after a storage change; it doesn't prove that your disk or database is retained. The restart exercise checks that part.
+
+NeoHaskell configures persistent query storage separately through `EventModel.withQueryObjectStore`, before the Features that declare queries. Merely choosing a PostgreSQL event store doesn't choose a PostgreSQL query store. For this exercise, rebuilding the in-memory stock answer from the retained history is enough.
+
+## Choosing PostgreSQL
+
+The simple store retains local event files. PostgreSQL retains events in a database and gives the application a separate database service to connect to. Both choices still require you to preserve the underlying storage:
+
+| Event store | What must survive |
+| --- | --- |
+| `SimpleEventStore` with `persistent = True` | The selected `basePath` directory and its event files |
+| `PostgresEventStore` | The database's data directory or persistent volume, with its database and schema |
+
+Switching the factory doesn't copy history between these stores. Plan a migration separately if you need to keep existing events. A container's writable layer is not a replacement for a retained database volume, and a retained volume is not a backup.
+
+For a PostgreSQL application, replace the simple-store import with `Service.EventStore.Postgres (PostgresEventStore (..))`. Keep `StarterConfig` registration, enable its five database fields (`dbHost`, `dbPort`, `dbUser`, `dbPassword`, `dbName`), and use `EventModel.withEventStore makePostgresConfig`. At the revision used here, the complete factory is:
+
+```haskell wrap
+makePostgresConfig :: StarterConfig -> PostgresEventStore
+makePostgresConfig config = PostgresEventStore {
+  host = config.dbHost,
+  databaseName = config.dbName,
+  user = config.dbUser,
+  password = config.dbPassword,
+  port = config.dbPort,
+  poolSize = 6,
+  sslMode = SslModeUnset,
+  sslRootCert = Nothing,
+  erasableApplicationScope = "example-mug-shop"
+}
+```
+
+Add the import for `SslModeUnset`:
+
+```haskell wrap
+import Service.Infra.Postgres.ConnectionConfig (SslMode (..))
+```
+
+ The last four fields are required too: connection-pool size, TLS mode, optional root-certificate path, and the stable application scope used for protected-value erasure. This local configuration leaves TLS mode unset; configure it for your database's connection requirements. Choose the application scope once for your own application and keep it stable.
+
+The starter's commented database settings use `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD` and `DB_NAME`. Its local Compose service uses host `localhost`, port `5432`, and `neohaskell` for the database, username and password. Those are local development values. Keep real credentials out of version control and preserve the password field's `Config.secret` setting. The starter's `postgres_data` volume is mounted at `/var/lib/postgresql/data`; removing that volume removes the retained database.
+
+When changing backends, repeat the same behavioral check against the selected store: open a fresh shop, accept an order, stop and restart, read two mugs, then verify the reserve boundary. A successful connection alone doesn't show that either the recorded history or its derived answer survives the deployment's storage lifecycle.

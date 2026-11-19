@@ -1,0 +1,12 @@
+<div class="storage-recovery" role="img" aria-label="Retained ShopOpened and OrderPlaced events rebuild AvailableStock after the process restarts, giving two available mugs.">
+  <div class="history" data-diagram-role="event"><strong>Retained event history</strong><span>ShopOpened: 3 mugs</span><span>OrderPlaced: 1 mug</span></div>
+  <div class="replay"><span>Replay after restart</span><svg viewBox="0 0 100 12" aria-hidden="true"><path d="M0 6H98M92 1L98 6L92 11" /></svg></div>
+  <div class="answer" data-diagram-role="query"><strong>AvailableStock</strong><span>2 available mugs</span></div>
+</div>
+<style>
+.storage-recovery {display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:16px;margin:32px 0;font-size:16px;line-height:1.6;}
+.history,.answer {display:flex;flex-direction:column;gap:8px;padding:20px;border:1px solid var(--diagram-line);background:var(--diagram-surface);color:var(--diagram-ink);border-radius:8px;}
+.replay {display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center;font-size:16px;color:var(--sl-color-gray-2);}
+.replay svg {width:100%;height:12px;fill:none;stroke:currentColor;stroke-width:1.5;}
+@media(max-width:600px){.storage-recovery{grid-template-columns:1fr;gap:16px;}.replay{padding:0;gap:4px;}.replay svg{width:48px;height:32px;transform:rotate(90deg);}}
+</style>

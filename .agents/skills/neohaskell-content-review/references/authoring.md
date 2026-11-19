@@ -28,6 +28,8 @@ For stdio transports, verify the launch path preserves standard input and keeps 
 
 For application CLI lessons, verify argument ownership before the transport runs, generated entity groups and field flags, and every declared transport registration. Exercise process exit, retained history across invocations, actual output switches and domain rejection exit status before teaching scripting. Distinguish the development CLI from the application interface.
 
+For storage lessons, distinguish retained event history from stored query rows and asynchronous query reconstruction. Verify the same entity and query before and after a real process restart, without reopening the entity or deleting history. Inspect every required backend configuration field at the pinned revision; starter comments can lag behind the API. A compiled database configuration is not evidence of a successful database connection or retained volume.
+
 For testing lessons, verify the runner's failure behavior as well as the example failure. A command may stop after unit failures and skip HTTP scenarios. Distinguish observed failures from consequences inferred for skipped checks. Capture the deliberate failure and restored success without changing the expected behavior.
 
 For intentional policy changes, revise the behavior agreement before changing test expectations. Verify both sides of the new boundary and preserve replay checks for histories accepted under the old policy; a new decision must not silently rewrite recorded facts.
