@@ -1,17 +1,74 @@
 ---
-title: "Accept or reject an order"
-description: "Page plan. When should the shop accept or reject an order?"
-tableOfContents: false
-pagefind: false
+title: Accept or reject an order
+description: Decide whether the mug shop can accept one more order and check what the decision records.
+tableOfContents:
+  minHeadingLevel: 2
+  maxHeadingLevel: 2
 prev: true
 next: true
-head:
-  - tag: meta
-    attrs:
-      name: robots
-      content: noindex
 ---
 
-## Page plan <a id="page-plan" />
+The shop can accept an order as long as it has a mug left. With one mug available, it accepts the order and commits the last mug. With zero, the same request gets a sold-out reply. We'll put that rule in a command and check the shop's recorded history after each attempt.
 
-This page will implement the shop's one-mug decision using the current command shape, entity lookup, and explicit accept or reject result. Readers will follow an available-stock case and a sold-out case through the same function, then connect only accepted orders to recorded events. Short source excerpts beside the two outcomes will explain the syntax needed at that point. Missing shop state will receive its own rejection case, without introducing transport or payment behavior.
+Use the project from [Create the shop feature](../first-feature/). It already has an internal `OpenShop` command that records three mugs in `ShopOpened`, and the shop's state subtracts one mug for each `OrderPlaced`. [Plan the mug shop](../) describes the cases we're building against.
+
+## Which shop receives the order?
+
+An order needs to identify the shop whose stock it will use. Since every order is for one mug, the command carries just that shop's identifier. Give your agent this task from the project root.
+
+```text wrap
+Follow the project's active NeoHaskell guidance. Add internal PlaceOrder under src/Shop/Commands/. Use the existing shop ID as entityId and return it in Just from getEntityId.
+
+Reject a missing shop with "Shop not found". With stock above zero, accept and record one OrderPlaced for that shop. At zero, reject with "Sold out".
+
+Wire PlaceOrder to OrderPlaced in Shop/Feature.hs. Keep Counter working. Leave the stock query and shop HTTP for later.
+
+In a fresh test store, run OpenShop, place three orders, then try a fourth and an order for an unopened shop. Check each result and read back the recorded history after each attempt. Run neo test.
+```
+
+Start your source review in `src/Shop/Commands/PlaceOrder.hs`. These two declarations describe the command's data and where NeoHaskell should look up the shop.
+
+```haskell wrap
+data PlaceOrder = PlaceOrder {
+  entityId :: Uuid
+}
+
+getEntityId :: PlaceOrder -> Maybe Uuid
+getEntityId cmd = Just cmd.entityId
+```
+
+The caller supplies the UUID used when the shop was opened. Returning `Just cmd.entityId` tells NeoHaskell which shop's history to load before it calls `decide`. If that UUID has no shop history, the current state passed to `decide` is `Nothing`. When the shop exists, `Just shop` gives the decision its current state.
+
+## The decision at one mug and at zero
+
+The first branch of `decide` handles the missing shop. It gives the caller a different answer from the one a shopper gets when an existing shop sells out.
+
+```haskell wrap
+Nothing ->
+  Decider.reject "Shop not found"
+```
+
+In the `Just shop` branch, the condition `shop.availableMugs > 0` is still true when one mug remains. Look at what the accepting branch returns.
+
+```haskell wrap
+Decider.acceptExisting
+  [ OrderPlaced
+      OrderPlaced.Event {
+        entityId = shop.shopId
+      }
+  ]
+```
+
+The brackets hold a list with one event. The event uses the loaded shop's ID so it belongs to that shop's history. Once recorded, the existing update function applies `OrderPlaced` and subtracts a mug. At zero, the same condition is false and the other branch runs.
+
+```haskell wrap
+else Decider.reject "Sold out"
+```
+
+## The connection and the recorded history
+
+With the project model saved as `event-model.json`, run `neo inspect sync` from the project root. Reload the graphical IDE, or open it with `neo ide` if it is closed. In **Ungrouped**, use **Fit View** and select `PlaceOrder` to highlight its connection to `OrderPlaced`. The arrow shows which event the command can produce. The stock condition in `decide` tells us when that arrow is taken.
+
+In the test, use the same store and shop ID for the opening and all four order attempts. After the opening, the history contains one `ShopOpened` with three mugs. The first three attempts each add one `OrderPlaced`. The third attempts to buy the last mug, so its acceptance brings the count to zero.
+
+On the fourth attempt, check for the `Sold out` reply and compare the recorded history with the history just after the third order. It should still contain the opening event and exactly three `OrderPlaced` events. An order using a different UUID that was never opened should return `Shop not found` and leave the same history intact. Both rejections are replies to the caller and record no events.
