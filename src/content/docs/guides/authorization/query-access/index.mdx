@@ -1,17 +1,114 @@
 ---
 title: "Restrict query results"
-description: "Page plan. Who may read a query and its individual results?"
-tableOfContents: false
-pagefind: false
-prev: false
-next: false
-head:
-  - tag: meta
-    attrs:
-      name: robots
-      content: noindex
+description: "Check access before fetching a query, then return only the rows the caller may see."
 ---
 
-## Page plan <a id="page-plan" />
+import QueryVisibility from '@components/learn/QueryVisibility.astro';
 
-This page will apply a query-level access check before fetching data and an ownership check for individual results. It will compare the same query for an owner, another authenticated user, and an anonymous caller, including a paginated result. A short decision table will show where each check runs so a reader can protect returned data without assuming that command permissions automatically protect query endpoints.
+A customer opening their mug orders should see their own orders. Knowing another order's identifier must not let them read its delivery details. [Authorize a command](../) protects changes to an order; a query needs its own policy for the information it returns.
+
+NeoHaskell checks a query at two points. `canAccess` decides whether the caller may use that query at all, before the store is read. `canView` then decides whether each stored row may be returned. A collection leaves out denied rows. A lookup by identifier treats a denied row as not found.
+
+<QueryVisibility />
+
+This lesson uses the verified caller claims from [Verify caller identity](../../authentication/) and an owner-bearing order, as introduced in [Authorize a command](../). Keep HTTP authentication configured, including the intended API audience. A query policy uses the identity supplied by the transport; it does not verify a token itself.
+
+## Ownership in the stored answer
+
+Suppose a new query, `OwnedOrderSummary`, contains an order identifier, `ownerId`, and the delivery information a customer may read. Its Feature derives `ownerId` from the accepted creation event, which recorded the verified caller's subject. Do not accept an owner identifier from a read request as proof of ownership.
+
+The original mug-shop stock query does not establish customer ownership. If your application has no owned-order flow, add a separately named flow that records it. Preserve deployed definitions and retained history, following [Add a feature safely](../../../tutorial/change-safely/). A new visibility policy needs a new query identity rather than an edit beneath an existing deployed query.
+
+Ask your agent for this bounded implementation:
+
+<div className="query-agent-prompt">
+
+```text
+Add a new OwnedOrderSummary query and Feature for owned mug
+orders.
+Use ownership recorded by the accepted creation event, never a
+read parameter.
+If ownership is not recorded yet, add a separately named owned-
+order flow.
+Declare authenticatedAccess and ownerOnly on the query before
+its generator.
+Register the new Feature alongside the existing application
+Features.
+Preserve deployed commands, events, queries and retained
+history.
+Test collection, by-ID and paginated reads as two owners and
+anonymously.
+Keep HTTP authentication and the intended API audience
+configured.
+```
+
+</div>
+
+The following excerpts show the policy to inspect in that new query module. They assume your agent supplies the query record and the event-to-query logic that maintains it.
+
+## Two checks with different inputs
+
+Import `Service.AccessControl` qualified as `AccessControl`, `AccessError` from that module, and `UserClaims` from `Service.Auth`. Place both declarations before the query's `deriveQuery` generation call:
+
+```haskell
+canAccess :: Maybe UserClaims -> Maybe AccessError
+canAccess = AccessControl.authenticatedAccess
+
+canView :: Maybe UserClaims -> OwnedOrderSummary -> Maybe AccessError
+canView = AccessControl.ownerOnly (.ownerId)
+```
+
+For example, `deriveQuery ''OwnedOrderSummary [''OwnedOrderEntity]` names the new query and its source entity. Here `OwnedOrderEntity` stands for the owner-bearing entity your agent defines. The query generator requires both functions and connects them to the endpoint. In each function, a result of `Nothing` allows access and `Just` an access error denies it. The input `Nothing` means an anonymous caller. `authenticatedAccess` rejects that caller before fetching any rows.
+
+`ownerOnly` receives one stored row and compares its `ownerId` with the verified caller's `sub`. The comparison is exact. Here ownership is scoped to the configured issuer, as discussed in [Verify caller identity](../../authentication/). A different authenticated customer passes `canAccess` but fails `canView` for this row.
+
+| Check | Available information | Effect of denial |
+| --- | --- | --- |
+| <code style="white-space: nowrap">canAccess</code> | Caller claims | Stops the query before a store read |
+| `canView` on a collection | Caller claims and one stored row | Omits that row |
+| `canView` on a by-ID lookup | Caller claims and the found row | Returns not found |
+
+For a query reserved for staff, `canAccess` could instead use `AccessControl.requirePermission "orders:read"`. That is an example permission name to configure with your issuer. Permission checks receive claims only; they cannot establish ownership of a particular row. Likewise, `publicView` allows every fetched row through once the query-level gate passes. Use it only when every caller admitted by that gate may read all those rows.
+
+## One policy across collection and by-ID reads
+
+The query name becomes the HTTP route `owned-order-summary`. A collection request uses `/queries/owned-order-summary`; a single-row request appends the returned query UUID. Use the actual identifier returned by your application, rather than a customer's subject or a guessed order number.
+
+With the policy above and HTTP authentication configured, compare a row belonging to the first customer:
+
+| Caller | Collection | By-ID lookup for that row |
+| --- | --- | --- |
+| Authenticated owner | Includes the row | 200 with the row |
+| Authenticated other customer | Omits the row | 404 |
+| Anonymous caller | 401 before fetching | 401 before lookup |
+
+An unknown UUID and a row denied by `canView` both produce 404. This avoids distinguishing those cases through the by-ID response. An invalid bearer token produces 401 during authentication, before either query check. A malformed UUID is a different request error, not evidence that the row exists.
+
+Query access does not share the command executor's trusted bypass. These endpoint handlers receive optional claims and run their checks against those claims. In particular, an HTTP application without authentication supplies no user to queries, so this `authenticatedAccess` policy rejects its reads. Do not replace it with public access merely because a trusted background command can run. A direct call to a query object store is below the endpoint policy; keep such access inside trusted application code.
+
+## Pagination after visibility
+
+Collection endpoints first check `canAccess`, fetch rows, and keep only those allowed by `canView`. They apply any NeoQL filter next, then calculate the total and take the requested page. The [query endpoint implementation](https://github.com/neohaskell/NeoHaskell/blob/414602b9510a92dfac647bc68d6afadfb594502c/core/service/Service/Query/Endpoint.hs) keeps these steps in that order.
+
+Suppose the store contains two orders for the first customer and one for the second. With no NeoQL filter, the first customer's request with `limit=1&offset=0` returns one of their orders:
+
+```json
+{
+  "items": ["one owned-order row"],
+  "total": 2,
+  "hasMore": true,
+  "effectiveLimit": 1
+}
+```
+
+Here the string in `items` stands for the full query record, omitted to focus on pagination. The total is two visible rows, not three stored rows. `offset=1` skips one visible row, and `hasMore` becomes false on that second one-row page. The second customer sees a total of one. The query's maximum-results setting caps the requested limit; `effectiveLimit` reports the applied limit.
+
+A NeoQL filter can narrow the visible set but cannot restore rows that ownership removed. A by-ID lookup does not apply the collection's filter, limit or offset. Test both routes rather than assuming collection filtering protects a separate lookup. Visibility filtering also does not turn into a database ownership predicate: this collection path fetches all query rows before filtering them.
+
+## Evidence from separate callers
+
+Run `neo --ci test` with endpoint scenarios as well as tests for the policy functions. Create fresh orders under two disposable authenticated identities, wait for their asynchronously maintained query rows, then read the same query with each identity and with no token. Assert row identities and delivery fields, not only HTTP status codes.
+
+For pagination, give one owner two rows and the other one row. Check that `total`, page contents and `hasMore` describe only the caller's visible, filtered rows. Check a known other-owner UUID and an unknown UUID for the same 404 response. Keep a missing-token test separate from an invalid-token test, because they stop at different boundaries.
+
+In the native IDE, locate the new query and follow the event connection that supplies its owner. Inspect the two policy functions in source alongside those tests. The model shows where the stored answer comes from; the caller comparisons establish who may receive it.

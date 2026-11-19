@@ -1,0 +1,19 @@
+<div class="query-visibility" role="img" aria-label="Signed-in caller passes canAccess before rows are fetched. An anonymous caller stops with 401. Stored rows for owners A, B and A pass through canView for caller A. The B row is omitted. Two A rows remain, then pagination returns one with total two.">
+  <div class="node">Caller A → canAccess: signed in?</div>
+  <div class="branch"><div class="arrow">Yes: fetch rows</div><div class="denied">× Anonymous: 401<br />No store read</div></div>
+  <div class="node" data-diagram-role="query">Stored rows: A1, B1, A2</div>
+  <div class="arrow">canView: owner matches A?</div>
+  <div class="branch"><div class="node" data-diagram-role="query">A1, A2 remain</div><div class="denied">× B1 omitted</div></div>
+  <div class="arrow">Page: limit 1, offset 0</div>
+  <div class="node" data-diagram-role="query">One A row returned<br />total 2, hasMore true</div>
+</div>
+<style>
+:global(.query-agent-prompt pre), :global(.query-agent-prompt pre code) { white-space:pre-wrap; overflow-wrap:anywhere; }
+.query-visibility { margin:32px 0; font-size:16px; }
+.node { padding:16px; border:1px solid var(--diagram-line, var(--sl-color-gray-3)); border-radius:8px; background:var(--diagram-surface, var(--sl-color-gray-6)); color:var(--diagram-ink, var(--sl-color-text)); }
+.arrow { position:relative; margin-left:24px; padding:16px 24px; border-left:2px solid var(--sl-color-gray-3); }
+.arrow::after { content:''; position:absolute; bottom:0; left:-6px; border-top:8px solid var(--sl-color-gray-3); border-left:5px solid transparent; border-right:5px solid transparent; }
+.branch { position:relative; display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+.denied { align-self:center; color:var(--sl-color-red-high); border-left:2px dashed var(--sl-color-red-high); padding:8px 12px; }
+.branch::before { content:''; position:absolute; top:0; left:24px; width:calc(50% - 16px); border-top:2px dashed var(--sl-color-red-high); }
+</style>
