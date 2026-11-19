@@ -1,0 +1,23 @@
+<section class="oauth-flow" aria-label="External account connection sequence">
+  <ol>
+    <li><strong>Browser to mug shop</strong><span>Connect with the shop's verified identity</span></li>
+    <li><strong>Mug shop to provider</strong><span>Save a temporary transaction, then redirect for consent</span></li>
+    <li><strong>Provider to mug shop</strong><span>Return code and signed state to the callback</span></li>
+    <li><strong>Mug shop</strong><span>Consume the transaction once. Recover the subject and PKCE verifier.</span><aside><strong>Connection stops</strong><span>Transaction missing after restart or on another instance. Begin a new connection.</span></aside></li>
+    <li><strong>Mug shop to provider</strong><span>Transaction found: exchange code plus verifier for provider tokens</span></li>
+    <li><strong>Secret store</strong><span>Save credentials under the provider and shop subject</span></li>
+    <li data-diagram-role="command"><strong>Application command</strong><span>Dispatch connection status and token reference</span></li>
+  </ol>
+</section>
+<style>
+.oauth-flow {margin:2rem 0;font-size:16px;line-height:1.5}
+.oauth-flow ol {list-style:none;margin:0;padding:0 0 0 24px;border-left:2px solid var(--sl-color-gray-4)}
+.oauth-flow li {position:relative;display:flex;flex-direction:column;gap:4px;padding:0 0 28px 12px;margin:0}
+.oauth-flow li:last-child {padding-bottom:0}
+.oauth-flow li::before {content:'';position:absolute;left:-31px;top:6px;width:12px;height:12px;border:2px solid var(--sl-color-text-accent);border-radius:50%;background:var(--sl-color-bg)}
+.oauth-flow strong {font-weight:600;color:var(--sl-color-white)}
+.oauth-flow li[data-diagram-role] strong {color:var(--diagram-command-ink,var(--sl-color-text-accent))}
+.oauth-flow aside {position:relative;display:flex;flex-direction:column;gap:4px;margin:8px 0 0 16px;padding:8px 12px;border-left:3px dashed var(--sl-color-red);border-bottom:3px solid var(--sl-color-red);color:var(--sl-color-red-high);font-style:normal}
+.oauth-flow aside strong {color:inherit}
+.oauth-flow aside::before {content:"";position:absolute;left:-19px;top:0;width:16px;border-top:2px dashed var(--sl-color-red)}
+</style>

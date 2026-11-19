@@ -1,17 +1,114 @@
 ---
 title: "Connect an external account"
-description: "Page plan. How does a user authorize access to a provider account?"
-tableOfContents: false
-pagefind: false
-prev: false
-next: false
-head:
-  - tag: meta
-    attrs:
-      name: robots
-      content: noindex
+description: "Connect a user's provider account, keep credentials separate from history, and handle refresh and disconnect."
 ---
 
-## Page plan <a id="page-plan" />
+import OAuthConnection from '@components/learn/OAuthConnection.astro';
 
-This page will register an OAuth provider and follow an authenticated user through connect, callback, token use, refresh, and disconnect. A sequence diagram will separate the application identity from provider credentials and temporary connection state. It will explain the consumer-supplied persistent secret store and the current in-memory callback transaction store, including what happens to an unfinished connection after a restart or a request reaches another instance.
+The mug shop's owner wants to connect a delivery-provider account so the shop can request shipments on their behalf. Signing into the shop establishes who the owner is. It does not give the shop permission to use that delivery account. OAuth connects the external account through the provider's consent screen and gives the shop credentials for subsequent API calls.
+
+This lesson builds on [Verify caller identity](../../authentication/). Keep inbound authentication configured with the intended API audience. The shop's identity token identifies the caller; the delivery provider's access token authorizes work at the provider. Keep those credentials separate even if the same company supplies both services.
+
+## A connection across two systems
+
+The owner begins with an authenticated request to the shop. The shop stores a temporary transaction linking that verified subject to this connection attempt, then redirects the browser to the provider. The provider returns an authorization code. The shop exchanges that code for tokens and stores them outside application history. For each attempt, it also generates a private verifier and sends the provider a derived challenge. The exchange must supply the matching verifier. This proof is called PKCE.
+
+<OAuthConnection />
+
+The callback recovers the owner from the server-side transaction. It does not trust an owner field in the callback URL, and it does not need a fresh shop identity token. Signed state binds the callback to the connection attempt; PKCE binds the code exchange to the verifier generated for that attempt. The transaction is consumed once, so replaying a callback cannot complete a second exchange.
+
+Dispatch of the final application command is a separate step after token storage. If that command fails, credentials may already exist even though the shop has not recorded a connected status. Design the application's recovery around both facts rather than treating the browser redirect alone as proof of a completed business action.
+
+## Settings in the application model
+
+Ask your agent to add a new connection Feature and focused configuration changes:
+
+```text
+Add a delivery-account connection to the mug shop.
+Keep inbound identity verification and the API audience.
+Register the provider, a secret store, and a state-signing key.
+Add separately named callback commands and a status query.
+Record subjects, status and token references, never credentials.
+Preserve deployed definitions and retained history.
+Test against a controlled local provider, including failed and
+repeated callbacks, refresh, and disconnect.
+```
+
+In the named Event Model, these settings belong alongside the existing authentication, transport and Feature registrations. The fragment assumes `persistentStore` has already been initialized by your startup code and `providerConfig` is the provider configuration described below:
+
+```haskell
+EventModel.withSecretStore @() (\_ -> persistentStore)
+EventModel.withOAuth2StateKey "OAUTH2_STATE_KEY"
+EventModel.withOAuth2Provider @() (\_ -> providerConfig)
+```
+
+Import `Service.EventModel` qualified as `EventModel`. `@()` makes this factory independent of the application's configuration record. For settings that depend on a registered configuration type, use that type and obtain settings from its value. The secret-store factory returns a concrete `SecretStore`, not a `Task`; initialize effectful resources before supplying the record.
+
+`OAUTH2_STATE_KEY` is the chosen environment-variable name, not the secret itself. Supply a secret of at least 32 bytes through your deployment's secret configuration. Declare this setting before registering a provider. Keep the key stable for pending attempts; changing it invalidates their signed state.
+
+The `OAuth2ProviderConfig` record comes from `Auth.OAuth2.Provider`. Its settings combine the provider's registration with the shop's callback behavior:
+
+```haskell
+providerConfig = OAuth2ProviderConfig {
+  provider = deliveryProvider,
+  clientId = deliveryClientId,
+  clientSecret = deliveryClientSecret,
+  redirectUri = deliveryCallbackUri,
+  scopes = deliveryScopes,
+  onSuccess = recordConnected,
+  onFailure = recordConnectionFailed,
+  onDisconnect = recordDisconnected,
+  successRedirectUrl = "https://shop.example.com/settings/connected",
+  failureRedirectUrl = "https://shop.example.com/settings/connection-failed"
+}
+```
+
+These are application-supplied values, not built-in delivery settings. `deliveryProvider` is a `Provider` with `name`, `authorizeEndpoint` and `tokenEndpoint`. Choose a stable name such as `delivery`; use the actual endpoints and client registration issued by your provider. Wrap its client ID with `ClientId`, its secret with `mkClientSecret`, and each requested permission with `Scope`, all from `Auth.OAuth2.Types`. Request only the scopes needed for shipment work.
+
+Validate the callback URL with `mkRedirectUri` and handle a rejected result during configuration. For the example name, register the shop's exact `/callback/delivery` URL with the provider. The two redirect URLs in the excerpt are example browser destinations in the shop after processing, not provider endpoints. Replace the example host with your own. The framework validates the provider endpoints and typed callback URI. The browser success and failure destinations remain plain text in configuration; supply trusted application URLs and use HTTPS for deployment.
+
+## Connection status without credentials
+
+The callback mappings produce command JSON using `Integration.encodeCommand`. The success mapping receives a subject and a `TokenKey`; the failure mapping receives a subject and an `OAuth2Error`; disconnect receives the subject. Route those inputs into application-owned commands with registered handlers and the required internal transport. The subject is text and need not be a UUID, so explicitly map it to the application's target entity.
+
+For example, suppose your agent defines a new `RecordDeliveryConnection` command with `subject` and `tokenReference` fields. Its mapping can extract the reference:
+
+```haskell
+recordConnected :: Text -> TokenKey -> Text
+recordConnected subject tokenKey = case tokenKey of
+  TokenKey reference ->
+    Integration.encodeCommand RecordDeliveryConnection {
+      subject = subject,
+      tokenReference = reference
+    }
+```
+
+Import `TokenKey(..)` from `Auth.SecretStore` and `Integration` qualified. The command needs `NameOf` and `Json.ToJSON` for encoding, plus its ordinary service registration. This is an illustrative mapping, not a complete command definition. Preserve the supplied reference. The current key format is `oauth:{provider}:{subject}`; using `show` on `TokenKey` produces redacted output rather than a usable reference.
+
+A connection event can record that reference and the status needed by a settings query. Access tokens, refresh tokens and client secrets belong only in the secret store. Keep them out of events, query rows, callback payloads and logs. Protect the status query with the policies from [Restrict query results](../../authorization/query-access/), so one user cannot inspect another user's connection.
+
+## Browser flow and token use
+
+For the example provider name, `GET /connect/delivery` requires the owner's shop authentication and returns a redirect to the provider. A browser address-bar navigation does not automatically attach an API bearer token. API clients can supply `Authorization: Bearer <shop token>` and inspect the 302 destination. For browser navigation the connect route also accepts `?token=<shop token>`, with the header taking precedence. That fallback places the shop credential in a URL; avoid retaining it in history, analytics or server logs. The route sets `Referrer-Policy: no-referrer` on its successful redirect, but that does not remove copies already logged by your own infrastructure.
+
+The provider returns to `GET /callback/delivery?code=...&state=...`. Successful exchange saves the credentials and dispatches the success command before redirecting to `successRedirectUrl`. Dispatch acceptance does not mean that the command has completed: read the status query to check its business outcome. Token-exchange failure uses the failure mapping and failure destination. Invalid or missing transaction state stops the connection instead of identifying an owner from the URL. A provider denial that returns only `error` and `state`, without `code`, receives 400 from the current callback route. `onFailure` handles token-exchange failure, not every unsuccessful connection.
+
+Later shipment work uses provider credentials from `ActionContext.secretStore`. The action context also provides validated provider configurations. Token refresh is an explicit part of the integration, not a guarantee attached to every HTTP call. The helper `Auth.OAuth2.TokenRefresh.withValidToken` reads the provider-and-subject key and runs an action with its access token. You supply the refresh action, a shared per-key lock map, and a predicate identifying unauthorized responses.
+
+If that predicate matches the first failure, the helper obtains a refresh token, coordinates refresh under the lock, saves the new token set and retries the action once. It does not refresh merely because an expiry time passed. Missing credentials, a missing refresh token, storage failure and refresh failure remain errors to handle. A second unauthorized response ends the attempt. Request fresh consent when recovery requires it rather than retrying indefinitely.
+
+## Durable credentials and temporary attempts
+
+The shipped secret-store implementation is in memory. For connections that must survive restart, supply a consumer-owned persistent `SecretStore`. Implement its `get`, `put`, `delete`, `atomicModify` and `atomicModifyReturning` operations, preserving their atomicity requirements. Returning `Nothing` from a modification deletes the entry. Secure the stored credentials and backups as secrets; NeoHaskell does not supply a ready-made persistent Vault or database adapter here.
+
+The callback transaction store is different. Application startup currently creates an in-memory store and exposes no builder to replace it. A persistent secret store therefore preserves completed credentials but does not preserve an unfinished connection. After a restart, the owner must begin again. With several instances, route the callback to the process that began the attempt; another process does not have its transaction. A shared state-signing key alone cannot recover that missing transaction. See the [OAuth route implementation](https://github.com/neohaskell/NeoHaskell/blob/414602b9510a92dfac647bc68d6afadfb594502c/core/auth/Auth/OAuth2/Routes.hs) for the distinct token and transaction operations.
+
+`POST /disconnect/delivery` also requires the owner's shop authentication. It requests deletion of that user's provider-token key, then dispatches the disconnect command. The current route ignores a deletion error, so a successful disconnect response cannot establish that the store erased credentials. It also does not revoke permission at the provider. If your product promises either outcome, verify deletion through your store and implement the provider's revocation procedure separately. Keep connection status honest when either step fails.
+
+## Checking the complete connection
+
+Use disposable users and a controlled local provider to test the full redirect, code exchange and callback command before involving real accounts. Check that the provider receives the registered callback URI and PKCE verifier, that credentials exist under the expected subject, and that the status query reflects an accepted command. Exercise invalid state, repeated callbacks and a rejected completion command separately.
+
+Test token refresh with an action that rejects its first token and accepts the replacement. Check that it retries only once, and that a non-authorization failure does not trigger refresh. Then disconnect and inspect both the stored credential and the application's status. Restart between a connect request and its callback to confirm that the old attempt fails and a newly initiated attempt works.
+
+In the native IDE, follow the new connection command to its status event and query. Inspect the provider registration and secret-store operations in source beside it. The model connects the business status; provider observations and store assertions establish what happened to credentials.
