@@ -1,17 +1,102 @@
 ---
-title: "Persist and rebuild queries"
-description: "Page plan. How do query results recover after a restart or projection change?"
-tableOfContents: false
-pagefind: false
-prev: false
-next: false
-head:
-  - tag: meta
-    attrs:
-      name: robots
-      content: noindex
+title: Persist and rebuild queries
+description: Configure saved query rows, follow startup replay, and recover the mug shop's stock answer from retained history.
+tableOfContents:
+  minHeadingLevel: 2
+  maxHeadingLevel: 2
+prev: true
+next: true
 ---
 
-## Page plan <a id="page-plan" />
+import QueryRecovery from '../../../../../components/learn/QueryRecovery.astro';
 
-This page will configure persistent query storage separately from event history and follow checkpoint resume and an explicitly verified rebuild. It will explain that the current query hash is derived from the query name, so changing projection code alone does not automatically invalidate saved progress. A timeline will show live events arriving during replay and when readiness becomes available. A rebuild failure will connect diagnostic evidence to recovery, which depends on usable history and does not reverse external effects.
+A query keeps an answer ready to read. In the mug shop, `AvailableStock` copies the shop's current stock into a row that the browser can request. That row and the events that explain the stock have different jobs, and NeoHaskell configures their storage separately.
+
+[Keep events across restarts](../) retained `ShopOpened` and `OrderPlaced` on disk, then rebuilt an in-memory stock answer after restarting. Here we'll follow that replay more closely, see how to store the query rows in PostgreSQL, and consider what happens when a deployed application needs a different answer. Keep the same Web application and event-store directory from that guide.
+
+## Saved rows and retained history
+
+The event store holds the facts needed to recover the shop. The query store holds derived rows such as "this shop has two mugs available." Saving those rows can preserve an existing answer across process restarts, but the application still replays history during startup. A saved row is not a record of how far replay has progressed.
+
+<QueryRecovery />
+
+The query subscriber coordinates replay with newly arriving events. It marks queries as rebuilding, processes retained history, drains the overlapping live events, and then marks them ready. With a small history this can finish before your first request. You don't need to observe an empty answer for replay to have occurred.
+
+A replay position records progress through event history. A saved checkpoint would retain that progress across processes. The ordinary application startup described here starts replay from the beginning; configuring persistent query rows doesn't turn it into checkpoint resume.
+
+## A combine that can run again
+
+Replay updates rows that may already exist. Before enabling persistent query storage, inspect the query's `combine` implementation with your agent. In `src/Shop/Queries/AvailableStock.hs`, the relevant part is:
+
+```haskell wrap
+instance QueryOf ShopEntity AvailableStock where
+  queryId shop = shop.shopId
+  combine shop _ =
+    Update AvailableStock {
+      shopId = shop.shopId,
+      availableMugs = shop.availableMugs
+    }
+```
+
+The updater obtains the entity's current state and passes it to `combine` along with the existing query row. This implementation ignores that old row and replaces its fields from the shop. If the shop has two mugs, combining it twice still leaves two. This property is called idempotence: repeating the same update has the same result.
+
+Contrast that with subtracting one from the existing query row each time the updater runs. Replaying history over saved rows could subtract again. Query storage doesn't enforce idempotence for you. Ask the agent to check every participating entity's `combine`, including what happens when a row already exists or an entity no longer contributes to it. Startup replay doesn't clear all saved rows first.
+
+This is an inspection of the existing stock query, not an instruction to edit its deployed implementation. Follow [Add a feature safely](../../../tutorial/change-safely/) when a changed calculation needs a new identity.
+
+## PostgreSQL for query rows
+
+`EventModel.withQueryObjectStore` chooses the query backend. Unlike the event-store setting, it accepts a configuration value directly, rather than a factory from `StarterConfig`. Keep the event-store factory, Web transport and existing Features. Add these imports to `src/App.hs`:
+
+```haskell wrap
+import Service.QueryObjectStore.Postgres
+  (PostgresQueryObjectStoreConfig (..))
+import Service.Infra.Postgres.ConnectionConfig (SslMode (..))
+```
+
+For the starter's local PostgreSQL service, add this configuration inside `EventModel.eventModel do`, before `EventModel.features`:
+
+```haskell wrap
+EventModel.withQueryObjectStore PostgresQueryObjectStoreConfig {
+  host = "localhost",
+  databaseName = "neohaskell",
+  user = "neohaskell",
+  password = "neohaskell",
+  port = 5432,
+  poolSize = 4,
+  sslMode = SslModeUnset,
+  sslRootCert = Nothing
+}
+```
+
+These credentials match the starter's local Compose service. They are development values, not credentials to copy into a deployed application. For deployment, have the agent load the actual connection values outside the pure Event Model construction and supply the configuration value when assembling it. Keep real credentials outside version control; the query setting doesn't automatically read the event-store factory's `StarterConfig` fields.
+
+The query store may use the same PostgreSQL database as your event store, but this setting doesn't select or replace that event store. `poolSize` controls this store's connection pool. The TLS mode is left unset for the local example; choose TLS settings appropriate to your database when deploying.
+
+Start PostgreSQL with retained storage before running the application. The query backend creates its table and separates rows by query name and instance UUID. Merely compiling this configuration doesn't check the connection or prove that the database volume survives a restart.
+
+## Readiness after restarting
+
+Use the browser documentation at `http://localhost:8080/docs` to open a shop with a fresh UUID in the same retained history, then place one online order. Read `AvailableStock` until its answer is two mugs. Use a new shop because completing the previous guide leaves its shop at the one-mug reserve. Preserve that earlier shop and its events. Keep the new UUID; don't open it again after restarting.
+
+Stop the application, wait for the process to exit, and start it again from the same project root with `neo run`. Open `http://localhost:8080/ready` to check startup replay:
+
+| Response | Meaning |
+| --- | --- |
+| HTTP 503, `rebuilding` | Replay is still catching up. Wait before using the query as a recovered answer. |
+| HTTP 200, `ready` | Startup replay and its overlapping live updates have completed. |
+| HTTP 503, `failed` | Replay failed. Inspect the application logs before trying again. |
+
+Once ready, read the same shop's stock again. It should be two. Then place another online order: it should succeed and leave one mug. A further online order should return `Reserved for in-person sales` without changing that answer. Queries update asynchronously, so allow the row to catch up after each accepted command.
+
+This checks both the recovered answer and the decision made against recovered shop state. With persistent query storage, seeing two mugs alone could mean you read a saved row. The readiness check establishes that startup replay has completed. It doesn't guarantee that every later live update will succeed or that every dependency remains healthy.
+
+## Recovery and a different query
+
+If readiness reports `failed`, use its response and the application logs to find the failing store or update. A database connection failure can stop startup before `/ready` is available; inspect the startup logs when that endpoint doesn't answer. For a connection problem, correct the database address, credentials or service availability, then restart against the same retained history. Don't point the application at an empty event directory to make the error disappear. That would start a different history rather than recover this shop.
+
+If a query's calculation needs to change, keep the deployed query intact and add a separately named query and Feature slice. For example, `StockForDisplay` could become the new answer while `AvailableStock` remains available to existing callers. Have the agent register the new query's entity inputs and both `ShopOpened` and `OrderPlaced`, then test its combine behavior against existing rows. A new identity gives it separate rows; changing a deployed type's fields or implementation isn't a migration strategy.
+
+Start the application with the new query registered against the retained event store. Wait for readiness, compare the old and new answers for known shop UUIDs, and open another shop with a fresh UUID. Place one online order for that new shop to check that both queries continue updating. Use `neo inspect sync` and `neo ide` to inspect the new query's incoming event connections as in [Keep events across restarts](../#history-and-the-stock-answer). Move callers to the new query only after its recovered and live answers agree with the intended behavior.
+
+Replay cannot recreate missing event history, clear every obsolete row automatically, or undo an external effect. Keep the history and the old query available while you verify the replacement.
