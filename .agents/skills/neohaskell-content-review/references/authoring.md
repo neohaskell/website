@@ -24,6 +24,8 @@ For a running-service lesson, verify readiness with a real request, then exercis
 
 For testing lessons, verify the runner's failure behavior as well as the example failure. A command may stop after unit failures and skip HTTP scenarios. Distinguish observed failures from consequences inferred for skipped checks. Capture the deliberate failure and restored success without changing the expected behavior.
 
+For intentional policy changes, revise the behavior agreement before changing test expectations. Verify both sides of the new boundary and preserve replay checks for histories accepted under the old policy; a new decision must not silently rewrite recorded facts.
+
 Keep revisions, commands, output, review reports, and verification limits under ignored `.agents-state/`. Separate source inspection, executed behavior, and approved product intent. Public prose explains the task confidently without a source-audit sidebar. A real contradiction that prevents honest instructions is a blocker to resolve, not a disclaimer to hide in the article.
 
 ## Teach through meaningful inspection
