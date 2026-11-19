@@ -1,17 +1,57 @@
 ---
 title: "Entities and event streams"
-description: "Page plan. Which facts must a decision consider together, and what happens when commands compete?"
-tableOfContents: false
-pagefind: false
-prev: false
-next: false
-head:
-  - tag: meta
-    attrs:
-      name: robots
-      content: noindex
+description: "Understand how one entity's history supplies decision state, and how competing commands are checked again after an append conflict."
+prev: true
+next: true
 ---
 
-## Page plan <a id="page-plan" />
+import EntityStreams from '@components/learn/EntityStreams.astro';
+import StockConflict from '@components/learn/StockConflict.astro';
 
-This page will explain an entity as state reconstructed from one identified event stream and as the boundary within which a command checks its conditions. Two competing stock reservations will illustrate a stale decision, an append conflict, and evaluation against refreshed state. A two-lane sequence figure will keep cart and stock histories separate. It will explain the boundary without promising an atomic transaction across both entities.
+Two customers can see the same two mugs available and each ask to buy one. The online shop must still keep one mug for in-person sales. Checking the number displayed on each customer's screen cannot protect that rule: both screens may show an answer from before either order was recorded.
+
+[Commands, decisions, and outcomes](/concepts/command-outcomes/) follows one request through a decision and an append. Here we examine the state that decision receives, and what happens when another command changes it before the append completes.
+
+## One identified history supplies the state
+
+An **entity** is the state and event boundary a command acts on. In the mug shop, `ShopEntity` holds a shop's available stock. Its identity selects an **event stream**, the ordered history for that particular shop. Another shop has a separate identity and history even though both use the same entity type.
+
+The application reconstructs the shop's state by applying its events in order. Opening with three mugs and then recording one order produces two available mugs. The entity state is the result of that calculation; the stream retains the facts used to calculate it.
+
+<EntityStreams />
+
+The cart lane is an illustration of a separate entity, not an addition to the tutorial application. Adding a mug to a cart records an intention to buy. It does not consume stock in the shop's stream. The shop's stock changes when its own accepted order event is recorded. Putting both lanes in one feature or chapter does not merge their histories.
+
+NeoHaskell identifies a stream using the entity type and entity ID. The command's `EntityOf` declaration selects its entity type, while its target ID selects the particular entity. The decision receives the state reconstructed for that destination, rather than every cart and shop in the application.
+
+## Rebuilding does not repeat the purchase
+
+The entity's event handler describes how each recorded fact changes state. Applying `OrderPlaced` subtracts one mug. Reconstructing the same ordered history produces the same stock state; it does not append another order or ask the customer to purchase again.
+
+A **snapshot** saves derived entity state at a known stream position. A position marks how far through the history that state was calculated. When a snapshot is available, fetching an entity can start there and apply later events instead of recalculating the entire stream. The snapshot accelerates reconstruction; it does not replace the business history or provide permission for a new order.
+
+A stock query is another derived answer, maintained separately for readers. The command checks the fetched entity state, not the number last displayed by a query. Query catch-up can happen after the command finishes, so two customers seeing the same answer does not mean both commands will be accepted.
+
+## Competing decisions need a second check
+
+Consider two online orders, A and B, aimed at the same shop. Both initially load two available mugs at the same stream position. Both decisions propose an `OrderPlaced` event because either order, taken alone, would leave one mug in reserve.
+
+For the tutorial's nonempty `acceptExisting` result, execution attempts the append against the position of the state it loaded. That expected position is what detects a competing write. One possible sequence is:
+
+<StockConflict />
+
+The conflict means B's proposal was based on stale state. Its event has not been recorded. Execution fetches the shop again and reruns B's decision with that refreshed state. The same reserve condition now rejects B with `"Reserved for in-person sales"`.
+
+This is an optimistic concurrency check: decisions can proceed using loaded state, while the append checks whether that state is still current. The [command executor](https://github.com/neohaskell/NeoHaskell/blob/414602b9510a92dfac647bc68d6afadfb594502c/core/service/Service/CommandExecutor/Core.hs) bounds consistency retries to ten after the first attempt. Repeated conflicts can therefore end in an execution failure rather than eventual acceptance. The example shows one possible ordering, not a guarantee that A always wins.
+
+The reserve rule must run on every evaluation. Checking it only in the browser, or reusing the first proposed event after a conflict, would miss the changed stock. Because a decision can run again, keep external actions such as taking payment outside it. Rerunning a decision must not charge the customer again.
+
+This protection depends on the append condition. `acceptAny` does not request the same expected-position check; it is not a substitute for `acceptExisting` when the proposed change depends on fetched stock. An empty event array performs no append and therefore no append-position check, as explained in [Commands, decisions, and outcomes](/concepts/command-outcomes/).
+
+## The boundary follows the condition
+
+The stock rule compares the available mugs with the reserve threshold. Both belong to the shop decision's state boundary. Keeping the facts needed for that condition in one entity lets an append conflict trigger a fresh evaluation of the whole condition.
+
+A cart's contents and the shop's available stock can still have separate histories. Recording a cart change does not atomically record a stock change. Likewise, several events accepted for one entity do not make commands for two entities one transaction. A process spanning cart, stock and shipment needs explicit steps and outcomes for each boundary.
+
+When reviewing a proposed model, ask which facts a command must consider together to accept its change. Then trace which stream supplies those facts and which append condition protects the decision. A feature groups related behavior for understanding; an entity determines the state and history against which that behavior is checked.

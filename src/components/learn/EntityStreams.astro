@@ -1,0 +1,29 @@
+---
+import '../../styles/diagram-colors.css';
+---
+<figure class="entity-streams" aria-label="Separate cart and stock histories. Only events in the shop stock stream rebuild its available mugs.">
+  <section>
+    <h3>Cart A</h3>
+    <div class="event" data-diagram-role="event">Mug added to cart</div>
+    <div class="flow" aria-hidden="true"></div>
+    <div class="state">Cart contains one mug</div>
+  </section>
+  <section>
+    <h3>Shop stock</h3>
+    <div class="event" data-diagram-role="event">ShopOpened: 3 mugs</div>
+    <div class="flow" aria-hidden="true"></div>
+    <div class="event" data-diagram-role="event">OrderPlaced: 1 mug</div>
+    <div class="flow" aria-hidden="true"></div>
+    <div class="state">ShopEntity: 2 available</div>
+  </section>
+</figure>
+<style>
+.entity-streams {display:grid;grid-template-columns:1fr 1fr;gap:24px;margin:32px 0;font-size:1rem;line-height:1.5;}
+.entity-streams section {margin:0;border-top:2px solid var(--sl-color-gray-3);padding-top:16px;min-width:0;}
+.entity-streams h3 {font-size:1.125rem;margin:0 0 16px;}
+.entity-streams .event,.entity-streams .state {margin:0;padding:16px;border:1px solid var(--sl-color-gray-4);border-radius:4px;}
+.entity-streams .event {background:var(--diagram-surface);border-color:var(--diagram-line);color:var(--diagram-ink);}
+.entity-streams .flow {height:28px;width:2px;background:var(--sl-color-gray-3);margin:0 auto;position:relative;}
+.entity-streams .flow::after {content:'';position:absolute;bottom:0;left:-4px;border:5px solid transparent;border-bottom:0;border-top:7px solid var(--sl-color-gray-3);}
+@media(max-width:520px){.entity-streams{gap:16px;grid-template-columns:1fr;}}
+</style>

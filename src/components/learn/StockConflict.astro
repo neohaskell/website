@@ -1,0 +1,19 @@
+<figure class="stock-conflict" aria-label="Order B reloads stock and runs its decision again after order A advances the stream.">
+  <div class="step">A and B load the same position<br /><strong>2 mugs available</strong></div>
+  <div class="flow" aria-hidden="true"></div>
+  <div class="step" data-diagram-role="event">A appends OrderPlaced<br /><strong>1 mug remains</strong></div>
+  <div class="flow" aria-hidden="true"></div>
+  <div class="step failure"><strong>B's append blocked</strong><br />Expected position is stale</div>
+  <div class="flow" aria-hidden="true"></div>
+  <div class="step">B reloads: 1 mug<br />Decision runs again</div>
+  <div class="flow" aria-hidden="true"></div>
+  <div class="step failure"><strong>B rejected</strong><br />Reserved for in-person sales<br />No event appended for B</div>
+</figure>
+<style>
+.stock-conflict{font-size:1rem;line-height:1.5;max-width:30rem;margin:32px auto;}
+.stock-conflict .step{margin:0;padding:16px;border:1px solid var(--sl-color-gray-4);border-radius:4px;text-align:center;}
+.stock-conflict [data-diagram-role]{color:var(--diagram-ink);background:var(--diagram-surface);border-color:var(--diagram-line);}
+.stock-conflict .failure{border:2px dashed var(--sl-color-red);}
+.stock-conflict .flow{width:2px;height:28px;background:var(--sl-color-gray-3);position:relative;margin:0 auto;}
+.stock-conflict .flow::after{content:'';position:absolute;bottom:0;left:-4px;border:5px solid transparent;border-bottom:0;border-top:7px solid var(--sl-color-gray-3);}
+</style>
