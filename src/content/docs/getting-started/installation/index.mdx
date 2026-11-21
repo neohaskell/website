@@ -10,74 +10,118 @@ next: true
 
 import InstallationPair from '../../../../components/learn/InstallationPair.astro';
 
-Neo is the command-line tool that creates, builds, and runs NeoHaskell projects. The installer supplies `neo` together with `neoctl`, its companion tool. Both belong to the same release and are updated together.
-
-<InstallationPair />
+You'll use `neo` to create, build, and run NeoHaskell projects. The same installer supplies `neoctl`, which starts NeoHaskell's local control service. You can check that both tools are installed without starting the service.
 
 ## Before installation
 
-The installer supports Linux on x86-64 or ARM64, and macOS on Apple Silicon. Intel Macs do not have a native installer. On Windows, use a WSL2 Linux distribution on x86-64 or ARM64 with systemd enabled. Run the commands on this page inside that distribution; the installed tools live there.
+Open a terminal on Linux (x86-64 or ARM64) or on a Mac with Apple Silicon. On Windows, open a Linux terminal in WSL2 and use it for the rest of this guide.
 
-You'll need a working **multi-user Nix installation**. Nix obtains the prebuilt tools and the dependencies your projects use. If Nix is not installed, follow the [Nix installation instructions](https://nix.dev/install-nix.html), choosing the multi-user installation for your platform. The [NeoHaskell Nix setup guide](https://github.com/neohaskell/NeoHaskell/blob/main/neo/nix-setup.md) covers daemon access and Windows setup.
+<details>
+<summary>Setting up a Windows terminal</summary>
 
-Use your ordinary account with a writable home directory. Automatic shell setup supports `/bin/bash` and `/bin/zsh`; a custom `ZDOTDIR` is not supported. The download command also needs `curl`, standard shell tools, and either `sha256sum` or `shasum` to check the downloaded installer. Install Git before creating your first project.
+If you're installing WSL for the first time, open PowerShell as an administrator and run `wsl --install`. Restart Windows when prompted, open Ubuntu from the Start menu, and create your Linux username and password.
+
+If you already use WSL, run `wsl --list --verbose` in PowerShell. The version beside your distribution should be `2`. For example, `wsl --set-version Ubuntu 2` converts an existing Ubuntu distribution to WSL2.
+
+Inside Linux, run `cat /proc/1/comm`. You should see `systemd`, the service manager that starts Nix. If your WSL2 distribution has systemd installed but prints `init`, set `systemd=true` in the `[boot]` section of `/etc/wsl.conf`. Save your work in all WSL terminals, run `wsl --shutdown` in PowerShell, then reopen Linux and repeat the check.
+
+</details>
+
+Use your usual account. The installer needs a writable home directory and a login shell of `/bin/bash` or `/bin/zsh`. For Zsh, it expects the startup files in your home directory, with `ZDOTDIR` unset. You'll also need an internet connection, `curl`, and either `sha256sum` or `shasum` to verify the download.
+
+### Installing Nix
+
+NeoHaskell uses Nix to download prebuilt tools. First check whether your account can reach the Nix background service:
+
+```sh wrap
+nix --extra-experimental-features nix-command store info --store daemon --offline --json
+```
+
+If the response includes `"url":"daemon"`, you're ready to [install the tools](#installing-the-tools). If your shell says `nix: command not found` and you haven't installed Nix yet, use the command for your platform below. If Nix is installed but reports a connection or permission error, ask your administrator to start the daemon and give your account access.
+
+**Linux, including WSL2.** The standard multi-user installer is intended for systems with systemd, access to `sudo`, and SELinux disabled. On a managed system, ask the administrator to provide multi-user Nix.
+
+```sh wrap
+curl --proto '=https' --tlsv1.2 -L https://nixos.org/nix/install | sh -s -- --daemon
+```
+
+**Apple Silicon macOS.** The current Nix installer requires macOS 14 or later.
+
+```sh wrap
+curl --proto '=https' --tlsv1.2 -L https://nixos.org/nix/install | sh
+```
+
+Follow the prompts, then open a new terminal and repeat the Nix check above.
 
 ## Installing the tools
 
-Open a terminal and run:
+From your terminal, run this command as your usual user:
 
-```sh
+```sh wrap
 curl -fsSL https://github.com/neohaskell/NeoHaskell/releases/latest/download/install | sh
 ```
 
-This downloads the latest release's installation script and runs it. The script selects the native installer for your machine and verifies its download before starting it. Run the command as your ordinary user, without `sudo`.
+The script downloads and checks the installer for your machine. You'll see the version it selected and the changes it proposes, including how your shell will find the two commands. Press **D** to see the details. Press **Enter** to accept or **Esc** to decline.
 
-The installer inspects your environment and presents a review of the selected version and proposed changes. These include the two command links and the shell configuration that makes them available in new terminals. In the interactive review, press D for details, Enter to continue, or Esc to decline. Q cancels the operation.
+If Nix needs another source for prebuilt packages, the installer shows which settings it will change. It may ask for your administrator password and restart the Nix daemon. If another Nix job is running, let it finish before you approve the restart.
 
-If Nix needs additional binary caches, the review includes the configuration changes and daemon restart. A binary cache supplies already-built packages. Authorizing that setup can prompt for your administrator password, and restarting the daemon can interrupt other Nix work. On an administrator-managed machine, use the [Nix setup guide](https://github.com/neohaskell/NeoHaskell/blob/main/neo/nix-setup.md) if the installer cannot configure it.
+When the installer says the selected version is active, open a new terminal so your shell picks up the commands. On Windows, open the same Linux distribution again.
 
-When installation completes, the terminal reports that the selected NeoHaskell version is active. Open a new terminal window before checking the tools so it loads the updated shell configuration.
+## Checking the installation <a id="the-installed-versions" />
 
-## The installed versions
-
-In the new terminal, run both checks:
+Run these commands in the new terminal:
 
 ```sh
 neo --version
 neoctl --version
 ```
 
-Both commands should report the same version. Compare it with the version selected during installation, which is also listed with the [release assets](https://github.com/neohaskell/NeoHaskell/releases/latest).
+Each command prints its name followed by a version number. For example, if the installer selected release 0.18.1, you should see:
 
-If either command is missing, first confirm that you're in a new terminal, or in the same WSL distribution where you installed. The shell's `PATH` setting determines where it finds commands. To see which commands it currently finds, run:
-
-```sh
-command -v neo
-command -v neoctl
+```text
+neo 0.18.1
+neoctl 0.18.1
 ```
 
-If an older installation takes precedence, resolve the conflicting path reported by the installer before retrying. The installer preserves existing command precedence. If it reports that shell PATH recovery finished, run the installation command again to complete the operation.
+<InstallationPair />
+
+When both numbers match the version the installer showed you, the tools are ready. You'll also need Git to create your first project. Run `git --version` to check. If Git is missing, install it with your distribution's package manager (for example, `sudo apt install git` on Ubuntu), or run `xcode-select --install` on macOS.
+
+## Troubleshooting <a id="if-installation-stops" />
+
+**The shell can't find a command, or the versions differ.** Open a fresh terminal and run `command -v neo` and `command -v neoctl`. Each should print a path. If one points to an older installation, use the original installation method to remove the conflicting command, then rerun the NeoHaskell installer. Open another terminal and repeat the version checks. If either path is missing or shell setup stopped partway through, rerun the install command after correcting the conflict.
+
+**Nix can't download a package.** If the installer offers to configure the caches, review and approve that change. If someone else manages Nix on your machine, give them the settings below. Once the daemon has loaded the changes, run the NeoHaskell install command again. If it still fails, keep the error message and the diagnostic report from the path the installer prints.
+
+<details>
+<summary>Nix settings for your administrator</summary>
+
+Add any missing features, caches, and signing keys to the system daemon's existing configuration. For standard multi-user Nix, this file is `/etc/nix/nix.conf`. On Windows, use the file inside the Linux distribution.
+
+```ini
+extra-experimental-features = nix-command flakes
+extra-substituters = https://neohaskell.cachix.org https://cache.iog.io https://cache.nixos.org
+extra-trusted-public-keys = neohaskell.cachix.org-1:mo2cLaGbwqbrxs9xhqKK8jeNsn3osi7t6XoAmxSZssc= hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ= cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=
+```
+
+Apply the settings using the tool that manages the daemon. For a standard systemd installation, run `sudo systemctl restart nix-daemon.service` after other Nix jobs finish. On a Mac with standard multi-user Nix, restart the Mac.
+
+</details>
 
 ## Updates and removal
 
-To update the installed pair to a stable release, run:
+To update both commands together, run:
 
 ```sh
 neo update
 ```
 
-Review the proposed changes as you did during installation. After it completes, open a new terminal and repeat both version checks. Running the installation command again keeps an existing installation; use `neo update` when you want an update.
+The installer shows the proposed release. After accepting the update, open a new terminal and check both versions again.
 
-To remove the managed tools, run:
+If you want to remove NeoHaskell, run:
 
 ```sh
 neo uninstall
 ```
 
-The uninstall review covers the managed command links, installation records, and shell PATH additions. It preserves Nix, your projects, and unrelated files. Some ownership and shell-recovery records remain so interrupted work can be handled safely.
-
-## If installation stops
-
-Read the reported error before retrying. A missing Nix client, an unavailable daemon, or a package-cache error needs the corresponding correction in the [Nix setup guide](https://github.com/neohaskell/NeoHaskell/blob/main/neo/nix-setup.md). A shell verification error means the installer could not confirm both commands in fresh shells; inspect the reported shell configuration or command conflict.
-
-The installer prints the location of a diagnostic report when it can save one. Keep that report when asking for help. After resolving the reported problem, retry the same operation. If removal was interrupted, retry `neo uninstall` rather than deleting installation files by hand.
+Review the changes and press **Enter** to confirm. This removes the managed commands and their shell setup. Your projects and Nix installation stay in place. If removal is interrupted, correct the reported problem and run `neo uninstall` again.
