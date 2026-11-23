@@ -1,0 +1,113 @@
+---
+title: Créer une intégration réutilisable
+description: Séparer le protocole du fournisseur de livraison des événements, commandes et décisions métier de l’application.
+tableOfContents:
+  minHeadingLevel: 2
+  maxHeadingLevel: 2
+---
+
+import ReusableIntegration from '@components/learn/ReusableIntegration.astro';
+
+Un fournisseur de livraison accepte une demande de réservation et renvoie le résultat. Il n’a pas besoin de savoir comment la boutique enregistre une commande, à quelle entité appartient une expédition ni à quel moment la décision sur l’expédition doit refuser une modification. Ces choix appartiennent à l’application.
+
+Dans [Flux de travail entre entités](/concepts/event-driven-workflows/), l’acceptation d’une commande de tasse déclenche le traitement d’une entité d’expédition distincte. Ici, nous extrayons la partie qui communique avec le fournisseur dans un module réutilisable par une autre application. Ce guide avancé s’adresse aux personnes qui travaillent sur une application existante et savent reconnaître les déclarations de commande, d’événement et de Feature. Les exemples présentent ici les contrats propres à l’intégration.
+
+<ReusableIntegration />
+
+Le module réutilisable est responsable du protocole du fournisseur. L’application est responsable des deux correspondances : de son événement vers les données envoyées au fournisseur, puis du résultat du fournisseur vers une nouvelle commande. Même si la réservation aboutit, la décision de la commande destinataire doit encore l’accepter avant que l’application enregistre un fait concernant l’expédition.
+
+## Un contrat en dehors de la boutique
+
+Placez le code générique dans `src/Shipping/Booking.hs`, en dehors de `src/MyShop`. Il peut importer des modules NeoHaskell et les utilitaires du fournisseur, mais pas les entités, événements ou commandes de la boutique. Sinon, la prochaine application devra dépendre de la boutique de tasses pour réserver une expédition.
+
+Utilisez le [module Shipping.Booking complet](/examples/shipping-booking.hs) comme fichier de départ et importez-le dans l’application avec `Shipping.Booking qualified as Shipping`. Sa configuration HTTP n’utilise pas d’authentification afin qu’elle puisse communiquer avec un fournisseur local contrôlé ; configurez l’authentification exigée par le fournisseur déployé.
+
+Les extraits suivants décrivent une petite couche qui encapsule l’intégration `Integration.Http` fournie. Ils montrent les contrats et les points de correspondance, pas une application complète. `Request` et `Booking` sont des types définis dans `Shipping.Booking` :
+
+```haskell
+data Request = Request {
+  reference :: Text,
+  quantity :: Int
+} deriving (Generic)
+
+instance Json.ToJSON Request
+
+data Booking = Booking {
+  status :: Text
+} deriving (Generic)
+
+instance Json.FromJSON Booking
+```
+
+La référence identifie cette opération du fournisseur ; la quantité indique le nombre d’articles qu’elle contient. Aucun de ces champs ne porte un événement ou un type d’entité de la boutique. Dans un vrai contrat fournisseur, ajoutez ici la destination et les autres champs nécessaires au lieu de transmettre tout l’événement métier en JSON.
+
+`Generic` permet d’utiliser les instances de codec génériques présentées ici. `Json.ToJSON` fournit l’encodage de la demande, tandis que `Json.FromJSON` fournit le décodage de la réponse. Ces responsabilités sont distinctes. Une instance `Schema.ToSchema` fournit une description structurelle ; à elle seule, elle ne décode pas une réponse, ne valide pas toutes les règles du fournisseur et ne génère pas de réponses de test réalistes.
+
+## L’adaptateur HTTP et son résultat
+
+L’adaptateur reçoit une URL de fournisseur, une demande et une fonction fournie par son appelant :
+
+```haskell
+request ::
+  Text ->
+  Request ->
+  (Result Text Booking -> command) ->
+  Http.Request command
+```
+
+La fonction de rappel accepte soit un message d’erreur, soit une réservation décodée, et renvoie une commande. Le paramètre de type `command` permet à chaque application de choisir cette commande sans que le module d’expédition ait à l’importer. Conservez l’URL dans la configuration. Une URL de bouclage convient à un fournisseur local contrôlé ; un fournisseur déployé nécessite son véritable point de terminaison et son authentification.
+
+Dans l’adaptateur, construisez `Http.Request` avec `method = Http.POST`, `body = Http.json input`, l’URL configurée et des paramètres explicites d’authentification, de délai d’attente et de nouvelle tentative. Le rappel de la réponse doit vérifier le statut HTTP avant de décoder le corps. Le nom du rappel fourni, `onSuccess`, signifie qu’une réponse est arrivée ; une réponse 503 doit tout de même produire un résultat de réservation en échec. Décodez une réponse acceptée avec `Json.decode @Booking response.body`. Un corps de réponse invalide devient un résultat d’erreur, pas une réservation inventée.
+
+Les deux champs de rappel convergent ensuite vers la fonction de l’application :
+
+```haskell
+onSuccess = \response -> toCommand (decodeBooking response),
+onError = Just (\_ ->
+  toCommand (Err "Shipping provider could not be reached"))
+```
+
+Ici, `decodeBooking` est notre décodeur qui vérifie le statut, et non une fonction du framework. Distinguez les diagnostics du fournisseur des messages destinés aux appelants et ne renvoyez ni identifiants ni corps de réponse bruts contenant des données sensibles. Choisissez soigneusement le comportement des nouvelles tentatives et envoyez une clé d’idempotence stable au fournisseur si son protocole le permet. Réessayer un appel HTTP et réessayer la distribution d’une commande par l’application sont deux opérations différentes ; aucune ne garantit une livraison exactement une fois.
+
+## Les correspondances restent dans MyShop
+
+Le gestionnaire d’événement de la boutique construit `Shipping.Request` à partir de la commande acceptée et fournit la correspondance du résultat. Dans cet extrait adapté, `event` est la charge utile de la nouvelle commande, `request` est la donnée envoyée au fournisseur et la fonction de rappel conserve l’identité d’expédition choisie par l’application :
+
+```haskell
+Shipping.request providerUrl request \result ->
+  case result of
+    Ok booking -> RecordShipmentBooking {
+      entityId = event.shipmentId,
+      status = booking.status
+    }
+    Err _ -> RecordShipmentBooking {
+      entityId = event.shipmentId,
+      status = "provider-failed"
+    }
+```
+
+Les champs de commande illustratifs appartiennent à la boutique. Le résultat du fournisseur ne décide pas de ce que la boutique peut enregistrer. Par exemple, la décision sur l’expédition peut refuser un statut inconnu même si le fournisseur a effectué la réservation. Ce refus n’annule ni l’action du fournisseur ni l’événement de commande d’origine.
+
+Encapsulez la demande configurée avec `Integration.outbound` et rassemblez son action avec `Integration.batch` dans le gestionnaire sortant de l’application. Enregistrez ce gestionnaire dans sa Feature. La commande destinataire doit autoriser `InternalTransport` et son gestionnaire doit être enregistré pour que la distribution de l’intégration puisse l’atteindre. Si le destinataire déployé existant n’autorise pas ce transport, ajoutez une nouvelle identité de commande et une tranche au lieu de modifier la déclaration figée. Préservez aussi les événements et requêtes déployés, comme l’explique [Ajouter une fonctionnalité sans risque](/tutorial/change-safely/).
+
+## Les tâches dans un adaptateur
+
+L’auteur d’une intégration réutilisable doit également comprendre le travail qui se déroule sous les enregistrements de configuration. `Task error value` décrit un travail susceptible d’échouer avec `error` ou de se terminer avec `value`. Construire une Task n’exécute pas l’appel HTTP. Dans un bloc `do`, `<-` récupère une valeur obtenue avec succès pour l’étape suivante ; un échec interrompt les étapes suivantes, sauf si le code le gère. L’exécution des actions d’intégration incombe au runtime. [Tâches et effets](/reference/core/tasks/) présente ce contrat séparément de l’acceptation ou du refus d’une décision métier.
+
+L’adaptateur HTTP fourni utilise `Integration.ToAction` pour convertir sa configuration en action. Un adaptateur de requête typée de niveau inférieur a un autre contrat dans [`Service.Integration.Adapter`](https://github.com/neohaskell/NeoHaskell/blob/414602b9510a92dfac647bc68d6afadfb594502c/core/service/Service/Integration/Adapter.hs) : une instance `Integration request` associe la requête à `Response request` et implémente `runReal` et `runFake`. Chaque opération renvoie une Task avec le type `IntegrationError` de l’adaptateur. Ce type d’erreur est distinct de celui qu’expose la façade `Integration`.
+
+Implémentez explicitement un adaptateur simulé déterministe lorsque vous en testez un. Par exemple, une requête donnée peut renvoyer une réponse de réservation fixe et une autre une erreur typée. Un schéma n’implémente pas `runFake`. Tester directement l’adaptateur simulé ne prouve pas non plus qu’une application en cours d’exécution dirige chaque fournisseur fourni vers cet adaptateur.
+
+## Le travail entrant suit la même frontière de responsabilité
+
+Pour une intégration entrante, le code réutilisable prend en charge la lecture et le décodage des données externes. L’application est responsable de la correspondance entre une notification décodée et sa commande. Gardez cette correspondance en dehors du lecteur de protocole, comme l’adaptateur sortant garde la correspondance du résultat de la boutique en dehors du traitement HTTP.
+
+L’API entrante typée représente les sorties autorisées par une liste de paires commande-entité. Par exemple, un travailleur d’application qui renvoie `Integration.TypedInbound '[ '(RecordShipmentBooking, ShipmentEntity)]` déclare la commande qu’il peut émettre et son entité cible. `Integration.TypedInboundConfig` fournit au travailleur une fonction d’émission limitée à cet ensemble. La commande doit disposer des instances requises pour son nom et son encodage JSON, et son entité doit correspondre à la paire déclarée. Ces vérifications contraignent les sorties ; elles ne prouvent pas que la commande destinataire acceptera chaque notification.
+
+`Integration.asInbound` convertit un travailleur typé en valeur d’enregistrement `Inbound` historique. Le `Timer.every` fourni renvoie déjà un `Inbound` historique ; ce n’est pas un constructeur de travailleur typé. Lorsqu’il utilise la déclaration typée adossée au modèle, l’auteur du fournisseur doit exposer directement le travailleur typé, sans laisser entendre qu’un travailleur historique peut être reconverti. Précisez clairement qui se charge de l’acquisition, de l’annulation et de la libération des ressources, comme l’explique [Gérer les ressources d’intégration](../resources/).
+
+## Des tests pour une autre application
+
+Testez le module réutilisable sans importer `MyShop` : encodage de la demande, décodage d’une réponse acceptée, réponse avec un statut HTTP d’échec, réponse mal formée et échec de transport. Testez ensuite séparément les correspondances de l’application, notamment le cas d’un résultat refusé par la décision destinataire. Un service HTTP local contrôlé permet au client fourni d’exercer ces cas sans identifiants ni effets externes. Vérifiez aussi l’état d’expédition obtenu, car l’acceptation de la commande et l’état de l’expédition sont deux résultats distincts.
+
+Regroupez le code réutilisable et ses tests lorsque vous les contribuez au [monorepo NeoHaskell](https://github.com/neohaskell/NeoHaskell). Incluez le contrat du protocole, les exigences d’authentification et les cas d’échec testés afin qu’une autre application puisse le configurer sans adopter le domaine de la boutique. Neo packages est une piste de distribution à venir ; pour le moment, les contributions passent par le monorepo.

@@ -1,15 +1,19 @@
-<div class="reusable-integration" role="img" aria-label="The application maps OrderPlaced to a booking request. A reusable shipping module sends HTTP and decodes a booking response without importing MyShop. The application maps the result to RecordShipmentBooking, whose own decision determines acceptance.">
-  <div class="node" data-diagram-role="event">Recorded OrderPlaced</div>
-  <div class="connector">Application maps event to request<svg viewBox="0 0 20 28" aria-hidden="true"><path d="M10 0V24M4 18L10 24L16 18" /></svg></div>
+---
+import { messages } from '../../i18n/runtime';
+const t = messages(Astro.locals.starlightRoute.locale ?? 'en');
+---
+<div class="reusable-integration" role="img" aria-label={t("lesson.integration-reusable-description")}>
+  <div class="node" data-diagram-role="event">{t("lesson.integration-recorded-order")}</div>
+  <div class="connector">{t("lesson.integration-reusable-map-event")}<svg viewBox="0 0 20 28" aria-hidden="true"><path d="M10 0V24M4 18L10 24L16 18" /></svg></div>
   <section>
-    <h3>Reusable Shipping module</h3>
+    <h3>{t("lesson.integration-reusable-module")}</h3>
     <div class="node">Shipping.Request</div>
     <div class="connector"><svg viewBox="0 0 20 28" aria-hidden="true"><path d="M10 0V24M4 18L10 24L16 18" /></svg></div>
-    <div class="node" data-diagram-role="integration">HTTP call and response decoding</div>
+    <div class="node" data-diagram-role="integration">{t("lesson.integration-reusable-http-decode")}</div>
     <div class="connector"><svg viewBox="0 0 20 28" aria-hidden="true"><path d="M10 0V24M4 18L10 24L16 18" /></svg></div>
-    <div class="node">Booking response or failure</div>
+    <div class="node">{t("lesson.integration-reusable-response")}</div>
   </section>
-  <div class="connector">Application maps result to command<svg viewBox="0 0 20 28" aria-hidden="true"><path d="M10 0V24M4 18L10 24L16 18" /></svg></div>
+  <div class="connector">{t("lesson.integration-reusable-map-result")}<svg viewBox="0 0 20 28" aria-hidden="true"><path d="M10 0V24M4 18L10 24L16 18" /></svg></div>
   <div class="node" data-diagram-role="command">RecordShipmentBooking</div>
 </div>
 <style>

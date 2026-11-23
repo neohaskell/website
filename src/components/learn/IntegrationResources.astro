@@ -1,17 +1,21 @@
-<div class="integration-resources" role="img" aria-label="For one entity stream, initialization opens client A. Two recorded events use that same client. Idle removal closes client A. A later event initializes client B. Resource replacement does not erase the entity's recorded history.">
-  <div class="node">One entity stream</div>
+---
+import { messages } from '../../i18n/runtime';
+const t = messages(Astro.locals.starlightRoute.locale ?? 'en');
+---
+<div class="integration-resources" role="img" aria-label={t("lesson.integration-resources-description")}>
+  <div class="node">{t("lesson.integration-resources-stream")}</div>
   <div class="arrow"><svg viewBox="0 0 20 28" aria-hidden="true"><path d="M10 0V24M4 18L10 24L16 18" /></svg></div>
   <section>
-    <div class="node" data-diagram-role="integration">initialize opens client A</div>
+    <div class="node" data-diagram-role="integration">{t("lesson.integration-resources-initialize-a")}</div>
     <div class="arrow"><svg viewBox="0 0 20 28" aria-hidden="true"><path d="M10 0V24M4 18L10 24L16 18" /></svg></div>
-    <div class="use"><span data-diagram-role="event">Recorded event 1</span><span>processEvent uses A</span></div>
+    <div class="use"><span data-diagram-role="event">{t("lesson.integration-resources-event-one")}</span><span>{t("lesson.integration-resources-use-client")}</span></div>
     <div class="arrow"><svg viewBox="0 0 20 28" aria-hidden="true"><path d="M10 0V24M4 18L10 24L16 18" /></svg></div>
-    <div class="use"><span data-diagram-role="event">Recorded event 2</span><span>processEvent reuses A</span></div>
-    <div class="arrow">Idle worker removed<svg viewBox="0 0 20 28" aria-hidden="true"><path d="M10 0V24M4 18L10 24L16 18" /></svg></div>
-    <div class="node" data-diagram-role="integration">cleanup closes client A</div>
+    <div class="use"><span data-diagram-role="event">{t("lesson.integration-resources-event-two")}</span><span>{t("lesson.integration-resources-reuse-client")}</span></div>
+    <div class="arrow">{t("lesson.integration-resources-idle")}<svg viewBox="0 0 20 28" aria-hidden="true"><path d="M10 0V24M4 18L10 24L16 18" /></svg></div>
+    <div class="node" data-diagram-role="integration">{t("lesson.integration-resources-cleanup")}</div>
   </section>
-  <div class="arrow">Later event, new worker<svg viewBox="0 0 20 28" aria-hidden="true"><path d="M10 0V24M4 18L10 24L16 18" /></svg></div>
-  <div class="node" data-diagram-role="integration">initialize opens client B</div>
+  <div class="arrow">{t("lesson.integration-resources-later-event")}<svg viewBox="0 0 20 28" aria-hidden="true"><path d="M10 0V24M4 18L10 24L16 18" /></svg></div>
+  <div class="node" data-diagram-role="integration">{t("lesson.integration-resources-initialize-b")}</div>
 </div>
 <style>
 .integration-resources{margin:32px 0;font-size:16px;line-height:1.5;}

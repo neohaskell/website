@@ -1,0 +1,113 @@
+---
+title: Crie uma integração reutilizável
+description: Separe o protocolo de um fornecedor de envios dos eventos, comandos e decisões de negócio da aplicação.
+tableOfContents:
+  minHeadingLevel: 2
+  maxHeadingLevel: 2
+---
+
+import ReusableIntegration from '@components/learn/ReusableIntegration.astro';
+
+A transportadora recebe um pedido de reserva e devolve o resultado. Não precisa de saber como a loja de canecas regista uma encomenda, que entidade é responsável por um envio ou quando a decisão da entidade de envio deve recusar uma alteração. Essas escolhas pertencem à aplicação.
+
+Em [Fluxos de trabalho entre entidades](/concepts/event-driven-workflows/), uma encomenda de canecas aceite dá origem a trabalho numa entidade de envio separada. Aqui extraímos a parte que comunica com o fornecedor para um módulo que outra aplicação pode reutilizar. Este é um guia avançado para uma aplicação existente: deve conseguir reconhecer declarações de comandos, eventos e Feature. Os exemplos introduzem localmente os contratos específicos da integração.
+
+<ReusableIntegration />
+
+O módulo reutilizável é responsável pelo protocolo do fornecedor. A aplicação é responsável pelos dois mapeamentos: do seu evento para os dados de entrada do fornecedor e do resultado do fornecedor para um novo comando. Mesmo uma reserva bem-sucedida tem de passar pela decisão do comando que a recebe antes de a aplicação registar um facto sobre o envio.
+
+## Um contrato fora da loja
+
+Coloque o código genérico em `src/Shipping/Booking.hs`, fora de `src/MyShop`. Pode importar módulos NeoHaskell e utilitários do fornecedor, mas não deve importar as entidades, os eventos nem os comandos da loja. Caso contrário, a aplicação seguinte teria de depender da loja de canecas para reservar um envio.
+
+Use o [módulo completo Shipping.Booking](/examples/shipping-booking.hs) como ponto de partida e importe-o na aplicação como `Shipping.Booking qualified as Shipping`. A configuração HTTP não usa autenticação, para poder funcionar com um fornecedor local controlado; configure a autenticação exigida pelo fornecedor em produção.
+
+Os excertos seguintes descrevem uma pequena camada à volta da integração `Integration.Http` fornecida. Mostram os contratos e os pontos de mapeamento, não uma aplicação completa. `Request` e `Booking` são tipos definidos em `Shipping.Booking`:
+
+```haskell
+data Request = Request {
+  reference :: Text,
+  quantity :: Int
+} deriving (Generic)
+
+instance Json.ToJSON Request
+
+data Booking = Booking {
+  status :: Text
+} deriving (Generic)
+
+instance Json.FromJSON Booking
+```
+
+A referência identifica esta operação do fornecedor; a quantidade indica quantos artigos contém. Nenhum dos campos transporta um evento ou tipo de entidade da loja. Num contrato real com o fornecedor, acrescente aqui o destino e os restantes campos obrigatórios, em vez de passar o evento de domínio completo como JSON.
+
+`Generic` permite usar as instâncias genéricas de codificação e descodificação apresentadas aqui. `Json.ToJSON` fornece a codificação do pedido, enquanto `Json.FromJSON` fornece a descodificação da resposta. São responsabilidades diferentes. Uma instância `Schema.ToSchema` fornece uma descrição estrutural; por si só, não descodifica uma resposta, não valida todas as regras do fornecedor nem gera respostas de teste realistas.
+
+## A camada HTTP e o respetivo resultado
+
+A função recebe o URL do fornecedor, um pedido e uma função fornecida por quem a chama:
+
+```haskell
+request ::
+  Text ->
+  Request ->
+  (Result Text Booking -> command) ->
+  Http.Request command
+```
+
+O callback aceita uma mensagem de erro ou uma reserva descodificada e devolve um comando. A variável de tipo `command` permite que cada aplicação escolha esse comando sem importar o módulo de envios. Mantenha o URL na configuração; um endereço de loopback é adequado para um fornecedor local controlado, enquanto um fornecedor em produção exige o seu endpoint e a autenticação correspondentes.
+
+Dentro da função, construa `Http.Request` com `method = Http.POST`, `body = Http.json input`, o URL configurado e definições explícitas de autenticação, tempo limite e repetição. O callback da resposta tem de verificar o estado HTTP antes de descodificar o corpo. O nome `onSuccess` fornecido significa que chegou uma resposta; uma resposta 503 continua a ter de resultar numa reserva falhada. Descodifique uma resposta aceite com `Json.decode @Booking response.body`. Um corpo de resposta inválido transforma-se num resultado de erro, não numa reserva inventada.
+
+Os dois campos de callback convergem depois na função da aplicação:
+
+```haskell
+onSuccess = \response -> toCommand (decodeBooking response),
+onError = Just (\_ ->
+  toCommand (Err "Shipping provider could not be reached"))
+```
+
+Aqui, `decodeBooking` é a nossa função de descodificação que verifica o estado, não uma função do framework. Mantenha os diagnósticos do fornecedor separados das mensagens destinadas a quem faz o pedido e evite devolver credenciais ou corpos de resposta sensíveis sem tratamento. Escolha deliberadamente o comportamento de repetição e envie uma chave de idempotência estável do fornecedor quando o protocolo o permitir. Repetir uma chamada HTTP e repetir o encaminhamento da aplicação são operações diferentes; nenhuma garante uma entrega exatamente uma vez.
+
+## Os mapeamentos ficam em MyShop
+
+O processador de eventos da loja constrói `Shipping.Request` a partir da encomenda aceite e fornece o mapeamento do resultado. Neste excerto adaptado, `event` é o payload da nova encomenda, `request` é a entrada do fornecedor e o callback preserva a identidade do envio escolhida pela aplicação:
+
+```haskell
+Shipping.request providerUrl request \result ->
+  case result of
+    Ok booking -> RecordShipmentBooking {
+      entityId = event.shipmentId,
+      status = booking.status
+    }
+    Err _ -> RecordShipmentBooking {
+      entityId = event.shipmentId,
+      status = "provider-failed"
+    }
+```
+
+Estes campos ilustrativos do comando pertencem à loja. O resultado do fornecedor não decide o que a loja pode registar. Por exemplo, a decisão da entidade de envio pode recusar um estado desconhecido mesmo depois de o fornecedor concluir uma reserva. Essa recusa não anula a ação do fornecedor nem o evento da encomenda que lhe deu origem.
+
+Envolva o pedido configurado com `Integration.outbound` e reúna a ação com `Integration.batch` no processador de saída da aplicação. Registe esse processador na sua Feature. O comando de receção tem de permitir `InternalTransport` e o respetivo processador tem de estar registado para que o encaminhamento da integração o alcance. Se o recetor existente em produção não permitir esse transporte, acrescente uma nova identidade de comando e uma nova fatia, em vez de alterar a declaração congelada. Preserve também as definições de eventos e consultas já implantadas, como explicado em [Reserve uma caneca](/tutorial/change-safely/).
+
+## Tarefas dentro de um adaptador
+
+Quem cria uma integração reutilizável também precisa de compreender o trabalho por trás dos registos de configuração. `Task error value` descreve um trabalho que pode falhar com `error` ou terminar com `value`. Construir uma Task não executa a chamada HTTP. Num bloco `do`, `<-` obtém um valor bem-sucedido para o passo seguinte; uma falha impede a execução dos passos seguintes, a menos que o código a trate. O ambiente de execução executa as ações de integração. [Tarefas e efeitos](/reference/core/tasks/) explica este contrato separadamente da aceitação ou recusa de uma decisão de negócio.
+
+A camada HTTP fornecida usa `Integration.ToAction` para transformar a sua configuração numa ação. Um adaptador de pedidos tipado de nível mais baixo tem um contrato diferente em [`Service.Integration.Adapter`](https://github.com/neohaskell/NeoHaskell/blob/414602b9510a92dfac647bc68d6afadfb594502c/core/service/Service/Integration/Adapter.hs): uma instância de `Integration request` associa o pedido a `Response request` e implementa `runReal` e `runFake`. Cada operação devolve uma Task com o tipo `IntegrationError` do adaptador. Este tipo de erro do adaptador é diferente do tipo de erro exposto pela fachada `Integration`.
+
+Ao testar um adaptador destes, implemente explicitamente uma simulação determinística. Por exemplo, um pedido escolhido pode devolver uma resposta de reserva fixa e outro pode devolver uma falha tipada. Um esquema não implementa `runFake`. Testar diretamente a simulação de um adaptador também não prova que uma aplicação em execução encaminhe todos os fornecedores configurados para essa simulação.
+
+## O trabalho de entrada segue a mesma fronteira de responsabilidade
+
+Para uma integração de entrada, o código reutilizável é responsável por ler e descodificar a entrada externa. A aplicação mapeia a notificação descodificada para o seu comando. Mantenha esse mapeamento fora do leitor do protocolo, tal como a camada de saída mantém fora do tratamento HTTP o mapeamento do resultado para a loja.
+
+A API de entrada tipada representa as saídas permitidas como uma lista de pares de comando e entidade. Por exemplo, um processo da aplicação que devolve `Integration.TypedInbound '[ '(RecordShipmentBooking, ShipmentEntity)]` declara o comando que pode emitir e a entidade de destino. `Integration.TypedInboundConfig` fornece ao processo uma função de emissão limitada a esse conjunto. O comando tem de ter instâncias para o nome e para a codificação JSON, e a entidade tem de corresponder ao par declarado. Estas verificações limitam as saídas; não provam que o comando recetor aceitará cada notificação.
+
+`Integration.asInbound` converte um processo tipado no valor de registo `Inbound` legado. `Timer.every` já devolve um `Inbound` legado; não é um construtor de processos tipados. Quem desenvolve a integração com o fornecedor deve expor diretamente o processo tipado quando usa a declaração tipada apoiada pelo modelo, em vez de prometer que um processo legado pode ser convertido de volta. Mantenha a aquisição, o cancelamento e a libertação de recursos sob responsabilidade explícita, como explicado em [Faça a gestão dos recursos de integração](../resources/).
+
+## Testes reutilizáveis noutra aplicação
+
+Teste o módulo reutilizável sem importar `MyShop`: a codificação do pedido, a descodificação de uma resposta aceite, um estado de insucesso, uma resposta malformada e uma falha de transporte. Depois, teste separadamente os mapeamentos da aplicação, incluindo um resultado que a decisão recetora recuse. Um serviço HTTP local controlado permite que o cliente real fornecido percorra estes casos sem credenciais nem efeitos externos. Verifique também o estado resultante do envio, além da aceitação da encomenda; são resultados separados.
+
+Mantenha o código reutilizável e os respetivos testes juntos ao contribuí-los para o [monorepo NeoHaskell](https://github.com/neohaskell/NeoHaskell). Inclua o contrato do protocolo, os requisitos de autenticação e os casos de falha testados para que outra aplicação o possa configurar sem adotar o domínio da loja. Neo packages é uma futura direção de distribuição; hoje, a via de contribuição é o monorepo.

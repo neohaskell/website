@@ -1,0 +1,72 @@
+---
+title: Integrationsressourcen verwalten
+description: Ausgehenden Clients und eingehenden Workern eine ausdrückliche Lebensdauer geben und die Freigabe einer Ressource vom Abschluss fachlicher Arbeit unterscheiden.
+tableOfContents:
+  minHeadingLevel: 2
+  maxHeadingLevel: 2
+---
+
+import IntegrationResources from '@components/learn/IntegrationResources.astro';
+
+Zum Buchen einer Sendung ist vielleicht nur ein HTTP-Aufruf nötig. Auf Aktualisierungen zu Sendungen zu warten, kann eine Verbindung erfordern, die stundenlang offen bleibt. Beides sind Integrationen. Die Verbindung braucht jedoch eine zuständige Stelle, die sie erwirbt, nutzt und bei Arbeitsende freigibt.
+
+[Eine wiederverwendbare Integration erstellen](../create-reusable/) hat das Protokoll des Versanddienstleisters vom Tassenladen getrennt. Dieser fortgeschrittene Leitfaden ergänzt diese Grenze um die Zuständigkeit für Ressourcen. Das wiederverwendbare Modul bleibt außerhalb von `src/MyShop`; die Anwendung ordnet weiterhin Bestellereignisse den Eingaben des Anbieters und dessen Ergebnissen den Versandkommandos zu.
+
+## Ein Client gehört zur Lebensdauer eines Workers
+
+Ein zustandsloser ausgehender Handler erstellt seine Arbeit für jedes Ereignis neu und behält zwischen Aufrufen keinen Client. Verwende diesen Weg, wenn die mitgelieferte Integration ihre benötigten Ressourcen bereits selbst verwaltet. Lebenszyklus-Hooks sind sinnvoll, wenn deine eigene Integration einen aufwendig zu erstellenden Client, eine Verbindung oder einen Interpreter benötigt, den mehrere Ereignisse wiederverwenden können.
+
+[`Integration.Lifecycle.OutboundConfig`](https://github.com/neohaskell/NeoHaskell/blob/414602b9510a92dfac647bc68d6afadfb594502c/core/service/Integration/Lifecycle.hs) beschreibt diesen zweiten Weg. Der Dispatcher erstellt für einen Entitätsstream einen Worker und übergibt dessen initialisierten Zustand an jeden Ereignisverarbeiter. Ereignisse dieses Streams werden nacheinander verarbeitet. Für verschiedene Streams kann es verschiedene Worker geben. Eine hier erstellte Ressource ist daher kein Singleton für die gesamte Anwendung.
+
+<IntegrationResources />
+
+Die in der Grafik mit einer Klammer dargestellte Lebensdauer endet, wenn ein untätiger Worker entfernt und bereinigt wird. Ein späteres Ereignis benötigt eine neue Initialisierung. Der aufgezeichnete Verlauf der Entität bleibt über die Lebensdauer beider Clients hinweg erhalten. Ein Client ist eine Laufzeitressource und nicht der maßgebliche Zustand der Sendung.
+
+## Drei Hooks, eine zuständige Stelle für Ressourcen
+
+Die Konfiguration hat drei Felder. In diesen Signaturen ist `state` der Ressourcenwert, den die Initialisierung zurückgibt, zum Beispiel ein Versandclient:
+
+```haskell
+initialize :: StreamId -> Task Text state
+processEvent ::
+  state ->
+  Event Json.Value ->
+  Task Text (Array Integration.CommandPayload)
+cleanup :: state -> Task Text Unit
+```
+
+`Task error value` beschreibt Arbeit, die mit einem Fehler enden oder einen Wert liefern kann. Hier sind Fehler vom Typ `Text`; die Initialisierung gibt `state`, die Ereignisverarbeitung Kommandonutzdaten und die Bereinigung `Unit` zurück, also keinen brauchbaren Ergebniswert. Das Erzeugen des Tasks führt ihn nicht aus. [Tasks und Effekte](/reference/core/tasks/) erklärt die Ausführung getrennt von der Annahme einer fachlichen Entscheidung.
+
+Die Initialisierung erhält die Identität des Streams. Verwende sie, wenn der Anbieter eine Ressource benötigt, die auf diese Entität beschränkt ist. Sobald die Initialisierung erfolgreich war, behält der Dispatcher die zurückgegebene Ressource und übergibt sie an `processEvent` und `cleanup`. Der Ressourcenstatus ist gewöhnlicher Laufzeitzustand. Die Hooks machen ihn über Prozessneustarts hinweg nicht dauerhaft.
+
+Das an `processEvent` übergebene Ereignis ist ein unverarbeitetes `Event Json.Value`. Dekodiere die Ereignisse, die deine Integration versteht, und ordne sie der Protokolleingabe zu. Gib Kommandonutzdaten zur Weiterleitung durch die Anwendung zurück und kodiere ein Kommando mit `Integration.makeCommandPayload`. Die Zuordnung der Anwendung bleibt außerhalb des allgemeinen Clientmoduls. Dieser Lebenszyklusdatensatz auf niedrigerer Ebene ist ein eigener Weg, getrennt vom typisierten ausgehenden Handler des vorigen Leitfadens. Er liefert nicht automatisch einen typisierten Ereignisinhalt oder rekonstruierten Entitätszustand.
+
+Die Bereinigung gibt die bei der Initialisierung erworbenen Ressourcen frei. Schließe den Client und beende alle untergeordneten Arbeiten, für die er zuständig ist. Halte die Bereinigung kurz und sicher wiederholbar. Öffnet die Initialisierung eine Verbindung und schlägt fehl, bevor sie diese zurückgibt, muss sie die Verbindung selbst freigeben: Dem Dispatcher liegt kein erfolgreich zurückgegebener Zustand zur Bereinigung vor. Dieselbe Sorgfalt ist nötig, wenn mehrere Ressourcen nacheinander erworben werden.
+
+## Entfernen im Leerlauf und Herunterfahren
+
+Der Dispatcher prüft regelmäßig, ob Worker untätig sind. Wird ein Worker entfernt, endet seine Ressourcenlebensdauer. Ein späteres Ereignis erstellt einen neuen Worker und ruft die Initialisierung erneut auf. Die Initialisierung muss daher wiederholte Lebenszyklen für dieselbe Entität verkraften. Sie soll den Client öffnen und nicht den fachlichen Vorgang wiederholen, eine Sendung zu buchen.
+
+Registriere diesen Weg mit `Application.withOutboundLifecycle @() @MugOrderEntity (\_ -> config)`, wobei `config` dein Wert vom Typ `Lifecycle.OutboundConfig` ist. Das erste Typargument wählt eine Einheitskonfiguration; die Fabrik ignoriert diesen Einheitswert. Wenn Einstellungen beim Start bereitgestellt werden, verwende stattdessen deinen Anwendungskonfigurationstyp und erstelle daraus die Clientkonfiguration. Ergänze den gezielten Import und die Registrierung in der Zusammensetzung der Anwendung, statt ihre gesamte Einrichtung zu ersetzen. Bewahre bereitgestellte Kommando-, Ereignis- und Abfragedefinitionen. Der Hook kann ein neues empfangendes Kommando zurückgeben, wenn der bestehende bereitgestellte Empfänger `InternalTransport` nicht erlaubt, wie unter [Ein Feature sicher ergänzen](/tutorial/change-safely/) erklärt.
+
+Beim regulären Beenden des Workers wird cleanup aufgerufen. Das Herunterfahren des Dispatchers leitet das Beenden ein; allein seine Rückgabe beweist nicht, dass alle Ressourcen freigegeben wurden. Eine erzwungene Unterbrechung und die Beendigung des Prozesses sind ebenfalls kein ordnungsgemäß abgeschlossenes Herunterfahren. Verlasse dich nicht auf die Bereinigung als einzigen Nachweis dafür, dass eine Sendung aussteht oder abgeschlossen ist.
+
+Ein Fehler bei der Ereignisverarbeitung kann vom Dispatcher erneut versucht werden. Daher braucht ein Anbietervorgang eine ausdrückliche Regel zum Umgang mit Duplikaten. Ein Fehler bei der Bereinigung kann weder eine angenommene Tassenbestellung zurücknehmen noch eine Anbieterbuchung rückgängig machen. Bewahre die dauerhafte Vorgangsidentität und den ausstehenden Status im Anwendungszustand auf, verwende einen stabilen Idempotenzschlüssel des Anbieters, sofern unterstützt, und kläre einen ungewissen Anbieterstatus, bevor ein Wiederholungsversuch als neue Buchung behandelt wird.
+
+## Ein eingehender Worker ist für den Erwerb seiner Ressourcen zuständig
+
+Bei einer eingehenden Integration ist die Richtung umgekehrt: Sie wartet auf Eingaben des Anbieters und gibt Kommandos der Anwendung aus. Ihre Ressourcenlebensdauer gehört in die Funktion `run`. Einen passenden eingehenden Datensatz mit den Feldern `initialize`, `processEvent` und `cleanup` gibt es nicht.
+
+Sowohl `Integration.InboundConfig` als auch `Integration.TypedInboundConfig` übergeben `run` eine Ausgabefunktion. Die typisierte Variante beschränkt die Kommandos und Zielentitäten, die der Worker ausgeben darf. Keine der Varianten stellt automatisch eine verwaltete Anbieterverbindung bereit. Ein Worker sollte seine Eingabeverbindung erwerben, seine Leseschleife ausführen und die Verbindung freigeben, sobald die Schleife endet oder fehlschlägt.
+
+Verwende `Task.finally release work` um Arbeit herum, die eine erworbene Ressource nutzt. Der Task für die Bereinigung ist das erste Argument. So wird die Leseschleife auch bei Abbruch aufgeräumt. Der Erwerb selbst muss ebenfalls mit einem teilweisen Fehlschlag und der Übergabe an die geschützte Arbeit umgehen. Bei produktiven Ressourcen ist ein abbrechungssicheres Erwerbs- und Freigabemuster nötig, damit ein Abbruch nicht zwischen dem Erwerb eines Handles und dem Einrichten seiner Bereinigung eintritt.
+
+Gibt ein eingehender Worker einen Integrationsfehler zurück, startet die Anwendung ihn mit wachsendem Warteabstand erneut. Jeder Versuch muss die Ressourcen freigeben, die er erworben hat, bevor ein neuer Versuch Ersatzressourcen öffnet. Ein regulär abgeschlossener Worker wird dagegen nicht erneut gestartet. Beim Herunterfahren der Anwendung bricht die Laufzeit eingehende Tasks ab und wartet mit `AsyncTask.waitCatch`. Dieses Warten endet erst, wenn der Worker einschließlich seiner Bereinigung fertig ist. Blockiert die Bereinigung endlos, kann auch das Warten endlos blockieren.
+
+## Ressourcenfreigabe und Abschluss des Versands
+
+Ein Listener, der gesund auf die nächste Benachrichtigung wartet, ist mit seiner Arbeit noch nicht fertig. Ein Listener, der `RecordShipmentBooking` ausgegeben hat, hat ein Kommando eingereicht. Eine Sendung, deren empfangende Entscheidung die Buchung angenommen und aufgezeichnet hat, hat ein fachliches Ergebnis. Diese Beobachtungen beantworten unterschiedliche Fragen.
+
+Lass deinen Agenten diese Grenzen unabhängig voneinander mit kontrollierten Ressourcen testen. Prüfe bei ausgehender Arbeit die Initialisierung, Wiederverwendung, Bereinigung nach Leerlauf und erneute Initialisierung für einen Stream sowie die Trennung zwischen Streams. Beziehe Fehler bei der Verarbeitung, einen teilweise fehlgeschlagenen Erwerb und das Herunterfahren mit ein. Zähle bei eingehender Arbeit Erwerbe und Freigaben bei regulärer Rückgabe, einem Fehler, einem Neustart und einem Abbruch. Warte anschließend auf das Ende und prüfe, dass keine weiteren Benachrichtigungen eintreffen. Untersuche den resultierenden Versandstatus getrennt von den Ressourcenzählern.
+
+Ein geschlossener Socket beweist die Freigabe. Er beweist nicht, dass die letzte Benachrichtigung angenommen wurde, eine Anbieteraktion rückgängig gemacht wurde oder ausstehende Arbeit nach einem Neustart fortgesetzt wird. Diese Ergebnisse benötigen eigene Kommandos der Anwendung, gespeicherte Fakten und eine Wiederherstellungsstrategie.

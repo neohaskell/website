@@ -1,0 +1,127 @@
+---
+title: Contrats d’intégration
+description: Examiner les actions sortantes, les adaptateurs enregistrés et les travailleurs entrants typés comme des contrats distincts, avec des responsabilités et des limites d’achèvement explicites.
+---
+
+import IntegrationContract from '@components/learn/IntegrationContract.astro';
+
+L’acceptation d’une commande de tasse peut déclencher une demande d’expédition. Le fournisseur peut réserver l’expédition, mais la boutique a encore besoin d’une commande destinataire pour enregistrer ce résultat. Une intégration relie ces étapes sans déplacer l’appel d’expédition dans la décision de la commande.
+
+Cette référence s’appuie sur [Modèles d’événements et fonctionnalités](../) et [Tâches et effets](../../core/tasks/). Pour voir un exemple complet d’adaptateur pour un fournisseur, consultez [Créer une intégration réutilisable](/guides/integrations/create-reusable/). Ces contrats vous aident à examiner le travail configuré par un agent, à déterminer qui est responsable de ses correspondances et à comprendre ce que prouve réellement l’achèvement d’un travailleur.
+
+## D’un événement enregistré à une autre décision <a id="outbound" />
+
+L’application associe son événement de commande enregistré à une demande destinée au fournisseur. Un module d’expédition réutilisable prend en charge le protocole et le décodage ; il se trouve en dehors de `src/MyShop` et n’importe aucune commande ni entité de la boutique. L’application fournit la correspondance entre le résultat de réservation et sa commande destinataire d’expédition.
+
+<IntegrationContract />
+
+Une réponse renvoyée par le fournisseur ne signifie pas automatiquement que la réservation a réussi. Une réservation réussie ne signifie pas automatiquement que la commande d’expédition a été acceptée. Le destinataire applique sa propre décision, puis la requête d’expédition se met à jour séparément. Refuser cette commande n’annule ni la commande initiale ni l’action du fournisseur.
+
+## Actions configurées avec ToAction <a id="actions" />
+
+La façade `Integration` expose le chemin de conversion d’une configuration en action utilisé par le module `Integration.Http` fourni :
+
+```haskell
+class ToAction config where
+  toAction :: config -> Action
+
+outbound :: ToAction config => config -> Action
+batch :: Array Action -> Outbound
+```
+
+`outbound` convertit une valeur de configuration. `batch` rassemble ces actions dans la valeur `Outbound` renvoyée par un gestionnaire d’application. `Integration.none` ne renvoie aucune action pour un événement. Ces fonctions décrivent le travail ; le répartiteur l’exécute après que l’événement a atteint le gestionnaire.
+
+L’auteur d’une intégration peut construire une action directement à cette frontière :
+
+```haskell
+action ::
+  (ActionContext -> Task IntegrationError (Maybe CommandPayload)) ->
+  Action
+```
+
+`ActionContext` fournit les services du runtime, notamment la distribution sortante enregistrée. Une action peut ne renvoyer aucune commande destinataire ou renvoyer une charge utile de commande encodée. `Integration.emitCommand command` construit une tâche réussie qui renvoie cette charge utile ; `Integration.noCommand` n’en renvoie aucune. Aucun de ces assistants ne prouve que la décision destinataire a accepté la commande.
+
+`Integration.makeCommandPayload` est l’assistant d’encodage pur. Il exige `Json.ToJSON command` et un `NameOf command` connu. La distribution nécessite aussi un destinataire enregistré qui autorise `InternalTransport`. Lorsqu’une commande existante déjà déployée ne dispose pas de cette permission, introduisez une nouvelle identité de commande au lieu de modifier sa déclaration figée. [Ajouter une fonctionnalité sans risque](/tutorial/change-safely/) explique cette transition.
+
+Le rappel `onSuccess` de la configuration HTTP signifie qu’une réponse est arrivée. L’application ou l’enveloppe doit vérifier le statut et décoder le corps avant de construire une commande de réussite. Distinguez les nouvelles tentatives HTTP, celles du répartiteur et le refus de la commande destinataire lorsque vous examinez la correspondance du résultat.
+
+## Adaptateurs de requête enregistrés <a id="adapters" />
+
+[`Service.Integration.Adapter`](https://github.com/neohaskell/NeoHaskell/blob/414602b9510a92dfac647bc68d6afadfb594502c/core/service/Service/Integration/Adapter.hs) définit une autre solution. Importez-le avec un alias qualifié afin que sa classe `Integration` soit distincte de celle du module façade :
+
+```haskell
+import Service.Integration.Adapter qualified as Adapter
+```
+
+Une instance `Adapter.Integration request` choisit `Adapter.Response request` et implémente les méthodes suivantes :
+
+```haskell
+runReal :: request -> Task IntegrationError (Response request)
+runFake :: request -> Task IntegrationError (Response request)
+```
+
+Ici, `IntegrationError` appartient à `Service.Integration.IntegrationError`, pas à la façade. La classe de l’adaptateur n’impose aucune superclasse liée aux codecs JSON ou aux schémas. Chaque implémentation prend en charge l’encodage, le décodage et la validation dont son protocole a besoin. [JSON et schémas](../../core/json/) distingue ces responsabilités des métadonnées structurelles et des jeux de données de test écrits à la main.
+
+Enregistrez le type de requête dans la composition de l’application :
+
+```haskell
+Application.new
+  |> Application.withIntegration @ShippingRequest
+```
+
+`ShippingRequest` représente le type de requête de votre adaptateur. L’enregistrement exige l’instance de l’adaptateur, les informations de type à l’exécution pour la requête et sa réponse, ainsi que `TypeName.Inspectable request`. Il crée une entrée dans le registre de distribution au démarrage de l’application. Il n’enregistre pas de gestionnaire d’événement, n’associe pas une commande à cette requête et ne prévoit aucune commande destinataire.
+
+`Service.Integration.ShimEmit.emit` reçoit ce registre puis la requête et renvoie `Task IntegrationError (Response request)`. Si l’enregistrement est absent, l’appel renvoie `PermanentFailure` ; il n’appelle pas silencieusement le vrai fournisseur. Le contexte de l’action rend le registre de l’application accessible à une implémentation d’action.
+
+### Le choix appartient à la voie enregistrée <a id="selection" />
+
+Le répartiteur d’adaptateurs peut associer `runReal` ou `runFake` à partir d’une `Selection`. Le démarrage de l’application se charge d’analyser le choix d’intégration et de construire ces fonctions. Cela ne fait pas utiliser le registre à toutes les implémentations de `ToAction`. En particulier, la configuration HTTP fournie a sa propre implémentation d’action ; enregistrer un adaptateur ne remplace pas les appels de ce client.
+
+Implémentez explicitement un adaptateur simulé et testez directement les réponses et les échecs choisis. Un schéma n’implémente pas `runFake`, et la réussite d’un test direct de l’adaptateur simulé ne prouve pas qu’une application en cours d’exécution l’a sélectionné. Pour tester le comportement du fournisseur, un service local contrôlé peut exercer le vrai client HTTP sans identifiants externes. [Créer une intégration réutilisable](/guides/integrations/create-reusable/) explique cette limite des tests.
+
+## Commandes entrantes typées <a id="inbound" />
+
+Un travailleur entrant lit des données externes et introduit des commandes. La partie réutilisable prend en charge la lecture et le décodage ; l’application est responsable de la correspondance entre la notification et la commande. Un travailleur qui ne peut soumettre qu’une commande de réservation d’expédition déclare ensemble la commande et son entité cible :
+
+```haskell
+Integration.TypedInbound
+  '[ '(RecordShipmentBooking, ShipmentEntity)]
+```
+
+`RecordShipmentBooking` et `ShipmentEntity` sont des types de l’application. La liste des sorties n’est pas une liste de réponses du fournisseur. `Integration.TypedInboundConfig outputs` définit une fonction `run` qui reçoit une fonction d’émission polymorphe. Pour chaque commande émise, cette fonction exige `AllowedOutput command outputs`, `Json.ToJSON command` et `KnownSymbol (NameOf command)`. La contrainte de sortie autorisée vérifie que l’entité cible de la commande correspond à la paire déclarée.
+
+`Integration.typedInbound` regroupe la configuration et exige `KnownInboundOutputs outputs`. Le travailleur renvoie `Task IntegrationError Unit`. La fonction de rappel d’émission renvoie également une tâche de type `Unit` ; elle ne renvoie ni l’historique des événements du destinataire, ni une ligne de requête, ni une réponse métier typée.
+
+`Integration.asInbound :: TypedInbound outputs -> Inbound` adapte un travailleur typé à l’enregistrement historique de l’application. Le `Timer.every` fourni renvoie déjà un `Inbound` historique. Cette conversion n’établit pas de conversion inverse de cette minuterie vers un travailleur typé adossé au modèle. Lors de l’examen de la configuration générée, distinguez les déclarations de travailleurs typés des valeurs historiques.
+
+## Formes sans état et avec gestion des ressources <a id="lifecycle" />
+
+Un gestionnaire sortant sans état renvoie des actions pour un événement sans conserver entre les événements un état client géré par le cycle de vie. Pour une connexion coûteuse et réutilisable, `Integration.Lifecycle.OutboundConfig state` fournit trois fonctions distinctes pour acquérir, traiter et libérer la ressource :
+
+```haskell
+initialize :: StreamId -> Task Text state
+processEvent ::
+  state -> Event Json.Value ->
+  Task Text (Array Integration.CommandPayload)
+cleanup :: state -> Task Text Unit
+```
+
+Il s’agit des signatures des champs de configuration. Le répartiteur conserve l’état par travailleur de flux d’entité, traite les événements de ce travailleur séquentiellement et nettoie un travailleur inactif. Un événement ultérieur initialise une nouvelle durée de vie. L’événement brut n’est automatiquement ni une charge utile typée ni l’état reconstruit d’une entité.
+
+`Application.withOutboundLifecycle @() @MugOrderEntity (\_ -> config)` enregistre une fabrique de configuration. Cette solution est distincte de la voie du gestionnaire d’événements typé. Les travailleurs entrants gèrent plutôt l’acquisition et la libération dans leur fonction `run` ; ils n’ont pas d’enregistrement correspondant à trois fonctions. [Gérer les ressources d’intégration](/guides/integrations/resources/) explique l’acquisition partielle, le transfert sûr face à l’annulation et le nettoyage.
+
+## Échec, nouvelle tentative et achèvement <a id="errors" />
+
+Les variantes d’erreur de l’adaptateur enregistré sont `TransportFailure Text`, `AuthenticationFailure`, `PermanentFailure Text`, `TransientFailure Text` et `ValidationFailure Text`. Veillez à ce que le texte soit sans danger pour les diagnostics publics. La façade a un type d’erreur différent ; partager des concepts de module ne rend pas leurs constructeurs d’erreur interchangeables.
+
+Une valeur d’erreur ne déclenche pas à elle seule une nouvelle tentative. Les implémentations d’adaptateur et leurs appelants définissent chacun leur politique de nouvelle tentative. Le répartiteur peut réessayer le traitement lorsqu’une exception synchrone se produit ; une erreur renvoyée par une tâche typée suit une autre voie. Une opération du fournisseur nécessite donc un identifiant d’opération stable et une politique explicite de gestion des doublons ; la distribution ne garantit pas à elle seule une exécution exactement une fois dans tous les cas.
+
+Pour les travailleurs entrants, une erreur d’intégration renvoyée entraîne le redémarrage du travailleur par l’application avec un délai croissant entre les tentatives. Un arrêt normal met fin au travailleur. Ce contrat ne garantit pas un redémarrage après n’importe quelle exception du runtime. Libérez les ressources acquises pour une tentative avant que la suivante en acquière de nouvelles.
+
+### Démarrage, arrêt et attente <a id="await" />
+
+Au démarrage, l’application rassemble les enregistrements et lance la distribution sortante. Elle valide les sorties entrantes typées déclarées avant de lancer les travailleurs entrants. À l’arrêt, les tâches entrantes sont annulées, puis rejointes avec `AsyncTask.waitCatch`. Cette attente se poursuit jusqu’à la fin de leur travail et de leur nettoyage ; un nettoyage lent la retarde.
+
+L’arrêt du répartiteur sortant lance l’arrêt des travailleurs. Son retour ne confirme pas que chaque travailleur a libéré ses ressources. Une annulation forcée et l’arrêt du processus peuvent aussi produire un nettoyage différent. Enregistrez le travail métier en attente dans l’état de l’application au lieu de traiter la durée de vie d’un client en mémoire comme le suivi de l’expédition.
+
+`AsyncTask.waitFor`, `waitCatch` et `waitOutcome` observent la fin d’un travailleur avec des informations d’erreur différentes, comme le précise [Tâches et effets](../../core/tasks/#async-task). Une émission entrante réussie signifie que le gestionnaire destinataire a signalé son acceptation. Elle n’attend ni les effets sortants ultérieurs ni la mise à jour de la requête. La fin du travailleur ne prouve à elle seule ni la réussite chez le fournisseur ni l’achèvement métier. Examinez chaque résultat à la frontière qui en est responsable.

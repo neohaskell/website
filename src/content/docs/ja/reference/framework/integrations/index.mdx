@@ -1,0 +1,127 @@
+---
+title: 統合の契約
+description: アウトバウンドアクション、登録済みアダプター、型付きインバウンドワーカーの契約を分け、所有者と完了の境界を明確にします。
+---
+
+import IntegrationContract from '@components/learn/IntegrationContract.astro';
+
+受理されたマグカップの注文をきっかけに、配送を依頼できます。プロバイダーが配送を手配しても、ショップ側では結果を記録する受信コマンドが必要です。統合は、注文の判断に配送呼び出しを移さずに、この2つの手順をつなぎます。
+
+このリファレンスでは、[イベントモデルとフィーチャー](../)と[タスクと副作用](../../core/tasks/)を前提とします。プロバイダー用ラッパーの全体は[再利用できる統合を作る](/guides/integrations/create-reusable/)を参照してください。ここで扱う契約を使うと、エージェントが設定した処理、その対応付けの担当箇所、完了したワーカーから実際に分かることを確認できます。
+
+## 記録済みイベントから次の判断へ <a id="outbound" />
+
+アプリケーションは記録済みの注文イベントをプロバイダーリクエストに対応付けます。再利用可能な配送モジュールがプロトコルとデコードを担い、`src/MyShop`の外に置いて、ショップのコマンドやエンティティをインポートしません。手配結果を配送の受信コマンドに対応付けるのは、アプリケーション側です。
+
+<IntegrationContract />
+
+プロバイダーからレスポンスが返ってきても、手配が成功したとは限りません。手配が成功しても、配送コマンドが受理されたとは限りません。受信側では独自の判断を行い、配送クエリはその後に更新されます。そのコマンドが拒否されても、元の注文やプロバイダーの処理は取り消されません。
+
+## ToActionで設定するアクション <a id="actions" />
+
+`Integration`ファサードでは、用意されている`Integration.Http`モジュールで使う、構成からアクションへの変換方法を公開しています。
+
+```haskell
+class ToAction config where
+  toAction :: config -> Action
+
+outbound :: ToAction config => config -> Action
+batch :: Array Action -> Outbound
+```
+
+`outbound`は1つの構成値を変換し、`batch`はそれらのアクションをアプリケーションハンドラーが返す`Outbound`値にまとめます。`Integration.none`はイベントに対してアクションを返しません。これらの関数は処理内容を表すもので、イベントがハンドラーに届いた後にディスパッチャーが実行します。
+
+統合を実装する側は、この境界を通じてアクションを直接構築できます。
+
+```haskell
+action ::
+  (ActionContext -> Task IntegrationError (Maybe CommandPayload)) ->
+  Action
+```
+
+`ActionContext`は、登録済みのアウトバウンドディスパッチなど、ランタイムサービスを提供します。アクションは受信コマンドを返さないか、エンコード済みのコマンドペイロードを1つ返します。`Integration.emitCommand command`はそのペイロードを返す成功Taskを構築し、`Integration.noCommand`は何も返しません。どちらのヘルパーも、受信側の判断がコマンドを受理した証明にはなりません。
+
+`Integration.makeCommandPayload`は純粋なエンコード用ヘルパーです。`Json.ToJSON command`と、既知の`NameOf command`が必要です。ディスパッチでは、`InternalTransport`を許可する登録済みの受信側も必要です。デプロイ済みの既存コマンドにその権限がない場合、凍結済みの宣言を変更せず、新しいコマンド識別子を導入します。この移行は[フィーチャーを安全に追加する](/tutorial/change-safely/)で説明しています。
+
+HTTP構成の`onSuccess`コールバックは、レスポンスが届いたことを表します。成功コマンドを構築する前に、アプリケーションかラッパーでステータスを確認し、本文をデコードしてください。結果を調べるときは、HTTPの再試行、ディスパッチャーの再試行、受信コマンドの拒否を別々に扱います。
+
+## 登録済みリクエストアダプター <a id="adapters" />
+
+[`Service.Integration.Adapter`](https://github.com/neohaskell/NeoHaskell/blob/414602b9510a92dfac647bc68d6afadfb594502c/core/service/Service/Integration/Adapter.hs)には、もう1つの方法が定義されています。アダプターの`Integration`クラスをファサードモジュールのものと区別するため、修飾名付きでインポートします。
+
+```haskell
+import Service.Integration.Adapter qualified as Adapter
+```
+
+`Adapter.Integration request`インスタンスで`Adapter.Response request`を選び、次のメソッドを実装します。
+
+```haskell
+runReal :: request -> Task IntegrationError (Response request)
+runFake :: request -> Task IntegrationError (Response request)
+```
+
+ここでの`IntegrationError`はファサードの型ではなく、`Service.Integration.IntegrationError`の型です。アダプタークラスにJSONコーデックやスキーマのスーパークラス制約はありません。必要なエンコード、デコード、検証は各実装が担います。[JSONとスキーマ](../../core/json/)では、それらの役割と構造メタデータ、手書きのテストデータの違いを説明しています。
+
+アプリケーションの組み立て時に、リクエスト型を登録します。
+
+```haskell
+Application.new
+  |> Application.withIntegration @ShippingRequest
+```
+
+`ShippingRequest`はアダプターのリクエスト型を表します。登録にはアダプターのインスタンス、リクエストとレスポンスのランタイム型情報、`TypeName.Inspectable request`が必要です。起動時にディスパッチレジストリーの項目を作成します。イベントハンドラーを登録するものでも、注文をリクエストに対応付けるものでも、受信コマンドを用意するものでもありません。
+
+`Service.Integration.ShimEmit.emit`には、レジストリーとリクエストを渡します。戻り値は`Task IntegrationError (Response request)`です。登録がなければ`PermanentFailure`を返し、実プロバイダーを暗黙に呼び出すことはありません。アクションの実装では、アクションコンテキストからアプリケーションのレジストリーを利用できます。
+
+### Selectionは登録された経路で適用される <a id="selection" />
+
+アダプターディスパッチャーは、`Selection`に基づいて`runReal`か`runFake`を紐付けます。起動時にアプリケーションが統合の選択を読み取り、そのクロージャーを作ります。ただし、すべての`ToAction`実装がレジストリーを使うわけではありません。用意されているHTTP構成には独自のアクション実装があり、アダプターを登録してもそのクライアントの呼び出し先は切り替わりません。
+
+フェイクは明示的に実装し、選んだレスポンスと失敗を直接テストします。スキーマは`runFake`を実装しません。また、フェイクを直接テストして成功しても、実行中のアプリケーションで選択されているとは証明できません。プロバイダーの動作を確認するには、制御下にあるローカルサービスを使って、外部の認証情報なしに実HTTPクライアントを動かせます。このテスト境界は[再利用できる統合を作る](/guides/integrations/create-reusable/)で説明しています。
+
+## 型付きインバウンドコマンド <a id="inbound" />
+
+インバウンドワーカーは外部入力を読み取り、コマンドを取り込みます。再利用可能な部分が読み取りとデコードを担い、通知をコマンドに対応付けるのはアプリケーション側です。配送手配コマンドだけを発行できるワーカーは、コマンドと対象エンティティを組にして宣言します。
+
+```haskell
+Integration.TypedInbound
+  '[ '(RecordShipmentBooking, ShipmentEntity)]
+```
+
+`RecordShipmentBooking`と`ShipmentEntity`はアプリケーションの型です。出力リストはプロバイダーのレスポンス一覧ではありません。`Integration.TypedInboundConfig outputs`には、多相な発行コールバックを受け取る`run`関数があります。コマンドを発行するたびに、そのコールバックは`AllowedOutput command outputs`、`Json.ToJSON command`、`KnownSymbol (NameOf command)`を要求します。許可された出力の制約で、コマンドの対象エンティティが宣言した組と一致するか確認します。
+
+`Integration.typedInbound`は構成をパッケージ化し、`KnownInboundOutputs outputs`を要求します。ワーカーは`Task IntegrationError Unit`を返します。発行コールバックも`Unit`を返すTaskです。受信側のイベント履歴、クエリの行、型付きの業務上の回答を返すわけではありません。
+
+`Integration.asInbound :: TypedInbound outputs -> Inbound`は、型付きワーカーを従来のアプリケーション登録形式に適合させます。用意されている`Timer.every`は最初から従来の`Inbound`を返します。この変換があっても、タイマーから型付きのモデルベースのワーカーへ逆変換できることにはなりません。生成済みの設定を確認するときは、型付きのワーカー宣言と従来の値を区別してください。
+
+## ステートレスな形式とリソースを所有する形式 <a id="lifecycle" />
+
+ステートレスなアウトバウンドハンドラーは、イベントごとにアクションを返し、ライフサイクルで管理するクライアント状態をイベント間で保持しません。コストの高い接続を再利用する場合は、`Integration.Lifecycle.OutboundConfig state`で取得、処理、解放のフックを分けます。
+
+```haskell
+initialize :: StreamId -> Task Text state
+processEvent ::
+  state -> Event Json.Value ->
+  Task Text (Array Integration.CommandPayload)
+cleanup :: state -> Task Text Unit
+```
+
+これらは構成フィールドのシグネチャです。ディスパッチャーはエンティティストリームごとのワーカーに状態を保持させ、そのワーカーのイベントを順に処理し、アイドル状態になったワーカーをクリーンアップします。後続のイベントでは新たな稼働期間を初期化します。生のイベントは、型付きペイロードや再構築済みのエンティティ状態として自動で渡されません。
+
+`Application.withOutboundLifecycle @() @MugOrderEntity (\_ -> config)`は構成ファクトリーを登録します。型付きイベントハンドラーの経路とは別のものです。インバウンドワーカーは`run`の中でリソースを取得、解放し、対応する3つのフックを持つレコードはありません。[統合のリソースを管理する](/guides/integrations/resources/)では、取得途中の失敗、キャンセルに安全な引き渡し、クリーンアップを説明しています。
+
+## 失敗、再試行、完了 <a id="errors" />
+
+登録済みアダプターが返すエラー型の選択肢は`TransportFailure Text`、`AuthenticationFailure`、`PermanentFailure Text`、`TransientFailure Text`、`ValidationFailure Text`です。エラーメッセージには、公開しても安全な情報だけを含めてください。ファサードのエラー型は別物です。モジュール間で同じ概念名が使われていても、エラーのコンストラクターを置き換えて使えるわけではありません。
+
+エラー値だけで再試行がスケジュールされるわけではありません。再試行方針はアダプターの実装と呼び出し元が担います。ディスパッチャーは同期処理中の例外を再試行することがありますが、型付きTaskがエラーを返す場合は別の経路です。そのため、プロバイダー処理には安定した処理IDと重複への明示的な対処方針が必要です。ディスパッチしたからといって、あらゆる処理が厳密に1回だけ実行される保証はありません。
+
+インバウンドワーカーが統合エラーを返すと、アプリケーションはバックオフを入れてワーカーを再起動します。正常に完了するとワーカーは終了します。この契約は、あらゆるランタイム例外の後に再起動することまでは保証しません。次の試行で代わりのリソースを取得する前に、各試行が所有するリソースを解放します。
+
+### 起動、シャットダウン、待機 <a id="await" />
+
+アプリケーションの起動時に登録を組み立て、アウトバウンドディスパッチを開始します。宣言された型付きインバウンド出力を検証してから、インバウンドワーカーを起動します。シャットダウン時にはインバウンドタスクをキャンセルし、`AsyncTask.waitCatch`で終了を待ちます。処理とクリーンアップが終わるまで待つため、クリーンアップに時間がかかると待機も長くなります。
+
+アウトバウンドディスパッチャーのシャットダウンは、ワーカーの停止を開始します。処理が返っただけでは、すべてのワーカーの解放が確認されたことにはなりません。強制キャンセルとプロセス終了では、クリーンアップの結果が異なることがあります。メモリー上のクライアントの稼働期間を配送記録とみなさず、保留中の業務処理はアプリケーションの状態に保持します。
+
+`AsyncTask.waitFor`、`waitCatch`、`waitOutcome`は、エラー情報の扱いが異なる形でワーカーの終了を確認します。詳細は[タスクと副作用](../../core/tasks/#async-task)を参照してください。インバウンドでコマンドを発行できたことは、受信ハンドラーが受理を報告したという意味です。その後のアウトバウンド処理やクエリの更新完了を待つものではありません。ワーカーが終了しただけでは、プロバイダーでの成功や業務処理の完了は分かりません。それぞれの結果を、その境界を担う場所で確認してください。

@@ -1,0 +1,113 @@
+---
+title: 创建可复用的集成
+description: 将物流服务提供方的协议与应用的事件、命令和业务决策分离。
+tableOfContents:
+  minHeadingLevel: 2
+  maxHeadingLevel: 2
+---
+
+import ReusableIntegration from '@components/learn/ReusableIntegration.astro';
+
+物流服务提供方会接收配送预订请求并返回预订结果。它无需了解马克杯商店如何记录订单、配送归属哪个实体，或配送决策何时应拒绝某项变更。这些选择属于应用。
+
+在[跨实体工作流](/concepts/event-driven-workflows/)中，已接受的马克杯订单会在另一个配送实体上触发工作。这里会把面向提供方的部分提取到一个可供其他应用复用的模块中。这是一篇面向已有应用的进阶指南：你应当能看懂命令、事件和 `Feature` 声明。示例会在本页介绍集成专用的契约。
+
+<ReusableIntegration />
+
+可复用模块负责提供方协议。应用负责两处映射：将自身事件转换为提供方输入，以及将提供方结果转换为新命令。预订成功后，还要由接收命令的决策接受该命令，应用才能记录配送事实。
+
+## 商店之外的契约
+
+将通用代码放在 `src/Shipping/Booking.hs` 中，也就是 `src/MyShop` 之外。它可以导入 NeoHaskell 模块和提供方工具，但不应导入商店的实体、事件或命令。否则，其他应用就必须依赖马克杯商店才能预订配送。
+
+以[完整的 Shipping.Booking 模块](/examples/shipping-booking.hs)为起点，并在应用中将它导入为 `Shipping.Booking qualified as Shipping`。其中的 HTTP 配置不使用身份验证，因此可以连接到受控的本地提供方服务；部署时请配置你的提供方所要求的身份验证。
+
+以下代码片段展示了围绕提供的 `Integration.Http` 集成构建的小型封装，说明其中的契约和映射位置，并非完整应用。`Request` 和 `Booking` 是我们在 `Shipping.Booking` 中定义的类型：
+
+```haskell
+data Request = Request {
+  reference :: Text,
+  quantity :: Int
+} deriving (Generic)
+
+instance Json.ToJSON Request
+
+data Booking = Booking {
+  status :: Text
+} deriving (Generic)
+
+instance Json.FromJSON Booking
+```
+
+`reference` 标识这次提供方操作，`quantity` 表示其中包含多少件商品。这两个字段都不包含商店事件或实体类型。实际的提供方契约还应在这里加入目的地和其他必需字段，而不是把整个领域事件当作 JSON 传过去。
+
+`Generic` 支持此处使用的通用编解码实例。`Json.ToJSON` 为请求提供编码，`Json.FromJSON` 为响应提供解码，两者各有职责。`Schema.ToSchema` 实例提供结构描述；仅凭它本身无法解码响应、验证提供方的所有规则，也无法生成逼真的测试响应。
+
+## HTTP 封装及其结果
+
+封装接收提供方 URL、请求和由调用方提供的函数：
+
+```haskell
+request ::
+  Text ->
+  Request ->
+  (Result Text Booking -> command) ->
+  Http.Request command
+```
+
+回调接收错误消息或已解码的预订结果，并返回一个命令。类型变量 `command` 让各个应用自行选择该命令，而无需让配送模块导入应用的命令类型。请将 URL 保存在配置中；回环地址适用于受控的本地提供方服务，部署时则需要使用真实端点和身份验证。
+
+在封装内部，使用 `method = Http.POST`、`body = Http.json input`、配置中的 URL，以及明确的身份验证、超时和重试设置来构造 `Http.Request`。响应回调必须先检查 HTTP 状态，再解码正文。提供的回调名 `onSuccess` 表示收到了响应；即使响应状态为 503，也仍应将其转换为失败的预订结果。使用 `Json.decode @Booking response.body` 解码已接受的响应。正文无效时应返回错误结果，而不是捏造预订结果。
+
+两个回调字段最终都会调用应用提供的函数：
+
+```haskell
+onSuccess = \response -> toCommand (decodeBooking response),
+onError = Just (\_ ->
+  toCommand (Err "Shipping provider could not be reached"))
+```
+
+这里的 `decodeBooking` 是我们编写的状态检查解码器，并非框架函数。请将提供方诊断信息与面向调用者的消息分开，不要返回凭据或敏感的原始响应正文。应谨慎选择重试行为；如果提供方协议支持，请发送稳定的提供方幂等键。重试 HTTP 调用和重试应用分发是两种不同的操作，两者都不能保证恰好投递一次。
+
+## 映射留在 MyShop 中
+
+商店的事件处理器根据已接受的订单构造 `Shipping.Request`，并提供结果映射。在这个改写后的片段中，`event` 是新订单的载荷，`request` 是提供方输入，而回调会保留应用选定的配送标识：
+
+```haskell
+Shipping.request providerUrl request \result ->
+  case result of
+    Ok booking -> RecordShipmentBooking {
+      entityId = event.shipmentId,
+      status = booking.status
+    }
+    Err _ -> RecordShipmentBooking {
+      entityId = event.shipmentId,
+      status = "provider-failed"
+    }
+```
+
+这些示例命令字段属于商店。商店能记录什么，由自己的决策决定，而不是由提供方结果决定。例如，即使提供方已经完成预订，接收配送命令的决策仍可以拒绝未知状态。这种拒绝不会撤销提供方的操作，也不会撤销最初的订单事件。
+
+在应用的出站处理器中，使用 `Integration.outbound` 封装配置好的请求，再用 `Integration.batch` 收集其操作。将该处理器注册到相应的 `Feature` 中。要让集成分发到达接收命令，该命令必须允许 `InternalTransport`，并且其处理器必须已注册。如果现有的已部署接收命令不允许此传输接口，请新增命令标识和切片，而不是修改已冻结的声明。也要保留已部署的事件和查询，详情见[安全地添加功能](/tutorial/change-safely/)。
+
+## 适配器中的任务
+
+可复用集成的作者还需要了解配置记录之下的工作。`Task error value` 描述一种可能以 `error` 失败，也可能以 `value` 完成的工作。构造 Task 不会执行其中的 HTTP 调用。在 `do` 代码块中，`<-` 会取得成功值供下一步使用；除非代码处理了失败，否则发生失败后不会执行后续步骤。运行时负责执行集成操作。[任务与副作用](/reference/core/tasks/)会单独介绍这份契约，并将其与业务决策的接受或拒绝区分开来。
+
+提供的 HTTP 封装使用 `Integration.ToAction` 将配置转换成操作。较底层的带类型请求适配器有另一份契约，定义于 [`Service.Integration.Adapter`](https://github.com/neohaskell/NeoHaskell/blob/414602b9510a92dfac647bc68d6afadfb594502c/core/service/Service/Integration/Adapter.hs)：`Integration request` 实例会将请求关联到 `Response request`，并实现 `runReal` 和 `runFake`。每个操作都返回一个 Task，其错误类型为适配器的 `IntegrationError`。该适配器错误类型不同于 `Integration` 门面暴露的错误类型。
+
+测试这类适配器时，请明确实现一个确定性的假适配器。例如，某个选定请求可以返回固定的预订响应，另一个则可以返回有类型的失败。模式不是 `runFake` 的实现。直接测试适配器的假实现，也不能证明运行中的应用会将所有提供方都路由到它。
+
+## 入站工作遵循相同的归属边界
+
+对于入站集成，可复用代码负责读取和解码外部输入，应用负责将解码后的通知映射到命令。请将该映射留在协议读取器之外，就像出站封装将商店的结果映射留在 HTTP 处理之外一样。
+
+带类型的入站 API 使用命令和实体对的列表表示允许的输出。例如，应用工作器返回 `Integration.TypedInbound '[ '(RecordShipmentBooking, ShipmentEntity)]`，即声明它可以发出的命令及其目标实体。`Integration.TypedInboundConfig` 会提供一个受此集合限制的发出函数。命令必须有名称和 JSON 编码实例，其实体也必须与声明的实体对相符。这些检查限制了输出，但不能证明接收命令会接受每条通知。
+
+`Integration.asInbound` 会将带类型的工作器转换为旧式的 `Inbound` 注册值。提供的 `Timer.every` 已经返回旧式 `Inbound`，它不是构造带类型工作器的函数。使用基于模型的带类型声明时，提供方作者应直接提供带类型工作器，而不应承诺可以将旧式工作器反向转换。资源获取、取消和释放也应明确归属，详情见[管理集成资源](../resources/)。
+
+## 其他应用可使用的测试
+
+在不导入 `MyShop` 的情况下测试可复用模块：请求编码、已接受响应的解码、非成功状态、格式错误的响应和传输失败。然后单独测试应用映射，包括接收决策会拒绝的结果。使用受控的本地 HTTP 服务，可以让提供的真实客户端在没有凭据或外部副作用的情况下测试这些情况。除了订单是否已接受，也要检查最终配送状态；它们是不同的结果。
+
+若要将代码贡献到 [NeoHaskell 单体仓库](https://github.com/neohaskell/NeoHaskell)，请将可复用代码及其测试放在一起。还应包含协议契约、身份验证要求和已测试的失败情况，让其他应用无需采用商店的领域模型也能完成配置。Neo 软件包是未来的分发方向；目前的贡献方式是提交到单体仓库。

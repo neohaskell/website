@@ -1,0 +1,127 @@
+---
+title: Contratos de integração
+description: Consulte as ações de saída, os adaptadores registados e os processos de entrada tipados como contratos distintos, com fronteiras explícitas de responsabilidade e conclusão.
+---
+
+import IntegrationContract from '@components/learn/IntegrationContract.astro';
+
+Uma encomenda de canecas aceite pode desencadear um pedido de envio. O fornecedor pode reservar o envio, mas a loja continua a precisar de um comando de receção para registar esse resultado. Uma integração liga estes passos sem transferir a chamada de envio para a decisão da encomenda.
+
+Esta referência parte de [Modelos de eventos e funcionalidades](../) e de [Tarefas e efeitos](../../core/tasks/). Para ver uma camada completa em torno do fornecedor, consulte o guia [Crie uma integração reutilizável](/guides/integrations/create-reusable/). Estes contratos ajudam a inspecionar que trabalho o agente configurou, quem é responsável pelos mapeamentos e o que um worker concluído realmente comprova.
+
+## De um evento registado a outra decisão <a id="outbound" />
+
+A aplicação mapeia o evento de encomenda registado para um pedido ao fornecedor. Um módulo reutilizável de envios é responsável pelo protocolo e pela descodificação; fica fora de `src/MyShop` e não importa comandos nem entidades da loja. A aplicação fornece o mapeamento do resultado da reserva para o comando de envio recetor.
+
+<IntegrationContract />
+
+Uma resposta do fornecedor não significa automaticamente que a reserva foi bem-sucedida. Uma reserva bem-sucedida também não significa automaticamente que o comando de envio foi aceite. A aplicação avalia o comando através da decisão recetora, e a consulta do envio é atualizada separadamente. Recusar esse comando não anula a encomenda original nem a ação do fornecedor.
+
+## Ações configuradas com ToAction <a id="actions" />
+
+A fachada `Integration` expõe o percurso de configuração para ação utilizado pelo módulo `Integration.Http` fornecido:
+
+```haskell
+class ToAction config where
+  toAction :: config -> Action
+
+outbound :: ToAction config => config -> Action
+batch :: Array Action -> Outbound
+```
+
+`outbound` converte um valor de configuração. `batch` reúne essas ações no valor `Outbound` devolvido pelo processador da aplicação. `Integration.none` não devolve ações para um evento. Estas funções descrevem trabalho; o distribuidor executa-o depois de o evento chegar ao processador.
+
+Quem cria uma integração pode construir uma ação diretamente nesta fronteira:
+
+```haskell
+action ::
+  (ActionContext -> Task IntegrationError (Maybe CommandPayload)) ->
+  Action
+```
+
+`ActionContext` fornece serviços do ambiente de execução, incluindo o encaminhamento de saída registado. Uma ação pode não devolver um comando de receção ou devolver um único payload de comando codificado. `Integration.emitCommand command` constrói uma Task bem-sucedida que devolve esse payload; `Integration.noCommand` não devolve um comando. Nenhum dos auxiliares prova que a decisão recetora aceitou o comando.
+
+`Integration.makeCommandPayload` é o auxiliar puro de codificação. Exige `Json.ToJSON command` e um `NameOf command` conhecido. O encaminhamento também exige um recetor registado que permita `InternalTransport`. Quando um comando existente em produção não tem essa permissão, introduza uma nova identidade de comando, em vez de alterar a declaração congelada. [Reserve uma caneca](/tutorial/change-safely/) explica essa transição.
+
+O callback `onSuccess` da configuração HTTP significa que chegou uma resposta. A aplicação ou a camada de integração tem de verificar o estado e descodificar o corpo antes de construir um comando de sucesso. Ao inspecionar o mapeamento do resultado, mantenha separadas as repetições HTTP, as repetições do distribuidor e a recusa do comando de receção.
+
+## Adaptadores de pedidos registados <a id="adapters" />
+
+[`Service.Integration.Adapter`](https://github.com/neohaskell/NeoHaskell/blob/414602b9510a92dfac647bc68d6afadfb594502c/core/service/Service/Integration/Adapter.hs) define outro percurso. Importe-o com um nome qualificado para que a sua classe `Integration` seja distinta do módulo da fachada:
+
+```haskell
+import Service.Integration.Adapter qualified as Adapter
+```
+
+Uma instância `Adapter.Integration request` escolhe `Adapter.Response request` e implementa estes métodos:
+
+```haskell
+runReal :: request -> Task IntegrationError (Response request)
+runFake :: request -> Task IntegrationError (Response request)
+```
+
+Aqui, `IntegrationError` pertence a `Service.Integration.IntegrationError`, não à fachada. A classe do adaptador não exige uma superclasse de codificação JSON nem de esquema. Cada implementação é responsável pela codificação, descodificação e validação de que o seu protocolo precisar. [JSON e esquemas](../../core/json/) distingue essas responsabilidades dos metadados estruturais e dos dados de teste escritos à mão.
+
+Registe o tipo de pedido na composição da aplicação:
+
+```haskell
+Application.new
+  |> Application.withIntegration @ShippingRequest
+```
+
+`ShippingRequest` representa o tipo de pedido do seu adaptador. O registo exige a instância do adaptador, informação de tipo em tempo de execução para o pedido e a resposta, e `TypeName.Inspectable request`. Cria uma entrada no registo de encaminhamento no arranque da aplicação. Não regista um processador de eventos, não mapeia uma encomenda para esse pedido nem prepara um comando de receção.
+
+`Service.Integration.ShimEmit.emit` recebe esse registo seguido do pedido e devolve `Task IntegrationError (Response request)`. Se não houver registo, devolve `PermanentFailure`; não chama silenciosamente o fornecedor real. O contexto da ação disponibiliza à implementação da ação o registo da aplicação.
+
+### A seleção pertence ao percurso registado <a id="selection" />
+
+O distribuidor do adaptador pode escolher `runReal` ou `runFake` de acordo com uma `Selection`. O arranque da aplicação é responsável por interpretar a seleção da integração e construir essas funções. Isto não faz com que todas as implementações de `ToAction` usem o registo. Em particular, a configuração HTTP fornecida tem a sua própria implementação de ação; registar um adaptador não substitui as chamadas desse cliente.
+
+Implemente explicitamente uma simulação e teste diretamente as respostas e falhas escolhidas. Um esquema não implementa `runFake`, e um teste direto bem-sucedido da simulação não prova que uma aplicação em execução a selecionou. Para testar o comportamento do fornecedor, um serviço local controlado pode exercitar o cliente HTTP real sem credenciais externas. [Crie uma integração reutilizável](/guides/integrations/create-reusable/) explica esta fronteira de teste.
+
+## Comandos de entrada tipados <a id="inbound" />
+
+Um worker de entrada lê dados externos e introduz comandos. A parte reutilizável é responsável pela leitura e descodificação; a aplicação é responsável pelo mapeamento da notificação para o comando. Um worker que só possa submeter um comando de reserva de envio declara em conjunto o comando e a entidade de destino:
+
+```haskell
+Integration.TypedInbound
+  '[ '(RecordShipmentBooking, ShipmentEntity)]
+```
+
+`RecordShipmentBooking` e `ShipmentEntity` são tipos da aplicação. A lista de saídas não é uma lista de respostas do fornecedor. `Integration.TypedInboundConfig outputs` tem uma função `run` que recebe uma função de emissão polimórfica. Para cada comando emitido, essa função exige `AllowedOutput command outputs`, `Json.ToJSON command` e `KnownSymbol (NameOf command)`. A restrição de saída permitida verifica se a entidade de destino do comando corresponde ao par declarado.
+
+`Integration.typedInbound` agrupa a configuração e exige `KnownInboundOutputs outputs`. O worker devolve `Task IntegrationError Unit`. A função de emissão também devolve uma Task com `Unit`; não devolve o histórico de eventos do recetor, uma linha de consulta nem uma resposta de negócio tipada.
+
+`Integration.asInbound :: TypedInbound outputs -> Inbound` adapta um worker tipado ao registo legado da aplicação. `Timer.every` já devolve um `Inbound` legado. Esta conversão não estabelece uma conversão inversa desse temporizador para um worker tipado apoiado pelo modelo. Ao rever a configuração gerada, mantenha distintas as declarações de workers tipados e os valores legados.
+
+## Formas sem estado e com gestão de recursos <a id="lifecycle" />
+
+Um processador de saída sem estado devolve ações para cada evento e não conserva estado de cliente entre eventos através de um ciclo de vida gerido. Para reutilizar uma ligação dispendiosa, `Integration.Lifecycle.OutboundConfig state` fornece funções separadas para aquisição, processamento e libertação:
+
+```haskell
+initialize :: StreamId -> Task Text state
+processEvent ::
+  state -> Event Json.Value ->
+  Task Text (Array Integration.CommandPayload)
+cleanup :: state -> Task Text Unit
+```
+
+Estas são assinaturas dos campos de configuração. O distribuidor mantém o estado por worker de fluxo de entidade, processa sequencialmente os eventos desse worker e limpa um worker inativo. Um evento posterior inicializa um novo ciclo de vida. O evento em bruto não é automaticamente um payload tipado nem o estado reconstruído da entidade.
+
+`Application.withOutboundLifecycle @() @MugOrderEntity (\_ -> config)` regista uma função de criação da configuração. É um percurso separado do processador de eventos tipado. Os workers de entrada são responsáveis pela aquisição e libertação dentro de `run`; não têm um registo correspondente com estas três funções. [Faça a gestão dos recursos de integração](/guides/integrations/resources/) explica a aquisição parcial, a transferência segura durante o cancelamento e a limpeza.
+
+## Falhas, repetições e conclusão <a id="errors" />
+
+As alternativas de erro do adaptador registado são `TransportFailure Text`, `AuthenticationFailure`, `PermanentFailure Text`, `TransientFailure Text` e `ValidationFailure Text`. Mantenha o respetivo texto seguro para diagnósticos públicos. A fachada tem outro tipo de erro; conceitos com nomes idênticos em módulos diferentes não tornam os construtores de erro intercambiáveis.
+
+Um valor de erro não agenda, por si só, uma repetição. As implementações dos adaptadores e quem as chama são responsáveis pela política de repetição. O processamento do distribuidor pode repetir exceções síncronas de processamento, enquanto um erro devolvido por uma Task tipada segue outro percurso. Por isso, uma operação no fornecedor precisa de uma identidade estável e de uma política explícita para lidar com duplicados; o encaminhamento não garante, por si só, execução exatamente uma vez.
+
+Nos workers de entrada, um erro de integração devolvido faz a aplicação reiniciar esse worker com uma espera progressiva. Uma conclusão normal termina o worker. Este contrato não promete um reinício após qualquer exceção arbitrária do ambiente de execução. Liberte os recursos de cada tentativa antes de a tentativa seguinte adquirir substitutos.
+
+### Arranque, encerramento e espera <a id="await" />
+
+O arranque da aplicação reúne os registos e inicia o distribuidor de saída. Valida as saídas de entrada tipadas declaradas antes de lançar os workers de entrada. No encerramento, as tarefas de entrada são canceladas e aguardadas até terminarem com `AsyncTask.waitCatch`. A espera prolonga-se até o trabalho e a limpeza terminarem; uma limpeza lenta atrasa-a.
+
+O encerramento do distribuidor de saída inicia a paragem dos workers. O respetivo retorno, por si só, não confirma a libertação dos recursos de todos os workers. O cancelamento forçado e o fim do processo podem ter resultados diferentes para a limpeza. Persista o trabalho de negócio pendente no estado da aplicação, em vez de tratar o ciclo de vida de um cliente em memória como o registo do envio.
+
+`AsyncTask.waitFor`, `waitCatch` e `waitOutcome` observam o término do worker com informações de erro diferentes, como explicado em [Tarefas e efeitos](../../core/tasks/#async-task). Uma emissão de entrada bem-sucedida significa que o processador recetor comunicou a aceitação. Não espera pelos efeitos de saída posteriores nem pela atualização da consulta. O término do worker, por si só, não comprova o sucesso do fornecedor nem a conclusão do trabalho de negócio. Inspecione cada resultado na fronteira responsável por ele.

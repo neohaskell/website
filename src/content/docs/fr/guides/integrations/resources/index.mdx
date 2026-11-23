@@ -1,0 +1,72 @@
+---
+title: Gérer les ressources d’intégration
+description: Définir la durée de vie des clients sortants et des travailleurs entrants, et distinguer la libération d’une ressource de l’achèvement du travail métier.
+tableOfContents:
+  minHeadingLevel: 2
+  maxHeadingLevel: 2
+---
+
+import IntegrationResources from '@components/learn/IntegrationResources.astro';
+
+Réserver une expédition peut ne nécessiter qu’un appel HTTP. Écouter les mises à jour d’expédition peut garder une connexion ouverte pendant des heures. Dans les deux cas, il s’agit d’une intégration, mais quelqu’un doit prendre en charge la connexion, l’ouvrir, l’utiliser et la libérer à la fin du travail.
+
+[Créer une intégration réutilisable](../create-reusable/) séparait le protocole du fournisseur de livraison de la boutique de tasses. Ce guide avancé ajoute la gestion des ressources à cette frontière. Le module réutilisable reste en dehors de `src/MyShop` ; l’application continue à associer les événements de commande aux données destinées au fournisseur, puis les résultats du fournisseur aux commandes d’expédition.
+
+## Un client appartient à la durée de vie d’un travailleur
+
+Un gestionnaire sortant sans état construit le travail de chaque événement sans conserver de client entre les appels. Utilisez cette solution si l’intégration fournie gère déjà les ressources dont elle a besoin. Ajoutez des fonctions de cycle de vie lorsque votre intégration a besoin d’un client, d’une connexion ou d’un interpréteur coûteux que plusieurs événements peuvent réutiliser.
+
+[`Integration.Lifecycle.OutboundConfig`](https://github.com/neohaskell/NeoHaskell/blob/414602b9510a92dfac647bc68d6afadfb594502c/core/service/Integration/Lifecycle.hs) décrit cette seconde solution. Le répartiteur crée un travailleur pour le flux d’une entité et transmet son état initialisé à chaque processeur d’événement. Les événements de ce flux sont traités séquentiellement. Des flux différents peuvent avoir des travailleurs différents ; une ressource créée ici n’est donc pas un singleton à l’échelle de l’application.
+
+<IntegrationResources />
+
+La durée de vie indiquée par les crochets prend fin lorsque le travailleur inactif est supprimé et nettoyé. Un événement ultérieur nécessite une nouvelle initialisation. L’historique enregistré de l’entité survit aux deux clients ; un client est une ressource du runtime, pas l’état faisant autorité de l’expédition.
+
+## Trois fonctions, un responsable de la ressource
+
+La configuration a trois champs. Dans ces signatures, `state` est la ressource renvoyée par l’initialisation, par exemple un client d’expédition :
+
+```haskell
+initialize :: StreamId -> Task Text state
+processEvent ::
+  state ->
+  Event Json.Value ->
+  Task Text (Array Integration.CommandPayload)
+cleanup :: state -> Task Text Unit
+```
+
+`Task error value` décrit un travail susceptible d’échouer avec une erreur ou de se terminer avec une valeur. Ici, les erreurs sont de type `Text` ; l’initialisation renvoie `state`, le traitement d’événement renvoie des charges utiles de commande et le nettoyage renvoie `Unit`, c’est-à-dire aucune valeur de résultat utile. Construire une Task ne l’exécute pas. [Tâches et effets](/reference/core/tasks/) explique son exécution séparément de l’acceptation d’une décision métier.
+
+L’initialisation reçoit l’identité du flux. Utilisez-la si le fournisseur nécessite une ressource propre à cette entité. Une fois l’initialisation réussie, le répartiteur conserve la ressource renvoyée et la transmet à `processEvent` et `cleanup`. L’état de la ressource est un état ordinaire du runtime ; ces fonctions ne le rendent pas durable après un redémarrage du processus.
+
+L’événement transmis à `processEvent` est un `Event Json.Value` brut. Décodez les événements compris par votre intégration et associez-les aux données de son protocole. Renvoyez des charges utiles de commande pour que l’application les distribue, en utilisant `Integration.makeCommandPayload` pour encoder une commande. Gardez la correspondance propre à l’application en dehors du module client générique. Cet enregistrement de cycle de vie de bas niveau est une solution distincte du gestionnaire sortant typé du guide précédent ; il ne fournit pas automatiquement une charge utile d’événement typée ni l’état reconstruit d’une entité.
+
+Le nettoyage libère ce que l’initialisation a renvoyé. Fermez le client et arrêtez les tâches secondaires dont il a la charge. Faites en sorte que le nettoyage soit bref et puisse être retenté sans danger. Si l’initialisation ouvre une connexion puis échoue avant de la renvoyer, elle doit libérer cette connexion elle-même : le répartiteur ne dispose d’aucun état renvoyé avec succès à nettoyer. Il faut prendre les mêmes précautions lorsqu’on acquiert plusieurs ressources à la suite.
+
+## Suppression après inactivité et arrêt
+
+Le répartiteur vérifie périodiquement quels travailleurs sont inactifs. La suppression d’un travailleur met fin à sa durée de vie et à celle de ses ressources ; un événement ultérieur crée un autre travailleur et relance l’initialisation. Celle-ci doit donc tolérer plusieurs durées de vie pour une même entité. Elle doit ouvrir le client, pas répéter l’opération métier de réservation d’une expédition.
+
+Enregistrez cette solution avec `Application.withOutboundLifecycle @() @MugOrderEntity (\_ -> config)`, où `config` est une valeur `Lifecycle.OutboundConfig`. Le premier argument de type choisit une configuration unitaire et la fonction ignore cette valeur. Pour des paramètres fournis au démarrage, utilisez plutôt le type de configuration de votre application et construisez la configuration du client à partir de sa valeur. Ajoutez l’import ciblé et l’enregistrement à la composition de l’application au lieu de remplacer toute sa configuration. Préservez les définitions de commande, d’événement et de requête déjà déployées. Cette fonction peut renvoyer une nouvelle commande destinataire lorsque la commande existante ne permet pas `InternalTransport`, comme l’explique [Ajouter une fonctionnalité sans risque](/tutorial/change-safely/).
+
+L’arrêt normal d’un travailleur appelle le nettoyage. L’arrêt du répartiteur lance l’arrêt des travailleurs ; son retour ne prouve pas à lui seul que toutes les ressources ont été libérées. Une annulation forcée et l’arrêt du processus diffèrent également d’un arrêt gracieux terminé. Ne comptez pas sur le nettoyage comme unique trace indiquant qu’une expédition est en attente ou terminée.
+
+Une erreur de traitement d’événement peut entraîner une nouvelle tentative du répartiteur ; une opération chez le fournisseur nécessite donc une politique explicite de gestion des doublons. Un échec de nettoyage ne peut pas annuler une commande de tasse déjà acceptée ni défaire une réservation du fournisseur. Conservez dans l’état de l’application l’identifiant durable de l’opération et son statut en attente, utilisez une clé d’idempotence stable si le fournisseur le permet et vérifiez un résultat fournisseur incertain avant de considérer une nouvelle tentative comme une nouvelle réservation.
+
+## Un travailleur entrant prend en charge ses ressources
+
+Une intégration entrante inverse le sens du flux : elle attend des données du fournisseur et émet des commandes d’application. La durée de vie de ses ressources appartient à sa fonction `run`. Il n’existe pas d’enregistrement entrant équivalent avec les champs `initialize`, `processEvent` et `cleanup`.
+
+`Integration.InboundConfig` et `Integration.TypedInboundConfig` fournissent toutes deux à `run` une fonction d’émission. La variante typée limite les commandes et les entités cibles qu’elle peut émettre. Aucune des deux ne fournit une connexion fournisseur gérée automatiquement. Le travailleur doit acquérir sa connexion d’entrée, exécuter sa boucle de lecture et la libérer lorsque cette boucle se termine ou échoue.
+
+Utilisez `Task.finally release work` pour encadrer le travail chargé de libérer une ressource acquise. La Task de nettoyage est le premier argument. Cela protège la sortie de la boucle de lecture, y compris en cas d’annulation ; l’acquisition doit aussi gérer les échecs partiels et le transfert vers le travail protégé. Les ressources de production nécessitent une acquisition et une libération sûres face à l’annulation, afin que celle-ci ne puisse pas survenir après l’acquisition d’une ressource mais avant l’installation de son nettoyage.
+
+Si une fonction run entrante renvoie une erreur d’intégration, l’application la relance avec un délai progressif. Chaque tentative doit libérer les ressources qu’elle a acquises avant que la suivante n’en ouvre de nouvelles. Une exécution terminée normalement s’arrête au lieu d’être relancée. À l’arrêt de l’application, le runtime annule les tâches entrantes et les rejoint avec `AsyncTask.waitCatch`. Cette attente dure jusqu’à la fin du travailleur et de son nettoyage. Si le nettoyage ne se termine jamais, elle peut elle aussi rester bloquée.
+
+## Libération des ressources et fin de l’expédition
+
+Un écouteur qui attend la prochaine notification fonctionne normalement, même si son travail est toujours en cours. Un écouteur qui a émis `RecordShipmentBooking` a soumis une commande. Une expédition dont la commande destinataire a été acceptée et enregistrée a un résultat métier. Ces observations répondent à des questions différentes.
+
+Demandez à votre agent de vérifier séparément ces frontières à l’aide de ressources contrôlées. Pour le travail sortant, vérifiez l’initialisation, la réutilisation, le nettoyage après inactivité et la réinitialisation d’un même flux, ainsi que l’isolation entre les flux. Incluez un échec de traitement, un échec d’acquisition partielle et l’arrêt. Pour le travail entrant, comptez les acquisitions et les libérations lors d’un retour normal, d’un échec, d’un redémarrage et d’une annulation, puis attendez sa fin et vérifiez qu’aucune notification supplémentaire n’arrive. Examinez l’état d’expédition obtenu séparément des compteurs de ressources.
+
+Une socket fermée prouve que la ressource a été libérée. Elle ne prouve pas que la dernière notification a été acceptée, qu’une action du fournisseur a été annulée ou que le travail en attente reprendra après un redémarrage. Ces résultats nécessitent leurs propres commandes d’application, faits enregistrés et politiques de reprise.

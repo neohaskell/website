@@ -1,0 +1,127 @@
+---
+title: Integrationsverträge
+description: Ausgehende Aktionen, registrierte Adapter und typisierte eingehende Worker als getrennte Verträge mit klarer Zuständigkeit und definierten Abschlussgrenzen lesen.
+---
+
+import IntegrationContract from '@components/learn/IntegrationContract.astro';
+
+Eine angenommene Tassenbestellung kann eine Versandanforderung auslösen. Der Anbieter kann die Sendung buchen, doch der Laden braucht weiterhin ein empfangendes Kommando, um dieses Ergebnis aufzuzeichnen. Eine Integration verbindet diese Schritte, ohne den Versandaufruf in die Entscheidung für die Bestellung zu verlagern.
+
+Diese Referenz baut auf [Ereignismodellen und Features](../) sowie [Tasks und Effekte](../../core/tasks/) auf. Einen vollständigen Anbieter-Wrapper findest du unter [Eine wiederverwendbare Integration erstellen](/guides/integrations/create-reusable/). Mit den Verträgen hier kannst du untersuchen, welche Arbeit ein Agent konfiguriert hat, wer für ihre Zuordnungen zuständig ist und was ein abgeschlossener Worker tatsächlich belegt.
+
+## Von einem aufgezeichneten Ereignis zu einer weiteren Entscheidung <a id="outbound" />
+
+Die Anwendung ordnet ihr aufgezeichnetes Bestellereignis einer Anbieteranfrage zu. Ein wiederverwendbares Versandmodul ist für Protokoll und Dekodierung zuständig. Es liegt außerhalb von `src/MyShop` und importiert keine Kommandos oder Entitäten des Ladens. Die Anwendung stellt die Zuordnung vom Buchungsergebnis zum empfangenden Kommando für die Sendung bereit.
+
+<IntegrationContract />
+
+Eine zurückgegebene Anbieterantwort bedeutet nicht automatisch, dass eine Buchung erfolgreich war. Eine erfolgreiche Buchung bedeutet nicht automatisch, dass das Kommando für die Sendung angenommen wurde. Der Empfänger wendet seine eigene Entscheidung an, während die Abfrage der Sendung unabhängig davon nachgezogen wird. Die Ablehnung des Kommandos macht weder die ursprüngliche Bestellung noch die Aktion des Anbieters rückgängig.
+
+## Mit ToAction konfigurierte Aktionen <a id="actions" />
+
+Die Fassade `Integration` stellt den Weg von der Konfiguration zur Aktion bereit, den das mitgelieferte Modul `Integration.Http` verwendet:
+
+```haskell
+class ToAction config where
+  toAction :: config -> Action
+
+outbound :: ToAction config => config -> Action
+batch :: Array Action -> Outbound
+```
+
+`outbound` wandelt einen Konfigurationswert um. `batch` sammelt Aktionen in dem Wert vom Typ `Outbound`, den ein Handler der Anwendung zurückgibt. `Integration.none` gibt für ein Ereignis keine Aktionen zurück. Diese Funktionen beschreiben Arbeit. Der Dispatcher führt sie aus, nachdem das Ereignis den Handler erreicht hat.
+
+Eine Integration kann direkt an dieser Grenze eine Aktion erstellen:
+
+```haskell
+action ::
+  (ActionContext -> Task IntegrationError (Maybe CommandPayload)) ->
+  Action
+```
+
+`ActionContext` stellt Laufzeitdienste bereit, darunter den registrierten Dispatcher für ausgehende Arbeit. Eine Aktion kann kein empfangendes Kommando oder eine kodierte Kommandonutzlast zurückgeben. `Integration.emitCommand command` erstellt einen erfolgreichen Task, der diese Nutzlast zurückgibt; `Integration.noCommand` gibt keine zurück. Keine der beiden Hilfsfunktionen belegt, dass die empfangende Entscheidung das Kommando angenommen hat.
+
+`Integration.makeCommandPayload` ist die reine Kodierungshilfsfunktion. Sie benötigt `Json.ToJSON command` und einen bekannten `NameOf command`. Für den Versand ist außerdem ein registrierter Empfänger erforderlich, der `InternalTransport` erlaubt. Fehlt diese Berechtigung bei einem bereitgestellten Kommando, führe eine neue Kommandoidentität ein, statt die eingefrorene Deklaration zu ändern. [Ein Feature sicher ergänzen](/tutorial/change-safely/) erklärt diesen Übergang.
+
+Der Callback `onSuccess` der HTTP-Konfiguration bedeutet, dass eine Antwort eingetroffen ist. Die Anwendung oder der Wrapper muss den Status prüfen und den Antworttext dekodieren, bevor ein erfolgreiches Kommando erstellt wird. Halte HTTP-Wiederholungen, Wiederholungen des Dispatchers und die Ablehnung eines empfangenden Kommandos auseinander, wenn du das Ergebnis untersuchst.
+
+## Registrierte Anfrageadapter <a id="adapters" />
+
+[`Service.Integration.Adapter`](https://github.com/neohaskell/NeoHaskell/blob/414602b9510a92dfac647bc68d6afadfb594502c/core/service/Service/Integration/Adapter.hs) definiert einen weiteren Weg. Importiere das Modul mit einem qualifizierten Namen, damit seine Klasse `Integration` von der Fassadenfunktion gleichen Namens unterscheidbar bleibt:
+
+```haskell
+import Service.Integration.Adapter qualified as Adapter
+```
+
+Eine Instanz von `Adapter.Integration request` wählt `Adapter.Response request` und implementiert diese Methoden:
+
+```haskell
+runReal :: request -> Task IntegrationError (Response request)
+runFake :: request -> Task IntegrationError (Response request)
+```
+
+Hier gehört `IntegrationError` zu `Service.Integration.IntegrationError`, nicht zur Fassade. Die Adapterklasse verlangt keine Oberklasse für JSON-Codecs oder Schemas. Jede Implementierung ist selbst für die Kodierung, Dekodierung und Validierung zuständig, die ihr Protokoll benötigt. [JSON und Schemas](../../core/json/) unterscheidet diese Aufgaben sowohl von strukturellen Metadaten als auch von handgeschriebenen Testdaten.
+
+Registriere den Anfragetyp in der Zusammensetzung der Anwendung:
+
+```haskell
+Application.new
+  |> Application.withIntegration @ShippingRequest
+```
+
+`ShippingRequest` steht für den Anfragetyp deines Adapters. Die Registrierung benötigt die Adapterinstanz, Laufzeit-Typinformationen für Anfrage und Antwort sowie `TypeName.Inspectable request`. Beim Start der Anwendung entsteht daraus ein Eintrag in der Dispatch-Registry. Dadurch werden weder ein Ereignishandler registriert noch eine Bestellung dieser Anfrage zugeordnet oder ein empfangendes Kommando eingerichtet.
+
+`Service.Integration.ShimEmit.emit` erhält erst diese Registry und dann die Anfrage und gibt `Task IntegrationError (Response request)` zurück. Fehlt die Registrierung, wird `PermanentFailure` zurückgegeben; der echte Anbieter wird nicht stillschweigend aufgerufen. Der Aktionskontext stellt die Registry der Anwendung einer Aktionsimplementierung bereit.
+
+### Die Auswahl gehört zum registrierten Weg <a id="selection" />
+
+Der Adapter-Dispatcher kann anhand einer `Selection` entweder `runReal` oder `runFake` auswählen. Beim Start der Anwendung werden die Auswahl der Integration ausgewertet und diese Funktionen zusammengestellt. Dadurch verwenden nicht automatisch alle `ToAction`-Implementierungen die Registry. Insbesondere hat die mitgelieferte HTTP-Konfiguration ihre eigene Aktionsimplementierung. Eine Adapterregistrierung ersetzt nicht die Aufrufe dieses Clients.
+
+Implementiere ein Fake ausdrücklich und teste seine ausgewählten Antworten und Fehler direkt. Ein Schema implementiert `runFake` nicht. Ein erfolgreicher direkter Fake-Test beweist auch nicht, dass eine laufende Anwendung dieses Fake ausgewählt hat. Das Verhalten eines Anbieters lässt sich mit einem kontrollierten lokalen Dienst über den echten HTTP-Client prüfen, ohne externe Zugangsdaten zu verwenden. [Eine wiederverwendbare Integration erstellen](/guides/integrations/create-reusable/) beschreibt diese Testgrenze.
+
+## Typisierte eingehende Kommandos <a id="inbound" />
+
+Ein eingehender Worker liest externe Eingaben und führt Kommandos ein. Der wiederverwendbare Teil ist für das Lesen und Dekodieren zuständig; die Anwendung ordnet Benachrichtigungen den Kommandos zu. Ein Worker, der nur ein Kommando zur Sendungsbuchung einreichen darf, deklariert Kommando und Zielentität gemeinsam:
+
+```haskell
+Integration.TypedInbound
+  '[ '(RecordShipmentBooking, ShipmentEntity)]
+```
+
+`RecordShipmentBooking` und `ShipmentEntity` sind Typen der Anwendung. Die Ausgabeliste enthält keine Anbieterantworten. `Integration.TypedInboundConfig outputs` hat eine Funktion `run`, die einen polymorphen Ausgabe-Callback erhält. Für jedes ausgegebene Kommando benötigt dieser Callback `AllowedOutput command outputs`, `Json.ToJSON command` und `KnownSymbol (NameOf command)`. Die Einschränkung für erlaubte Ausgaben prüft, ob die Zielentität des Kommandos zum deklarierten Paar passt.
+
+`Integration.typedInbound` verpackt die Konfiguration und verlangt `KnownInboundOutputs outputs`. Der Worker gibt `Task IntegrationError Unit` zurück. Auch der Ausgabe-Callback gibt einen Task mit `Unit` zurück. Er liefert weder den Ereignisverlauf des Empfängers noch eine Abfragezeile oder eine typisierte fachliche Antwort zurück.
+
+`Integration.asInbound :: TypedInbound outputs -> Inbound` passt einen typisierten Worker an die ältere Anwendungsregistrierung an. Das mitgelieferte `Timer.every` gibt bereits einen `Inbound` des älteren Typs zurück. Daraus folgt keine umgekehrte Umwandlung dieses Timers in einen typisierten, modellgestützten Worker. Halte beim Prüfen der generierten Einrichtung typisierte Worker-Deklarationen und Werte des älteren Typs auseinander.
+
+## Zustandslose Formen und Formen mit eigenen Ressourcen <a id="lifecycle" />
+
+Ein zustandsloser ausgehender Handler gibt Aktionen für ein Ereignis zurück und behält zwischen Ereignissen keinen Clientzustand, der durch den Lebenszyklus verwaltet wird. Für eine aufwendig zu erstellende und wiederverwendbare Verbindung bietet `Integration.Lifecycle.OutboundConfig state` getrennte Hooks zum Erwerb, zur Verarbeitung und zur Freigabe:
+
+```haskell
+initialize :: StreamId -> Task Text state
+processEvent ::
+  state -> Event Json.Value ->
+  Task Text (Array Integration.CommandPayload)
+cleanup :: state -> Task Text Unit
+```
+
+Das sind die Signaturen der Konfigurationsfelder. Der Dispatcher behält den Zustand für jeden Worker eines Entitätsstreams, verarbeitet dessen Ereignisse nacheinander und bereinigt einen untätigen Worker. Ein späteres Ereignis beginnt mit einer neuen Initialisierung eine neue Lebensdauer. Das unverarbeitete Ereignis ist nicht automatisch ein typisierter Inhalt oder rekonstruierter Entitätszustand.
+
+`Application.withOutboundLifecycle @() @MugOrderEntity (\_ -> config)` registriert eine Konfigurationsfabrik. Dieser Weg ist getrennt vom Handler für typisierte Ereignisse. Eingehende Worker sind dagegen selbst für Erwerb und Freigabe innerhalb ihres `run` zuständig. Für sie gibt es keinen entsprechenden Datensatz mit drei Hooks. [Integrationsressourcen verwalten](/guides/integrations/resources/) erklärt den teilweisen Erwerb, die abbrechungssichere Übergabe und die Bereinigung.
+
+## Fehler, Wiederholungen und Abschluss <a id="errors" />
+
+Die möglichen Fehler des registrierten Adapters sind `TransportFailure Text`, `AuthenticationFailure`, `PermanentFailure Text`, `TransientFailure Text` und `ValidationFailure Text`. Achte darauf, dass ihre Meldungen für öffentliche Diagnosen geeignet sind. Die Fassade hat einen anderen Fehlertyp. Gleiche Begriffe in Modulen machen die Fehlerkonstruktoren nicht austauschbar.
+
+Ein Fehlerwert löst nicht selbst eine Wiederholung aus. Adapterimplementierungen und ihre Aufrufer bestimmen die Wiederholungsstrategie. Bei synchronen Verarbeitungsausnahmen kann der Dispatcher die Verarbeitung wiederholen; ein zurückgegebener typisierter Task-Fehler ist ein anderer Fall. Ein Anbietervorgang braucht daher eine stabile Vorgangsidentität und eine ausdrückliche Regel für den Umgang mit Duplikaten. Es gibt keine allgemeine Garantie, dass ein Vorgang genau einmal ausgeführt wird.
+
+Bei eingehenden Workern führt ein zurückgegebener Integrationsfehler dazu, dass die Anwendung den Worker mit wachsendem Warteabstand neu startet. Eine reguläre Beendigung schließt den Worker ab. Dieser Vertrag verspricht keinen Neustart nach jeder beliebigen Laufzeitausnahme. Die in einem Versuch erworbenen Ressourcen müssen freigegeben sein, bevor der nächste Versuch Ersatzressourcen erwirbt.
+
+### Start, Herunterfahren und Warten <a id="await" />
+
+Beim Start stellt die Anwendung Registrierungen zusammen und startet den ausgehenden Dispatcher. Bevor sie eingehende Worker startet, prüft sie die deklarierten Ausgaben der typisierten Worker. Beim Herunterfahren bricht die Anwendung eingehende Tasks ab und wartet mit `AsyncTask.waitCatch` zu Ende geführt. Dieses Warten endet erst, wenn deren Arbeit und Bereinigung abgeschlossen sind; eine langsame Bereinigung verzögert das Warten.
+
+Das Herunterfahren des ausgehenden Dispatchers leitet das Beenden seiner Worker ein. Seine Rückgabe allein bestätigt nicht die Freigabe durch jeden Worker. Eine erzwungene Unterbrechung und die Beendigung des Prozesses können zu anderen Bereinigungsergebnissen führen. Speichere ausstehende fachliche Arbeit im Anwendungszustand, statt die Lebensdauer eines Clients im Arbeitsspeicher als Versandnachweis zu behandeln.
+
+`AsyncTask.waitFor`, `waitCatch` und `waitOutcome` beobachten die Beendigung eines Workers mit unterschiedlichen Fehlerinformationen, wie unter [Tasks und Effekte](../../core/tasks/#async-task) beschrieben. Das erfolgreiche Absenden eines Kommandos durch einen eingehenden Worker bedeutet, dass der empfangende Handler die Annahme gemeldet hat. Es wartet weder auf nachgelagerte ausgehende Effekte noch darauf, dass sich die Abfrage angleicht. Allein die Beendigung eines Workers belegt weder den Erfolg beim Anbieter noch den fachlichen Abschluss. Prüfe jedes Ergebnis an der Grenze, für die es zuständig ist.

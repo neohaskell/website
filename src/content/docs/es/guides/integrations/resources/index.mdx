@@ -1,0 +1,72 @@
+---
+title: Gestiona los recursos de una integración
+description: Asigna una vida útil explícita a los clientes salientes y los workers entrantes, y distingue la liberación de un recurso de la finalización del trabajo de negocio.
+tableOfContents:
+  minHeadingLevel: 2
+  maxHeadingLevel: 2
+---
+
+import IntegrationResources from '@components/learn/IntegrationResources.astro';
+
+Reservar un envío quizá requiera una sola llamada HTTP. Escuchar las actualizaciones del envío puede mantener una conexión abierta durante horas. Ambas son integraciones, pero la conexión necesita un responsable que la adquiera, la use y la libere cuando termine el trabajo.
+
+[Crea una integración reutilizable](../create-reusable/) separó el protocolo del proveedor de envíos de la tienda de tazas. Esta guía avanzada añade la responsabilidad sobre los recursos a ese límite. El módulo reutilizable sigue fuera de `src/MyShop`; la aplicación sigue transformando los eventos de pedido en entradas para el proveedor y los resultados del proveedor en comandos de envío.
+
+## El cliente pertenece al ciclo de vida del worker
+
+Un manejador saliente sin estado prepara el trabajo para cada evento sin conservar un cliente entre llamadas. Usa esta opción cuando la integración suministrada ya gestione los recursos que necesita. Añadir funciones del ciclo de vida resulta útil si tu integración necesita un cliente, una conexión o un intérprete costoso que puedan reutilizar varios eventos.
+
+[`Integration.Lifecycle.OutboundConfig`](https://github.com/neohaskell/NeoHaskell/blob/414602b9510a92dfac647bc68d6afadfb594502c/core/service/Integration/Lifecycle.hs) describe esta segunda opción. El despachador crea un worker para el flujo de eventos de una entidad y proporciona su estado inicializado a cada procesador de eventos. Los eventos de ese flujo se procesan secuencialmente. Cada flujo puede tener un worker distinto, así que un recurso creado aquí no es un singleton para toda la aplicación.
+
+<IntegrationResources />
+
+El ciclo de vida delimitado por la inicialización y la limpieza termina cuando se elimina y se limpia el worker inactivo. Un evento posterior necesita una inicialización nueva. El historial registrado de la entidad sobrevive a ambos clientes; un cliente es un recurso en tiempo de ejecución, no el estado de envío que sirve de fuente de verdad.
+
+## Tres funciones y un solo responsable del recurso
+
+La configuración tiene tres campos. En estas firmas, `state` es el valor del recurso que devuelve la inicialización, por ejemplo un cliente de envíos:
+
+```haskell
+initialize :: StreamId -> Task Text state
+processEvent ::
+  state ->
+  Event Json.Value ->
+  Task Text (Array Integration.CommandPayload)
+cleanup :: state -> Task Text Unit
+```
+
+`Task error value` describe trabajo que puede fallar con un error o terminar con un valor. Aquí los errores son de tipo `Text`; la inicialización devuelve `state`, el procesamiento de eventos devuelve payloads de comando y la limpieza devuelve `Unit`, es decir, ningún valor de resultado útil. Construir la Task no la ejecuta. [Tareas y efectos](/reference/core/tasks/) explica la ejecución por separado de la aceptación de una decisión de negocio.
+
+La inicialización recibe la identidad del flujo. Úsala si el proveedor necesita un recurso asociado a esa entidad. Cuando la inicialización termina correctamente, el despachador conserva el recurso devuelto y se lo pasa a `processEvent` y `cleanup`. El estado del recurso solo existe en tiempo de ejecución: estas funciones no lo conservan entre reinicios del proceso.
+
+El evento que recibe `processEvent` es un `Event Json.Value` sin interpretar. Decodifica los eventos que entiende tu integración y transfórmalos en la entrada de su protocolo. Devuelve payloads de comando para que los despache la aplicación y usa `Integration.makeCommandPayload` para codificar un comando. Mantén fuera del módulo genérico del cliente las transformaciones de la aplicación. Este registro de ciclo de vida de nivel más bajo es una opción distinta del manejador saliente tipado de la guía anterior; no proporciona automáticamente un payload de evento tipado ni el estado reconstruido de la entidad.
+
+La limpieza libera lo que devolvió la inicialización. Cierra el cliente y detén cualquier tarea subordinada de la que sea responsable. Procura que la limpieza sea breve y pueda repetirse de forma segura. Si la inicialización abre una conexión y luego falla antes de devolverla, debe liberar esa conexión por su cuenta: el despachador no tiene un estado devuelto correctamente que pueda limpiar. Hay que tener el mismo cuidado al adquirir varios recursos en secuencia.
+
+## Eliminación de workers inactivos y cierre
+
+El despachador comprueba periódicamente si hay workers inactivos. Al eliminar uno termina la vida útil de sus recursos; un evento posterior crea otro worker y vuelve a llamar a la inicialización. Por eso, la inicialización debe tolerar que una misma entidad pase por varios ciclos de vida. Debe abrir el cliente, no repetir la operación de negocio de reservar un envío.
+
+Registra esta opción con `Application.withOutboundLifecycle @() @MugOrderEntity (\_ -> config)`, donde `config` es tu valor de tipo `Lifecycle.OutboundConfig`. El primer argumento de tipo selecciona una configuración unitaria, y la fábrica ignora ese valor unitario. Para los ajustes proporcionados al inicio, usa el tipo de configuración de la aplicación y construye a partir de su valor la configuración del cliente. Añade la importación y el registro necesarios a la composición de la aplicación en lugar de sustituir toda su configuración. Conserva las definiciones desplegadas de comandos, eventos y consultas. La función puede devolver un comando receptor nuevo si el comando ya desplegado no permite `InternalTransport`, tal como se explica en [Añade una feature de forma segura](/tutorial/change-safely/).
+
+Al detener normalmente un worker, se llama a cleanup. El cierre del despachador inicia la detención, pero que el método vuelva no demuestra por sí solo que se hayan liberado todos los recursos. Una cancelación forzada y la terminación del proceso tampoco equivalen a una detención ordenada y completada. No dependas de la limpieza como único registro de que un envío está pendiente o se ha completado.
+
+El despachador puede reintentar un fallo al procesar un evento, así que la operación del proveedor necesita una política explícita para gestionar duplicados. Un fallo de limpieza no puede revertir un pedido de taza aceptado ni deshacer una reserva del proveedor. Conserva en el estado de la aplicación la identidad duradera de la operación y su estado pendiente, usa una clave de idempotencia estable si el proveedor la admite y resuelve con él cualquier resultado incierto antes de tratar un reintento como una reserva nueva.
+
+## El worker entrante es responsable de adquirir sus recursos
+
+Una integración entrante invierte la dirección: espera datos del proveedor y emite comandos de la aplicación. Su vida útil de recursos se gestiona dentro de la función `run`. No existe un registro entrante equivalente con los campos `initialize`, `processEvent` y `cleanup`.
+
+Tanto `Integration.InboundConfig` como `Integration.TypedInboundConfig` proporcionan a `run` una función de emisión. La variante tipada limita los comandos y las entidades de destino que puede emitir. Ninguna variante proporciona una conexión al proveedor que se gestione automáticamente. El worker debe adquirir la conexión de entrada, ejecutar su bucle de lectura y liberarla cuando el bucle termine o falle.
+
+Usa `Task.finally release work` alrededor del trabajo responsable de un recurso adquirido. La Task de limpieza es el primer argumento. Esto protege la salida del bucle de lectura, incluida la cancelación; la propia adquisición también debe gestionar los fallos parciales y el traspaso al trabajo protegido. Para los recursos de producción se necesita un patrón de adquisición y liberación seguro ante cancelaciones, de modo que una cancelación no ocurra entre adquirir un recurso y registrar su limpieza.
+
+Cuando una ejecución entrante devuelve un error de integración, la aplicación la reinicia con demoras progresivas. Cada intento debe liberar los recursos que adquirió antes de que otro intento abra sus reemplazos. Si la ejecución termina normalmente, el worker se detiene en lugar de reiniciarse. Al cerrar la aplicación, el tiempo de ejecución cancela las tareas entrantes y espera a que terminen mediante `AsyncTask.waitCatch`. Esa espera incluye la limpieza del worker. Si la limpieza se bloquea para siempre, la espera también puede bloquearse.
+
+## Liberar recursos y completar un envío
+
+Un listener que espera la siguiente notificación sigue trabajando con normalidad. Un listener que emitió `RecordShipmentBooking` ha enviado un comando. Cuando la decisión receptora acepta el comando y registra la reserva, el envío tiene un resultado de negocio. Estas observaciones responden a preguntas distintas.
+
+Pide a tu agente que pruebe por separado estos límites con recursos controlados. Para el trabajo saliente, prueba la inicialización, la reutilización, la limpieza por inactividad y la reinicialización de un flujo, además del aislamiento entre flujos. Incluye fallos de procesamiento, de adquisición parcial y de cierre. Para el trabajo entrante, cuenta las adquisiciones y liberaciones cuando termina normalmente, falla, se reinicia o se cancela; después, espera a que termine y comprueba que no lleguen más notificaciones. Inspecciona el estado resultante del envío por separado de los contadores de recursos.
+
+Un socket cerrado demuestra que se liberó el recurso. No demuestra que se aceptara la última notificación, que se deshiciera una acción del proveedor ni que el trabajo pendiente vaya a reanudarse después de un reinicio. Esos resultados necesitan sus propios comandos de aplicación, hechos conservados y una política de recuperación.

@@ -1,0 +1,127 @@
+---
+title: 集成契约
+description: 了解出站操作、已注册适配器和带类型入站工作器各自的契约，并明确资源由谁管理以及何时才算完成。
+---
+
+import IntegrationContract from '@components/learn/IntegrationContract.astro';
+
+已接受的马克杯订单可以触发配送请求。提供方可能会完成配送预订，但商店仍需通过一个接收命令来记录结果。集成负责连接这些步骤，而不会把配送调用移进订单决策。
+
+本参考页以[事件模型与功能](../)和[任务与副作用](../../core/tasks/)为基础。若要查看完整的提供方封装，请参阅[创建可复用的集成](/guides/integrations/create-reusable/)。这里介绍的契约能帮助你检查智能体配置了哪些工作、映射由谁负责，以及工作器完成后究竟能证明什么。
+
+## 从已记录事件到另一个决策 <a id="outbound" />
+
+应用会将已记录的订单事件映射到提供方请求。可复用的配送模块负责协议和解码；它位于 `src/MyShop` 之外，不会导入商店的命令或实体。应用负责将预订结果映射到接收配送命令。
+
+<IntegrationContract />
+
+收到提供方响应，并不自动表示预订成功。预订成功，也不自动表示配送命令已被接受。接收端会应用自己的决策，配送查询则会另行更新。拒绝该命令不会撤销原订单或提供方的操作。
+
+## 通过 ToAction 配置的操作 <a id="actions" />
+
+`Integration` 门面公开了提供的 `Integration.Http` 模块所使用的配置到操作路径：
+
+```haskell
+class ToAction config where
+  toAction :: config -> Action
+
+outbound :: ToAction config => config -> Action
+batch :: Array Action -> Outbound
+```
+
+`outbound` 会转换一个配置值。`batch` 会将多个操作收集为应用处理器返回的 `Outbound` 值。对于某个事件，`Integration.none` 会返回空操作集合。这些函数描述要执行的工作；事件到达处理器后，分发器才会执行它们。
+
+集成作者也可以直接通过此边界构造操作：
+
+```haskell
+action ::
+  (ActionContext -> Task IntegrationError (Maybe CommandPayload)) ->
+  Action
+```
+
+`ActionContext` 提供运行时服务，包括已注册的出站分发。一个操作可以返回没有接收命令，也可以返回一个已编码的命令载荷。`Integration.emitCommand command` 会构造成功的 Task，并返回该载荷；`Integration.noCommand` 则不返回载荷。这两个辅助函数都不能证明接收命令已被决策接受。
+
+`Integration.makeCommandPayload` 是纯编码辅助函数。它要求 `Json.ToJSON command` 和已知的 `NameOf command`。分发还要求接收端已注册并允许 `InternalTransport`。如果现有的已部署命令不允许此传输接口，应引入新的命令标识，而不是修改已冻结的声明。[安全地添加功能](/tutorial/change-safely/)解释了如何完成这一迁移。
+
+HTTP 配置中的 `onSuccess` 回调表示收到了响应。应用或封装必须检查状态并解码正文，然后才能构造成功命令。检查结果映射时，要区分 HTTP 重试、分发器重试和接收命令遭到拒绝这三种情况。
+
+## 已注册的请求适配器 <a id="adapters" />
+
+[`Service.Integration.Adapter`](https://github.com/neohaskell/NeoHaskell/blob/414602b9510a92dfac647bc68d6afadfb594502c/core/service/Service/Integration/Adapter.hs) 定义了另一条路径。请使用限定导入，以区分它的 `Integration` 类型类和门面模块中的同名类型类：
+
+```haskell
+import Service.Integration.Adapter qualified as Adapter
+```
+
+`Adapter.Integration request` 实例会选择 `Adapter.Response request`，并实现以下方法：
+
+```haskell
+runReal :: request -> Task IntegrationError (Response request)
+runFake :: request -> Task IntegrationError (Response request)
+```
+
+这里的 `IntegrationError` 属于 `Service.Integration.IntegrationError`，而不是门面模块。适配器类型类没有 JSON 编解码或模式超类约束。每个实现都负责协议所需的编码、解码和验证。[JSON 与模式](../../core/json/)会区分这些职责、结构元数据和手写测试夹具。
+
+在应用组合处注册请求类型：
+
+```haskell
+Application.new
+  |> Application.withIntegration @ShippingRequest
+```
+
+`ShippingRequest` 表示适配器的请求类型。注册需要适配器实例、请求和响应的运行时类型信息，以及 `TypeName.Inspectable request`。它会在应用启动时构建一个分发注册表项，但不会注册事件处理器、将订单映射到该请求，也不会安排接收命令。
+
+`Service.Integration.ShimEmit.emit` 接收该注册表和请求，并返回 `Task IntegrationError (Response request)`。如果没有注册，就会返回 `PermanentFailure`；它不会悄悄调用真实提供方。操作实现可以通过操作上下文访问应用的注册表。
+
+### 选择方式由已注册的调用路径决定 <a id="selection" />
+
+适配器分发器可以根据 `Selection` 绑定 `runReal` 或 `runFake`。应用启动流程负责解析集成选择，并构造这些闭包。这不代表每种 `ToAction` 实现都会使用注册表。尤其是，提供的 HTTP 配置有自己的操作实现；注册适配器不会替换该客户端的调用。
+
+请明确实现一个假适配器，并直接测试它选定的响应和失败情况。模式不会实现 `runFake`，直接测试假适配器成功，也不能证明运行中的应用选择了它。若要测试提供方行为，可以使用受控的本地服务来调用真实 HTTP 客户端，无需外部凭据。[创建可复用的集成](/guides/integrations/create-reusable/)介绍了这条测试边界。
+
+## 带类型的入站命令 <a id="inbound" />
+
+入站工作器会读取外部输入并引入命令。可复用部分负责读取和解码；应用负责将通知映射到命令。只能提交配送预订命令的工作器，会同时声明命令和目标实体：
+
+```haskell
+Integration.TypedInbound
+  '[ '(RecordShipmentBooking, ShipmentEntity)]
+```
+
+`RecordShipmentBooking` 和 `ShipmentEntity` 是应用类型。输出列表不是提供方响应的列表。`Integration.TypedInboundConfig outputs` 有一个 `run` 函数，它会接收多态的发出回调。每次发出命令时，该回调都要求满足 `AllowedOutput command outputs`、`Json.ToJSON command` 和 `KnownSymbol (NameOf command)`。`AllowedOutput` 约束会检查命令的目标实体是否与声明的实体对相符。
+
+`Integration.typedInbound` 会封装配置，并要求满足 `KnownInboundOutputs outputs`。工作器返回 `Task IntegrationError Unit`。发出回调也返回结果为 `Unit` 的 Task；它不会返回接收端的事件历史、查询行或带类型的业务答案。
+
+`Integration.asInbound :: TypedInbound outputs -> Inbound` 会将带类型工作器适配为旧式应用注册值。提供的 `Timer.every` 已经返回旧式 `Inbound`。这种转换无法反向将计时器转换为基于模型的带类型工作器。检查生成的设置时，请将带类型工作器声明与旧式值区分开来。
+
+## 无状态形式与资源管理形式 <a id="lifecycle" />
+
+无状态出站处理器会为事件返回操作，但不会在事件之间保留由生命周期管理的客户端状态。对于昂贵且可复用的连接，`Integration.Lifecycle.OutboundConfig state` 会分别提供获取、处理和释放钩子：
+
+```haskell
+initialize :: StreamId -> Task Text state
+processEvent ::
+  state -> Event Json.Value ->
+  Task Text (Array Integration.CommandPayload)
+cleanup :: state -> Task Text Unit
+```
+
+这些是配置字段的签名。分发器会为每个实体流工作器保留状态，依次处理该工作器的事件，并在工作器空闲时清理状态。之后有新事件到来时，会初始化新的生命周期。原始事件不会自动变成带类型的载荷或还原出的实体状态。
+
+`Application.withOutboundLifecycle @() @MugOrderEntity (\_ -> config)` 会注册一个配置工厂。这与带类型事件处理器路径彼此独立。入站工作器则会在自己的 `run` 函数中负责获取和释放资源，没有对应的三钩子记录。[管理集成资源](/guides/integrations/resources/)会说明部分获取、取消安全的交接和清理。
+
+## 失败、重试与完成 <a id="errors" />
+
+已注册适配器错误的备选项包括 `TransportFailure Text`、`AuthenticationFailure`、`PermanentFailure Text`、`TransientFailure Text` 和 `ValidationFailure Text`。确保其中的文本适合用于公开诊断信息。门面使用不同的错误类型；模块概念相似，不代表错误构造器可以互换。
+
+错误值本身不会安排重试。适配器实现及其调用方各自负责重试策略。分发器处理时可以重试同步处理异常，而返回带类型的 Task 错误则是另一条路径。因此，提供方操作需要稳定的操作标识和明确的重复处理策略；分发本身不保证恰好执行一次。
+
+对于入站工作器，返回集成错误会使应用加入退避后重启工作器。正常完成则会结束工作器。这份契约不保证任意运行时异常都会触发重启。每次尝试都应先释放自己拥有的资源，再让下一次尝试获取替代资源。
+
+### 启动、关闭与等待 <a id="await" />
+
+应用启动时会组合各项注册并启动出站分发。启动入站工作器之前，应用会验证声明的带类型输出。关闭应用时，入站任务会被取消，并通过 `AsyncTask.waitCatch` 等待它们结束。等待会持续到这些任务及其清理均已退出；缓慢的清理会延长等待时间。
+
+关闭出站分发器会启动工作器停止流程。仅凭它返回，不能证明每个工作器都已释放资源。强制取消和进程终止也可能有不同的清理结果。请将待处理的业务工作保存在应用状态中，不要把内存中的客户端生命周期当作配送记录。
+
+`AsyncTask.waitFor`、`waitCatch` 和 `waitOutcome` 会以不同的错误信息观察工作器终止，详见[任务与副作用](../../core/tasks/#async-task)。入站工作器成功发出命令，表示接收处理器报告了接受；它不会等待后续出站副作用完成，也不会等待查询同步。工作器终止本身不能证明提供方操作成功或业务工作已完成。请在各自负责的边界检查每项结果。

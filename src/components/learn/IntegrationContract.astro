@@ -1,14 +1,18 @@
-<div class="integration-contract" role="img" aria-label="An order event leads through an application input mapping to a shipping call. The provider result passes through the application's command mapping to a separate shipment decision. The decision can accept or reject even after the provider booking.">
-  <div class="node" data-diagram-role="event">Recorded OrderPlaced</div>
-  <div class="arrow">Application maps input<span aria-hidden="true">↓</span></div>
-  <div class="node" data-diagram-role="integration">Shipping request and provider call</div>
-  <div class="arrow">Provider result<span aria-hidden="true">↓</span></div>
-  <div class="node" data-diagram-role="command">Application maps to RecordShipmentBooking</div>
+---
+import { messages } from '../../i18n/runtime';
+const t = messages(Astro.locals.starlightRoute.locale ?? 'en');
+---
+<div class="integration-contract" role="img" aria-label={t("lesson.integration-contracts-description")}>
+  <div class="node" data-diagram-role="event">{t("lesson.integration-recorded-order")}</div>
+  <div class="arrow">{t("lesson.integration-contracts-map-input")}<span aria-hidden="true">↓</span></div>
+  <div class="node" data-diagram-role="integration">{t("lesson.integration-contracts-provider-call")}</div>
+  <div class="arrow">{t("lesson.integration-contracts-result")}<span aria-hidden="true">↓</span></div>
+  <div class="node" data-diagram-role="command">{t("lesson.integration-contracts-map-command")}</div>
   <div class="arrow"><span aria-hidden="true">↓</span></div>
-  <div class="decision">Shipment decision</div>
+  <div class="decision">{t("lesson.integration-contracts-decision")}</div>
   <div class="branches">
-    <div class="branch"><div class="rail" aria-hidden="true"></div><div class="node" data-diagram-role="event">Accepted: shipment event</div></div>
-    <div class="branch"><div class="rail" aria-hidden="true"></div><div class="refusal">Rejected: no shipment event</div></div>
+    <div class="branch"><div class="rail" aria-hidden="true"></div><div class="node" data-diagram-role="event">{t("lesson.integration-contracts-accepted")}</div></div>
+    <div class="branch"><div class="rail" aria-hidden="true"></div><div class="refusal">{t("lesson.integration-contracts-rejected")}</div></div>
   </div>
 </div>
 <style>
