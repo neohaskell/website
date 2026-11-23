@@ -1,7 +1,0 @@
-/* The installed confetti component's finite, deterministic particle mechanism, adapted to paper bills. */
-.money-v3{position:absolute;inset:0;overflow:hidden;pointer-events:none;perspective:1100px;transform-style:preserve-3d}
-#money-v3-back{z-index:2}#money-v3-front{z-index:7}
-.money-v3 .bill{position:absolute;left:0;top:0;width:240px;height:101px;background:url('dollar-bill.svg') center/100% 100% no-repeat;opacity:0;backface-visibility:visible;transform-style:preserve-3d;will-change:transform,opacity}
-#money-v3-front .bill{width:330px;height:139px}
-#included-head,.included-hit{paint-order:stroke fill;-webkit-text-stroke:5px #7df9ff;text-shadow:0 3px 0 #7df9ff;z-index:8!important}
-#included-head{-webkit-text-stroke:7px #7df9ff}

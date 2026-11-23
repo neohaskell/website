@@ -9,6 +9,7 @@ test-results/
 
 # Local environment, editor files, and logs
 .DS_Store
+._*
 .env
 .env.*
 !.env.example
@@ -17,43 +18,11 @@ test-results/
 *.swp
 *.swo
 
-# Impeccable: retain durable design decisions; generated work stays local.
-# See .impeccable/README.md for the ownership of each retained artifact.
-/.impeccable/*
-!/.impeccable/README.md
-!/.impeccable/config.json
-!/.impeccable/design.json
-!/.impeccable/surfaces/
-!/.impeccable/critique/
-!/.impeccable/retrospectives/
-
-!/.impeccable/questions/
-/.impeccable/questions/*
-!/.impeccable/questions/*.md
-!/.impeccable/questions/*direction*.json
-
-!/.impeccable/review/
-/.impeccable/review/**
-!/.impeccable/review/**/
-!/.impeccable/review/**/*.md
-!/.impeccable/reviews/
-/.impeccable/reviews/**
-!/.impeccable/reviews/**/
-!/.impeccable/reviews/**/*.md
-
-!/.impeccable/diagrams/
-/.impeccable/diagrams/*
-!/.impeccable/diagrams/README.md
-!/.impeccable/diagrams/diagram-language.html
-!/.impeccable/diagrams/diagram-language.template.html
-!/.impeccable/diagrams/manrope.woff2
-
-!/.impeccable/mocks/
-/.impeccable/mocks/*
-!/.impeccable/mocks/decision/
-/.impeccable/mocks/decision/*
-!/.impeccable/mocks/decision/r2-violet-workshop.*
-!/.impeccable/mocks/decision/r2-daylight-workshop.*
-
-# Translation prompts, responses, diagnostics, and process lock
-.i18n/
+# Local research, agent evidence and promotional output
+/.impeccable/
+/brag-output*/
+/docs/research/
+/unslop/
+/dist-newstyle/
+/.i18n/
+/public/images/**/*.webp.json

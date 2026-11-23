@@ -4,7 +4,7 @@ Use the current ticket for scope and `AGENTS.md` for delivery. This reference ow
 
 ## Establish the page's job
 
-Read `PRODUCT.md`, `GLOSSARY.md`, the existing page, and the relevant learning path from [reading context](reading-context.md). The four introductory lessons are the teaching and philosophical baseline. Resolve page order from the current navigation and ticket rather than inventing a new curriculum.
+Read [product positioning](positioning.md), `GLOSSARY.md`, the existing page, and the relevant learning path from [reading context](reading-context.md). The four introductory lessons are the teaching and philosophical baseline. Resolve page order from the current navigation and ticket rather than inventing a new curriculum.
 
 Write the reader's immediate goal and the visible result that completes it. Keep the material that serves that result. A creation page ends with a recognizable project; running the application and tracing all its files belong to their own pages. Mention supporting tools only as far as the task needs them. It is useful to say that Neo initializes Git and commits the generated files; a project-creation lesson does not need Git inspection commands, identity configuration, or a version-control tutorial. Apply the same boundary to Nix, build tools, editors, and other supporting tools. Keep detailed verification in internal evidence unless the reader needs it to complete the NeoHaskell task. For a conceptual lesson, state the question the reader should be able to reason about afterward.
 
@@ -66,7 +66,7 @@ Prefer an authentic screenshot when recognizing a real interface is the point, a
 
 Place each figure immediately beside the idea it explains. When a dependency or risk motivates the whole page, show it near the opening before implementation details. Design a visible focal point and reading path: use connected shapes, meaningful symbols, position and visual hierarchy to reveal the mechanism. Do not substitute a grid of text cards for a diagram. Use danger color and a broken connection or other non-color cue for an actual failure; keep command/event/query semantic colors intact. Remove repeated labels and secondary text that compete with the main relationship. Review the figure at a glance before reading its prose.
 
-Preserve the convictions in `PRODUCT.md`: developer judgment, agency, enjoyment, and coherent built-in choices. Each paragraph needs a substantive job, but not every paragraph needs a new mechanism. For conceptual arguments, connect examples to the claim rather than listing capabilities. Comparisons with other approaches are an internal test of the argument, not required public concessions. Native previous/next links own onward navigation; end when the subject is resolved.
+Preserve the convictions in [product positioning](positioning.md): developer judgment, agency, enjoyment, and coherent built-in choices. Each paragraph needs a substantive job, but not every paragraph needs a new mechanism. For conceptual arguments, connect examples to the claim rather than listing capabilities. Comparisons with other approaches are an internal test of the argument, not required public concessions. Native previous/next links own onward navigation; end when the subject is resolved.
 
 ## Review and deliver
 

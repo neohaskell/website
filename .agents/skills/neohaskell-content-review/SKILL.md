@@ -39,10 +39,12 @@ For an out-of-scope destination with missing entry context, report the dependenc
 
 Prefer the smallest correction that lets the reader follow: express the benefit in ordinary language, introduce the concept beside its first necessary use, move the mechanism to the page that teaches it, or provide a named contextual link. Choose based on the page's purpose. A link alone cannot explain the central promise of a homepage section.
 
-Read the corrected heading and opening sentence together. They should communicate the gain without requiring later vocabulary. Then check the complete argument and its example for accuracy: simplification must preserve meaningful differences such as requested changes, accepted facts, and current answers. Product claims remain governed by `PRODUCT.md` and positioning; term meanings remain governed by `GLOSSARY.md`. Trust-oriented copy should support human understanding and judgment, not imply automatic correctness.
+Read the corrected heading and opening sentence together. They should communicate the gain without requiring later vocabulary. Then check the complete argument and its example for accuracy: simplification must preserve meaningful differences such as requested changes, accepted facts, and current answers. Product claims remain governed by [product positioning](references/positioning.md) and positioning; term meanings remain governed by `GLOSSARY.md`. Trust-oriented copy should support human understanding and judgment, not imply automatic correctness.
 
 ## Return findings within scope
 
 Return at most five material findings, each with the passage location, assumed concept, preceding teaching evidence or its absence, likely reading difficulty, and a concrete revision. Mark missing source context as unverified rather than guessing that a concept was taught. A review can conclude that no change is needed.
 
 When edits are authorized, apply the in-scope corrections and inspect the resulting reading order. A homepage request stays on the homepage; reading documentation for prerequisite evidence does not authorize editing it. Translation needs its own explicit scope. Do not add public prerequisite badges, glossary panels, captions, or process notes to satisfy the review. Keep the concept-dependency notes in the review evidence, and distinguish editorial judgment from observed reader-comprehension results.
+
+Use [page delivery](references/page-delivery.md) for a Wayfinder continuation, [translation](references/translation.md) for a requested language, and [Counter diagram provenance](references/counter-diagram.md) when updating the supplied example.

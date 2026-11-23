@@ -1,20 +1,12 @@
-# Authority and baseline
+# Approved surfaces
 
-## Sources and responsibilities
+The homepage and documentation are approved for publication. Scope changes to the owner's request. Use the rendered surface for composition, the stylesheets for exact tokens, and the [product positioning reference](../../neohaskell-content-review/references/positioning.md) for claims.
 
-Resolve repository paths from the checkout root. This is a source map, not a second token catalogue.
+Preserve the homepage's split hero, relief artwork, authentic IDE, caller-to-contract illustration and compact specification with command and query slices. Keep the history illustration, pure boundary and transport comparison, included capabilities, agent workflow and closing docs action in their accepted order. Clarity and hierarchy apply to both themes and phone layouts.
 
-| Question | Owner |
-| --- | --- |
-| What has the owner asked for, and what does the language promise? | Latest task direction, `AGENTS.md`, `PRODUCT.md`, and the positioning skill it names |
-| What visual intent applies here? | `DESIGN.md` and `.impeccable/surfaces/src-pages-index-astro.md` or `.impeccable/surfaces/src-components-learn-guidedlesson-astro.md` |
-| What does each domain object mean? | `GLOSSARY.md`, terminology and diagram skills named by `AGENTS.md` |
-| What actually renders? | `src/components/Home.astro`, `src/components/HomepageVisual.astro`, `src/components/HomepageHighlights.astro`, `src/components/learn/`, `src/styles/home.css`, `src/styles/docs.css`, `src/styles/diagram-colors.css`, and `astro.config.mjs` |
-| How is it verified and served? | `README.md`, `package.json`, current tests, and the applicable review skills in `AGENTS.md` |
+Articles use normal scrolling, native Starlight navigation, search, code copying and an on-page outline. The 18rem topic sidebar starts expanded and labels wrap. Body text is 18px and essential examples are at least 16px. Keep examples beside their explanation. In the history replay, retain the event stack and give the current answer separate emphasis. Keep a complete static result available with reduced motion.
 
-Later explicit owner decisions take precedence within their scope. Current source proves implementation; it cannot silently supersede accepted intent. Historical passages and generated design previews are supporting records. When they disagree with an active decision, name the discrepancy rather than averaging the rules.
-
-## Starting identity
+## Identity
 
 The existing records preserve the original logo, violet/cyan brand identity, geometric homepage headings, Manrope reading text, and a limited pixel accent. Native diagrams make application relationships visible. Documentation uses a quieter reading surface and native navigation. Preserve these accepted foundations unless the task changes them.
 
@@ -40,10 +32,4 @@ Which shapes distinguish a request, retained fact, current answer, and boundary 
 
 Answer through representative rendered examples before prescribing universal radii, type counts, or animation timings. The current implementation is a starting point for these questions, not proof that the language is complete.
 
-## Inspection findings, 16 November 2026
-
-At checkpoint `6fb2befd4de27cee53a322225ebcd92d3fff3259`, `DESIGN.md`'s canonical color prose still describes violet recorded events. The homepage surface record's 13 November semantic-color correction and current `src/styles/diagram-colors.css` use orange events. Follow the later semantic decision. The current documentation surface record also specifies an 18rem sidebar, while older design prose describes 16rem. Inspect the current styles and applicable owner decision before changing that layout.
-
-These are record discrepancies found through source inspection, not a rendered audit. This initial skill does not certify the current pages or declare the unresolved visual questions settled.
-
-The subsequent history calibration reconciles the canonical color and sidebar prose in `DESIGN.md` and records the first scoped history pattern there. Older swatches and specimens remain historical. Consult the current design section and `.impeccable/reviews/visual-language-history-2026-11-16/review.md` for the tested scope; the initial inspection above is provenance.
+Review hierarchy, spacing consistency and restraint in supporting controls. These review criteria adapt [Unslop by Damir Sokolovsky](https://github.com/heydamir/unslop/tree/97daa3eb365670ea3f87ed85356cbfcee18105a5), licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).

@@ -1,7 +1,0 @@
-Build with AI. Keep control.
-
-NeoHaskell is an AI-first language with a visual IDE, pure business logic, and a history you can follow.
-
-https://neohaskell.org
-
-Music: Sascha Ende, ende.app (CC BY 4.0). Happy Beats / Business Moves Vol. 12, excerpted and faded. https://ende.app/en/standard-license

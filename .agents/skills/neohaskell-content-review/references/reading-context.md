@@ -12,6 +12,6 @@ Resolve paths from the repository root. Inspect the current source before relyin
 
 The homepage's main documentation action starts at `/introduction/`. Feature actions can enter later pages or sections directly, including `/introduction/event-modeling/`. Check those targets for context when reviewing the corresponding action, while keeping edits within the requested surface.
 
-Use `GLOSSARY.md` to check whether a term is correct, not to infer that the visitor has read it. Use `PRODUCT.md` to preserve the approved developer-centered promise and distinguish product intent from verified behavior. The existing documentation surface brief and `AGENTS.md` own reading layout, direct-entry requirements and translation scope.
+Use `GLOSSARY.md` to check whether a term is correct, not to infer that the visitor has read it. Use [product positioning](positioning.md) to preserve the approved developer-centered promise and distinguish product intent from verified behavior. The visual-language baseline and `AGENTS.md` own reading layout, direct-entry requirements and translation scope.
 
 Three different evidence levels matter: a term was visible, its purpose was briefly introduced, or its behavior was explained sufficiently for the next argument. Record only the level supported by the actual prose and example. An agent's expectation that a visitor will understand a passage is an editorial judgment until tested with readers.

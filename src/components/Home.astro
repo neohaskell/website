@@ -5,7 +5,6 @@ import HomepageHighlights from './HomepageHighlights.astro';
 import HomepageSpecification from './HomepageSpecification.astro';
 import FeatureIcon from './FeatureIcon.astro';
 import Arrow from './Arrow.astro';
-import VisitorContext from './VisitorContext.astro';
 import '../styles/home.css';
 
 import LanguagePicker from './LanguagePicker.astro';
@@ -54,7 +53,6 @@ const capabilities = [
       })();
     </script>
     <AlternateLinks locale={locale} path="/" />
-    <VisitorContext />
   </head>
   <body>
     <a class="skip-link" href="#main">{t("home.skip-to-content")}</a>

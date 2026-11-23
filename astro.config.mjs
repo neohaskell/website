@@ -33,7 +33,7 @@ export default defineConfig({
     customCss: ['./src/styles/docs.css'],
     defaultLocale: 'root',
     locales: Object.fromEntries(locales.map(({ code, label, lang }) => [code === 'en' ? 'root' : code, { label, lang }])),
-    components: { Head: './src/components/DocsHead.astro', LanguageSelect: './src/components/DocsLanguagePicker.astro' },
+    components: { LanguageSelect: './src/components/DocsLanguagePicker.astro' },
     sidebar: [
       group('docs.start', ['introduction', 'introduction/history', 'learn', 'introduction/event-modeling']),
       group('docs.first-project', ['getting-started/installation', 'getting-started/create-project', 'getting-started/run', 'getting-started/first-response', 'getting-started/project-files', 'getting-started', 'getting-started/troubleshooting']),

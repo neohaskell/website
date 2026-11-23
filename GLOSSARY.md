@@ -2,7 +2,7 @@
 
 Canonical website and diagram terminology, confirmed by the owner on 2026-11-06 and extended on 2026-11-13. Use these terms in future copy, diagrams, and domain identifiers.
 
-NeoHaskell is an AI-first **language** with integrated application capabilities. Use NeoHaskell or the language for the product; framework names an actual implementation layer when that distinction matters. `PRODUCT.md` owns the approved positioning and the One Person Framework philosophical reference.
+NeoHaskell is an AI-first **language** with integrated application capabilities. Use NeoHaskell or the language for the product; framework names an actual implementation layer when that distinction matters. The [positioning reference](.agents/skills/neohaskell-content-review/references/positioning.md) owns the approved positioning and the One Person Framework philosophical reference.
 
 | Term | Meaning in the website's explanatory model | Replaces |
 | --- | --- | --- |
@@ -51,4 +51,4 @@ Keep ordinary meanings such as HTTP request, browser view, SQL view, language tr
 
 The introductory history lesson explains why growing history does not require full replay for routine work, without requiring readers to learn the internal snapshot mechanism. Its animated example records stock received, order placed, and order cancelled, then recalculates the same history. Replaying does not append new events.
 
-The [progressive-introduction source review](.impeccable/reviews/progressive-intro-2026-11-13/source-review.md) records the exact implementation boundaries at revision 033ae4a. Describe decisions as separating business logic from arbitrary external actions, without claiming their interpreter performs no effects at all.
+The [decision algebra](https://github.com/neohaskell/NeoHaskell/blob/033ae4a570686cd885ca14c6595997d9498d5287/core/service/Decider.hs) defines the operations available to a decision. Describe decisions as separating business logic from arbitrary external actions, without claiming their interpreter performs no effects at all.

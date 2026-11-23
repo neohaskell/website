@@ -1,9 +1,0 @@
----
-import Default from '@astrojs/starlight/components/Sidebar.astro';
-import MobileMenuFooter from '@astrojs/starlight/components/MobileMenuFooter.astro';
-const id = Astro.locals.starlightRoute.entry.id;
-const learning = id === 'learn';
-const setup = id === 'getting-started';
-const steps = learning ? [['command','Commands'],['decision','Decisions'],['event','Events'],['query','Queries'],['sold-out','When stock runs out']] : [['environment','Your environment'],['skills','Agent skills'],['first-task','Your first task'],['review','Check the behavior']];
----
-{learning || setup ? <div class="learning-sidebar"><a class="library-link" href="/learn/">The NeoHaskell guide</a><nav aria-label="Guide chapters"><a class:list={['chapter-link',{ selected:learning }]} href="/learn/" aria-current={learning ? 'page' : undefined}>Understand the model</a>{learning && <ol class="section-nav">{steps.map(([anchor,label]) => <li><a href={`#${anchor}`} data-section-link={anchor}><span class="nav-dot" aria-hidden="true"></span>{label}</a></li>)}</ol>}<a class:list={['chapter-link',{ selected:setup }]} href="/getting-started/" aria-current={setup ? 'page' : undefined}>Build with an AI agent</a>{setup && <ol class="section-nav">{steps.map(([anchor,label]) => <li><a href={`#${anchor}`} data-section-link={anchor}><span class="nav-dot" aria-hidden="true"></span>{label}</a></li>)}</ol>}</nav><div class="sidebar-bottom"><p>A small shop.<br />A model you understand.</p><a href="https://github.com/neohaskell/NeoHaskell">NeoHaskell on GitHub</a></div><div class="mobile-sidebar-footer"><MobileMenuFooter /></div></div> : <Default />}

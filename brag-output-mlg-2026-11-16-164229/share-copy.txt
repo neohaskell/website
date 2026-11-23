@@ -1,1 +1,0 @@
-Deploy on Friday. Go offline. NeoHaskell is an AI-first language built to keep you shipping. New feature. Old features still work. Weird flex but ok. neohaskell.org
