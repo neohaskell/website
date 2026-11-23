@@ -27,4 +27,4 @@ npm run dev -- status
 
 Inspect listening processes and confirm the command and working directory before stopping another server. Run the maintained stop command from its owning checkout. For an unregistered server belonging to this repository, send SIGTERM to the verified PID. Preserve other projects' processes. Verify the sidebar and affected routes at port 4323.
 
-The [Pages workflow](.github/workflows/deploy.yml) deploys on pushes to main or manual dispatch. To reproduce its base path locally, run `GITHUB_PAGES_PREVIEW=true npm run build`.
+The [Pages workflow](.github/workflows/deploy.yml) publishes `main` from [neohaskell/website](https://github.com/neohaskell/website) to [neohaskell.org](https://neohaskell.org/) on push or manual dispatch. Run `npm run build` to reproduce the production build locally.

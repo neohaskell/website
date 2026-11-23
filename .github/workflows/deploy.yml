@@ -24,14 +24,11 @@ jobs:
         run: npm run check:translations
       - run: npm test
       - run: npm run build
-        env:
-          GITHUB_PAGES_PREVIEW: 'true'
-      - name: Keep the preview on the GitHub Pages URL
-        run: rm dist/CNAME dist/robots.txt
       - uses: actions/upload-pages-artifact@v4
         with:
           path: dist
   deploy:
+    if: github.repository == 'neohaskell/website' && github.ref == 'refs/heads/main'
     needs: build
     runs-on: ubuntu-latest
     environment:
