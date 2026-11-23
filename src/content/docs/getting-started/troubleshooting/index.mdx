@@ -22,7 +22,7 @@ If your shell says `neo: command not found`, check whether it can start Neo from
 neo --version
 ```
 
-If that still fails, check your installation instructions and open a new terminal. [Resources and project status](../../resources/#start-building) links to the CLI prerequisites and installation instructions. Retry once the command prints a version.
+If this command also fails, follow the [command lookup steps](../installation/#command-lookup). Retry the original command once `neo --version` prints the installed version.
 
 Neo itself can start and still be unable to launch another tool. It needs Git to make the initial project commit and Nix to prepare the build environment. For `git init failed` with `could not spawn git`, check `git --version`. For `Nix is required but was not found on PATH`, check `nix --version`. Run the check in the same terminal where Neo failed. Once the missing tool prints a version there, retry the command that needed it.
 
@@ -79,4 +79,4 @@ Include the failing command, the relevant error text, and what `neo --version` p
 
 If Neo reports `neo::subprocess_raw`, it includes the output of the tool that failed. Use the report for this failure from the log Neo names, or copy the relevant terminal output if the log is unavailable. Remove credentials or private paths before sharing it.
 
-For a failure while compiling, see [Setup and build errors](../../reference/errors/). If the build succeeds and the application fails during startup or while handling a request, see [Startup and request errors](../../reference/errors/runtime/). [Resources and project status](../../resources/#follow-changes-and-get-help) lists where to ask for help.
+For a failure while compiling, see [Setup and build errors](../../reference/errors/). If the build succeeds and the application fails during startup or while handling a request, see [Startup and request errors](../../reference/errors/runtime/). If you still need help, [report the unresolved failure](../../reference/errors/#reporting).

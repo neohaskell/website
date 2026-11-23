@@ -179,7 +179,6 @@ h1 { font-size: clamp(72px, 7.3vw, 112px); line-height: 1.02; hyphens: none; }
   .agent-workflow { padding-left: 12px; }
 }
 @media (max-width: 1000px) {
-  .nav-resources { display: none !important; }
   .brand { font-size: 26px; }
   .brand img { width: 36px; height: 36px; }
   .main-nav { gap: 24px; }

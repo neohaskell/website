@@ -65,7 +65,7 @@ nix --version
 git --version
 ```
 
-If the named tool is missing, follow the [development environment guidance](../../resources/) and open a new shell after installation. If it is installed, correct that shell's `PATH`. Rerun the version check and then the failed Neo command. A warning that `direnv` is absent concerns automatic editor integration; it is different from a missing required tool.
+If Nix is missing, follow the [Nix setup instructions](../../getting-started/installation/#installing-nix). If Git is missing, install Git for your operating system. Open a new shell after installation. If it is installed, correct that shell's `PATH`. Rerun the version check and then the failed Neo command. A warning that `direnv` is absent concerns automatic editor integration; it is different from a missing required tool.
 
 For `neo::network`, inspect the URL and underlying network reason. Check connectivity or access to that source, then retry the original operation. Changing a dependency version does not repair a connection failure. `NEO_SKIP_NETWORK` supplies placeholders for offline tests; it is not a way to obtain a working offline application build.
 
@@ -97,4 +97,4 @@ A `neo::lock_violation` stops the build because locked files were changed, renam
 
 When a small correction does not resolve the cause, include the exact command, `neo --version`, operating system, diagnostic code and relevant source location in a report. Include the child output for a subprocess failure, with a minimal reproduction when possible. Inspect copied output and log records for secrets and private paths before sharing them; retained child output is not automatically redacted.
 
-Use the [unrecognized subprocess error report](https://github.com/neohaskell/NeoHaskell/issues/new?template=uninterpreted-subprocess-error.md) for `neo::subprocess_raw`, or find the issue tracker and community help through [Resources](../../resources/). Preserve the original failure and the result after your correction so another reader can distinguish the cause from later failures.
+Use the [unrecognized subprocess error report](https://github.com/neohaskell/NeoHaskell/issues/new?template=uninterpreted-subprocess-error.md) for `neo::subprocess_raw`, or [search the NeoHaskell issue tracker](https://github.com/neohaskell/NeoHaskell/issues) for other failures. Preserve the original failure and the result after your correction so another reader can distinguish the cause from later failures.

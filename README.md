@@ -42,8 +42,6 @@ The homepage has no tutorial widget, replay control, scenario switcher, or conce
 
 Start at `/introduction/`, then read `/introduction/history/`, `/learn/`, and `/introduction/event-modeling/` for the four introductory lessons. Installation and agent setup live separately under `/getting-started/`. The pages use Starlight's native topic sidebar, title, search, contents outline, anchor navigation, and code copying. Sidebar sections start expanded. The article scrolls normally, with examples and diagrams beside the relevant explanation.
 
-`/resources/` collects verified setup, language/framework guidance, project status, releases, and community destinations. The setup guide distinguishes application preparation from agent-skills installation; it is not a verified zero-to-running-app walkthrough.
-
 Author English content in `src/content/docs/`. Reading styles live in `src/styles/docs.css`; prose is 18px and code/table examples are 16px. Shared lesson components live in `src/components/learn/`, including the event-history replay, Event Model, growth charts, and IDE screenshot. Code snippets illustrate the lesson and are not standalone applications. Use `learning-example-review` as required by `AGENTS.md` when creating or materially changing examples.
 
 ## Translation workflow

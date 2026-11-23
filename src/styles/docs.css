@@ -99,9 +99,6 @@ h1 { font-weight: 700; letter-spacing: -.03em; }
 .pagination-links a { box-shadow: none; border-color: var(--docs-line); }
 .pagination-links .link-title { font-size: 1.125rem; }
 .sl-markdown-content .docs-plan { margin-top: 3rem; }
-.sl-markdown-content .docs-map { margin-block: 1.5rem; }
-.sl-markdown-content .docs-map dt { margin-top: 1.25rem; font-weight: 600; }
-.sl-markdown-content .docs-map dd { margin: .25rem 0 0; }
 
 @media (min-width: 100rem) {
   :root { --sl-content-width: 50rem; }
