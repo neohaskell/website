@@ -10,88 +10,110 @@ next: true
 
 import InstallationPair from '../../../../components/learn/InstallationPair.astro';
 
-You'll use `neo` to create, build, and run NeoHaskell projects. The same installer supplies `neoctl`, which starts NeoHaskell's local control service. You can check that both tools are installed without starting the service.
+You'll use `neo` to create, build, and run NeoHaskell projects. To get started, check that Nix is ready, install `neo` and its companion `neoctl`, then check both versions in a new terminal.
 
-## Before installation
+## Choosing your terminal <a id="before-installation" />
 
-Open a terminal on Linux (x86-64 or ARM64) or on a Mac with Apple Silicon. On Windows, open a Linux terminal in WSL2 and use it for the rest of this guide.
+- **Linux (x86-64 or ARM64):** Open your usual terminal.
+- **macOS (Apple Silicon):** Open Terminal.
+- **Windows (x86-64 or ARM64):** Open your WSL2 Linux distribution. Run the installation and version checks inside that distribution.
 
 <details>
-<summary>Setting up a Windows terminal</summary>
+<summary>Windows: setting up WSL2</summary>
 
-If you're installing WSL for the first time, open PowerShell as an administrator and run `wsl --install`. Restart Windows when prompted, open Ubuntu from the Start menu, and create your Linux username and password.
+**New to WSL?** Open PowerShell as an administrator and run `wsl --install`. Restart Windows when prompted, open Ubuntu from the Start menu, and create your Linux username and password.
 
-If you already use WSL, run `wsl --list --verbose` in PowerShell. The version beside your distribution should be `2`. For example, `wsl --set-version Ubuntu 2` converts an existing Ubuntu distribution to WSL2.
+**Already using WSL?** Run `wsl --list --verbose` in PowerShell. The version beside your distribution should be `2`. For example, `wsl --set-version Ubuntu 2` converts an existing Ubuntu distribution to WSL2.
 
-Inside Linux, run `cat /proc/1/comm`. You should see `systemd`, the service manager that starts Nix. If your WSL2 distribution has systemd installed but prints `init`, set `systemd=true` in the `[boot]` section of `/etc/wsl.conf`. Save your work in all WSL terminals, run `wsl --shutdown` in PowerShell, then reopen Linux and repeat the check.
+**Check the Linux service manager.** Inside Linux, run `cat /proc/1/comm`. You should see `systemd`, the service manager that starts Nix. If your WSL2 distribution has systemd installed but prints `init`, set `systemd=true` in the `[boot]` section of `/etc/wsl.conf`. Save your work in all WSL terminals, run `wsl --shutdown` in PowerShell, then reopen Linux and repeat the check.
 
 </details>
 
-Use your usual account. The installer needs a writable home directory and a login shell of `/bin/bash` or `/bin/zsh`. For Zsh, it expects the startup files in your home directory, with `ZDOTDIR` unset. You'll also need an internet connection, `curl`, and either `sha256sum` or `shasum` to verify the download.
+Use your usual account with a writable home directory. You'll need an internet connection, `curl`, and either `sha256sum` or `shasum` to verify the download. Your login shell must be `/bin/bash` or `/bin/zsh`. If you use Zsh, it expects the startup files in your home directory, with `ZDOTDIR` unset.
 
-### Installing Nix
+## 1. Check Nix <a id="installing-nix" />
 
-NeoHaskell uses Nix to download prebuilt tools. First check whether your account can reach the Nix background service:
+NeoHaskell uses multi-user Nix to download prebuilt tools. Run this command to see whether your account can reach the Nix background service:
 
 ```sh wrap
 nix --extra-experimental-features nix-command store info --store daemon --offline --json
 ```
 
-If the response includes `"url":"daemon"`, you're ready to [install the tools](#installing-the-tools). If your shell says `nix: command not found` and you haven't installed Nix yet, use the command for your platform below. If Nix is installed but reports a connection or permission error, ask your administrator to start the daemon and give your account access.
+- **The response includes `"url":"daemon"`.** You're ready for [step 2](#installing-the-tools).
+- **The shell says `nix: command not found`.** If you haven't installed Nix, open the instructions for your platform below.
+- **Nix reports a connection or permission error.** Ask your administrator to start the Nix daemon and give your account access. Repeat the check before continuing.
 
-**Linux, including WSL2.** The standard multi-user installer is intended for systems with systemd, access to `sudo`, and SELinux disabled. On a managed system, ask the administrator to provide multi-user Nix.
+<details>
+<summary>Install Nix on Linux or WSL2</summary>
+
+Use the multi-user installer on a system with systemd, access to `sudo`, and SELinux disabled. If your system is managed, ask the administrator to provide multi-user Nix.
 
 ```sh wrap
 curl --proto '=https' --tlsv1.2 -L https://nixos.org/nix/install | sh -s -- --daemon
 ```
 
-**Apple Silicon macOS.** The current Nix installer requires macOS 14 or later.
+Follow the prompts, open a new Linux terminal, and [repeat the Nix check](#installing-nix).
+
+</details>
+
+<details>
+<summary>Install Nix on Apple Silicon macOS</summary>
+
+The current Nix installer requires macOS 14 or later.
 
 ```sh wrap
 curl --proto '=https' --tlsv1.2 -L https://nixos.org/nix/install | sh
 ```
 
-Follow the prompts, then open a new terminal and repeat the Nix check above.
+Follow the prompts, open a new Terminal window, and [repeat the Nix check](#installing-nix).
 
-## Installing the tools
+</details>
 
-From your terminal, run this command as your usual user:
+## 2. Install NeoHaskell <a id="installing-the-tools" />
 
-```sh wrap
-curl -fsSL https://github.com/neohaskell/NeoHaskell/releases/latest/download/install | sh
-```
+1. **Start the installer.** Run this command as your usual user. It downloads and checks the installer for your machine.
 
-The script downloads and checks the installer for your machine. You'll see the version it selected and the changes it proposes, including how your shell will find the two commands. Press **D** to see the details. Press **Enter** to accept or **Esc** to decline.
+   ```sh wrap
+   curl -fsSL https://github.com/neohaskell/NeoHaskell/releases/latest/download/install | sh
+   ```
 
-If Nix needs another source for prebuilt packages, the installer shows which settings it will change. It may ask for your administrator password and restart the Nix daemon. If another Nix job is running, let it finish before you approve the restart.
+2. **Review the changes.** Look for the selected version and the shell settings that make both commands available. Press **D** for details. If the installer proposes a new source for prebuilt packages, it may ask for your administrator password and restart Nix. Let other Nix jobs finish before approving that restart. Press **Enter** to accept or **Esc** to decline.
 
-When the installer says the selected version is active, open a new terminal so your shell picks up the commands. On Windows, open the same Linux distribution again.
+3. **Open a new terminal** when the installer says the selected version is active. On Windows, reopen the same Linux distribution.
 
-## Checking the installation <a id="the-installed-versions" />
+## 3. Check both versions <a id="the-installed-versions" />
 
-Run these commands in the new terminal:
+Run both commands in the new terminal:
 
 ```sh
 neo --version
 neoctl --version
 ```
 
-Each command prints its name followed by a version number. For example, if the installer selected release 0.18.1, you should see:
-
-```text
-neo 0.18.1
-neoctl 0.18.1
-```
+Each command prints its name and version. Here's the expected output if you installed release 0.18.1:
 
 <InstallationPair />
 
-When both numbers match the version the installer showed you, the tools are ready. You'll also need Git to create your first project. Run `git --version` to check. If Git is missing, install it with your distribution's package manager (for example, `sudo apt install git` on Ubuntu), or run `xcode-select --install` on macOS.
+If both numbers match the release you installed, setup is complete. If either command is missing or prints another version, [check which commands your shell found](#command-lookup).
+
+**Git for your first project.** [Create a project](../create-project/) uses Git to record the starter files. Run `git --version` to check that it's available. If Git is missing, install it with your distribution's package manager (for example, `sudo apt install git` on Ubuntu), or run `xcode-select --install` on macOS.
 
 ## Troubleshooting <a id="if-installation-stops" />
 
-**The shell can't find a command, or the versions differ.** Open a fresh terminal and run `command -v neo` and `command -v neoctl`. Each should print a path. If one points to an older installation, use the original installation method to remove the conflicting command, then rerun the NeoHaskell installer. Open another terminal and repeat the version checks. If either path is missing or shell setup stopped partway through, rerun the install command after correcting the conflict.
+### A command is missing or has the wrong version <a id="command-lookup" />
 
-**Nix can't download a package.** If the installer offers to configure the caches, review and approve that change. If someone else manages Nix on your machine, give them the settings below. Once the daemon has loaded the changes, run the NeoHaskell install command again. If it still fails, keep the error message and the diagnostic report from the path the installer prints.
+In a new terminal, check where your shell finds each tool:
+
+```sh
+command -v neo
+command -v neoctl
+```
+
+Each command should print a path. If a path points to an older installation, use its original installation method to remove the conflicting command. If a path is missing, check that you're using the supported login shell and, on Windows, the distribution where you installed the tools. Rerun [the installer](#installing-the-tools), open a new terminal, and [check both versions](#the-installed-versions).
+
+### Nix can't download a package
+
+If the installer offers to configure a cache for prebuilt packages, review the change. On a managed system, give the settings below to your administrator. Once the daemon has loaded them, [retry the installation](#installing-the-tools). If it still fails, keep the error message and the diagnostic report from the path the installer prints.
 
 <details>
 <summary>Nix settings for your administrator</summary>
@@ -110,18 +132,22 @@ Apply the settings using the tool that manages the daemon. For a standard system
 
 ## Updates and removal
 
-To update both commands together, run:
+### Updating both tools
+
+When you're ready for a newer release, run:
 
 ```sh
 neo update
 ```
 
-The installer shows the proposed release. After accepting the update, open a new terminal and check both versions again.
+Review the proposed release. After accepting the update, open a new terminal and [check both versions](#the-installed-versions).
 
-If you want to remove NeoHaskell, run:
+### Uninstalling NeoHaskell
+
+To remove the managed commands and their shell setup, run:
 
 ```sh
 neo uninstall
 ```
 
-Review the changes and press **Enter** to confirm. This removes the managed commands and their shell setup. Your projects and Nix installation stay in place. If removal is interrupted, correct the reported problem and run `neo uninstall` again.
+Review the changes and press **Enter** to confirm. Your projects and Nix installation stay in place. If removal is interrupted, correct the reported problem and run `neo uninstall` again.

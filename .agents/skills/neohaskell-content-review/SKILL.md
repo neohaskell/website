@@ -5,7 +5,7 @@ description: Author and review NeoHaskell documentation within the reader's lear
 
 # Write within the reader's learning path
 
-For documentation creation, revision, or deletion, follow [authoring a page](references/authoring.md) and [documentation voice](references/documentation-voice.md). The voice reference applies the Rust Book's connected explanations and descriptive headings instead of a chain of imperative steps or benefit slogans. For a bounded copy review, use the prerequisite review below without expanding the edit scope.
+For documentation creation, revision, or deletion, follow [authoring a page](references/authoring.md) and [documentation voice](references/documentation-voice.md). Use the voice reference for both conceptual lessons and ordered procedures. For installation pages, use its terminal walkthrough to review the rendered instructions. For a bounded copy review, use the prerequisite review below without expanding the edit scope.
 
 ## Teach the difficult part visually
 

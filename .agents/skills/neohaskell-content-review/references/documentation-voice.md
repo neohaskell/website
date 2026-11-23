@@ -10,6 +10,16 @@ The Cargo chapter begins by saying what Cargo is and what work it does. It conne
 
 That is the model: a knowledgeable person working through an example with the reader. It is neither a checklist supervisor nor a salesperson. Instructions still belong in the prose when there is an action to perform.
 
+## Installation and recovery procedures
+
+Read the [Rust Book installation chapter](https://doc.rust-lang.org/book/ch01-01-installation.html) for the progression from a terminal command to recognizable output and diagnosis. The [Go installation guide](https://go.dev/doc/install) puts the operating system choice before the commands that depend on it. Adapt those moves to the actual installer.
+
+Use short numbered headings for mandatory stages when their order matters. These headings should make sense in the contents outline on their own. Give optional setup, troubleshooting, and later maintenance descriptive headings outside that sequence. Use an ordered list within a stage when accepting a prompt or opening a new shell must happen at a particular time.
+
+Walk through the rendered guide with a terminal in mind. Can someone entering at the first screen identify their platform and first action? After a prerequisite check, give each materially different result its own line with the next action. A reader who installs a missing prerequisite needs a way back to the check. Place the success criterion beside example output, identify any values that vary, and give failed checks a specific recovery destination. Use copyable snippets for commands and visually distinguish the output the reader compares.
+
+During review, scan the phone layout and the desktop contents outline. Trace one successful installation and one failure back to the point where the reader can resume. Record where a reader has to guess what to run, where to run it, or whether they have finished.
+
 ## How to write the lesson
 
 - Use descriptive headings that name the subject or learning activity. "The project settings" and "Creating a project with Neo" fit a lesson. A sequence of "Create", "Review", "Confirm", and "Keep" headings turns the article into a task board. Gerunds alone do not fix that structure; each section needs an explanation worth reading.
