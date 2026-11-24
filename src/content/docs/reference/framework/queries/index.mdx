@@ -76,6 +76,16 @@ The starter keeps `CounterView` in `src/<YourApp>/Counter/Queries/CounterView.hs
 
 The Counter feature registers the query slice and its event subscriptions. The declaration supplies the events that trigger projection work; merely defining a row type does not run a subscriber. [Event models and features](../) explains `query`, `readsFrom` and `onEvent`. When reviewing an agent's query change, inspect the row key, whether `combine` replaces or accumulates data, and which events trigger it. Deployed query definitions remain frozen; [Add a feature safely](../../../tutorial/change-safely/) covers new behavior under a new identity.
 
+## Published query routes <a id="published-routes" />
+
+A query slice publishes two read operations by default. For the stock answer, `Index` serves a page of visible rows at `GET /queries/stock-answer`. `Lookup` serves one visible row at `GET /queries/stock-answer/{id}`, where `{id}` is the UUID chosen by `queryId`.
+
+NeoHaskell 0.19.1 always publishes both routes. Choosing which routes to publish requires a framework revision that provides `only`.
+
+The slice builder in `Service.EventModel` exports `only`, `Index` and `Lookup`. To select the operations, put `only [Lookup]` inside the slice's `query @StockAnswer do` block at the same indentation as `readsFrom`. This publishes the single-row route. A request to the collection path returns 404. Use `only [Index]` for a collection alone, or `only []` for a projection without either route. The same events still update the stored rows.
+
+Applications assembled directly with `Application` can select the same operations with `Application.withQueryOnly @StockAnswer [Application.Lookup]`. Existing `Application.withQuery @StockAnswer` registrations publish both operations.
+
 ## NeoQL filtering <a id="neoql" />
 
 The HTTP collection endpoint accepts a NeoQL expression in its `q` parameter. At this revision, the supported forms are bare field access and field equality with a string or number:

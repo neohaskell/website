@@ -72,7 +72,7 @@ For a query reserved for staff, `canAccess` could instead use `AccessControl.req
 
 ## One policy across collection and by-ID reads
 
-The query name becomes the HTTP route `owned-order-summary`. A collection request uses `/queries/owned-order-summary`; a single-row request appends the returned query UUID. Use the actual identifier returned by your application, rather than a customer's subject or a guessed order number.
+When both routes are published, they use the same access and visibility checks. The query name becomes the HTTP route `owned-order-summary`. A collection request uses `/queries/owned-order-summary`; a single-row request appends the returned query UUID. Use the actual identifier returned by your application, rather than a customer's subject or a guessed order number.
 
 With the policy above and HTTP authentication configured, compare a row belonging to the first customer:
 
@@ -85,6 +85,14 @@ With the policy above and HTTP authentication configured, compare a row belongin
 An unknown UUID and a row denied by `canView` both produce 404. This avoids distinguishing those cases through the by-ID response. An invalid bearer token produces 401 during authentication, before either query check. A malformed UUID is a different request error, not evidence that the row exists.
 
 Query access does not share the command executor's trusted bypass. These endpoint handlers receive optional claims and run their checks against those claims. In particular, an HTTP application without authentication supplies no user to queries, so this `authenticatedAccess` policy rejects its reads. Do not replace it with public access merely because a trusted background command can run. A direct call to a query object store is below the endpoint policy; keep such access inside trusted application code.
+
+## Publish just the order lookup
+
+If the mug shop needs an order detail page without an order list, put `only [Lookup]` inside the new `query @OwnedOrderSummary do` block, alongside `readsFrom`. Keep `authenticatedAccess` and `ownerOnly` so that each customer can read their own order.
+
+Sign in as the owner and request `GET /queries/owned-order-summary/{id}` with the order's UUID. It should return that order. Request `GET /queries/owned-order-summary` with the same credentials. It should return 404 because the slice publishes only the lookup.
+
+This option requires a framework revision that provides `only`. Version 0.19.1 publishes both routes. See [Queries and projections](../../../reference/framework/queries/#published-routes) for the route choices.
 
 ## Pagination after visibility
 
