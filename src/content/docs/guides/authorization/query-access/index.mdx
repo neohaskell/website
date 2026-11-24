@@ -86,11 +86,13 @@ An unknown UUID and a row denied by `canView` both produce 404. This avoids dist
 
 Query access does not share the command executor's trusted bypass. These endpoint handlers receive optional claims and run their checks against those claims. In particular, an HTTP application without authentication supplies no user to queries, so this `authenticatedAccess` policy rejects its reads. Do not replace it with public access merely because a trusted background command can run. A direct call to a query object store is below the endpoint policy; keep such access inside trusted application code.
 
-## A link that opens one contract
+## Publish just the order lookup
 
-Suppose customers receive a signing link by email and can open their contract without an account. A new `SigningLink` query uses an unguessable UUID as its row key. With `publicAccess` and `publicView`, anyone who has that key can read the contract. Publishing the default collection would also let anyone browse every customer's contract.
+If the mug shop needs an order detail page without an order list, put `only [Lookup]` inside the new `query @OwnedOrderSummary do` block, alongside `readsFrom`. Keep `authenticatedAccess` and `ownerOnly` so that each customer can read their own order.
 
-This setup requires a framework revision that supports `only`. Version 0.19.1 publishes both routes. Put `only [Lookup]` inside the `query @SigningLink do` block, alongside `readsFrom`. The signing page can then read `GET /queries/signing-link/{id}` with the UUID from the email. Check both requests without signing in. The URL with the UUID should return that contract, and `GET /queries/signing-link` should return 404. See [Queries and projections](../../../reference/framework/queries/#published-routes) for the route choices.
+Sign in as the owner and request `GET /queries/owned-order-summary/{id}` with the order's UUID. It should return that order. Request `GET /queries/owned-order-summary` with the same credentials. It should return 404 because the slice publishes only the lookup.
+
+This option requires a framework revision that provides `only`. Version 0.19.1 publishes both routes. See [Queries and projections](../../../reference/framework/queries/#published-routes) for the route choices.
 
 ## Pagination after visibility
 
